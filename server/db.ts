@@ -2,7 +2,7 @@ import initSqlJs, { Database } from 'sql.js';
 import fs from 'fs';
 import path from 'path';
 
-const DB_DIR = path.resolve(process.cwd(), 'data');
+const DB_DIR = process.env.VERCEL ? '/tmp' : path.resolve(process.cwd(), 'data');
 const DB_FILE = path.join(DB_DIR, 'store.sqlite');
 
 let dbInstance: Database | null = null;

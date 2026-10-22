@@ -22,6 +22,23 @@ Dữ liệu SQLite được tự động khởi tạo và seed sẵn tại thư 
 
 ---
 
+## 🌐 Hướng Dẫn Deploy Lên Vercel / Render / Cloud
+
+### 1. Deploy lên Vercel
+Dự án đã được cấu hình sẵn file `vercel.json` và serverless API `api/index.ts`:
+- Kết nối kho code GitHub với Vercel.
+- Framework Preset: **Vite** (mặc định).
+- Vercel sẽ tự động build frontend `dist` và kích hoạt Serverless API tại `/api`.
+- *Lưu ý về Vercel:* Vì Vercel là môi trường Serverless (bộ nhớ tạm `/tmp`), nếu web không có lượt truy cập sau một thời gian, dữ liệu SQLite trong `/tmp` có thể tự động reset về dữ liệu ban đầu.
+
+### 2. Deploy lên Render / Railway (Khuyên dùng cho Database lâu dài)
+- Tạo dịch vụ mới: chọn **Web Service**.
+- Build Command: `npm install && npm run build`
+- Start Command: `npm start`
+- Server Node.js Express sẽ chạy liên tục 24/7 và lưu dữ liệu SQLite vĩnh viễn.
+
+---
+
 ## 👥 Tài Khoản Thử Nghiệm Có Sẵn (Seeded Accounts)
 
 ### 1. Người bán (Seller)
