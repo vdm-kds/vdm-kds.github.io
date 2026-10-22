@@ -1,0 +1,6 @@
+{
+  "name": "Đồ Cũ Còn Thương - Chợ Đồ Cũ Vintage & Độc Bản",
+  "description": "Nền tảng thương mại điện tử chuyên đồ second-hand chất lượng, minh bạch độ mới, theo dõi đơn hàng chi tiết từng chặng.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

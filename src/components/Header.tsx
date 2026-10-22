@@ -1,0 +1,417 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  ShoppingBag, Package, Store, LogOut, User as UserIcon, Search, Menu, X, 
+  Heart, Tag, ExternalLink, Sparkles
+} from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { NotificationBell } from './NotificationBell';
+import { Product } from '../types';
+import { api } from '../services/api';
+import { formatVND } from '../utils/format';
+
+interface HeaderProps {
+  currentView: 'home' | 'orders' | 'seller' | 'account' | '404';
+  onNavigate: (view: 'home' | 'orders' | 'seller' | 'account') => void;
+  onOpenCart: () => void;
+  onOpenAuth: (role: 'buyer' | 'seller') => void;
+  onSelectOrder?: (orderId: number) => void;
+  onSelectProduct?: (product: Product) => void;
+  searchQuery?: string;
+  onSearchChange?: (val: string) => void;
+  onSearchSubmit?: () => void;
+}
+
+export const Header: React.FC<HeaderProps> = ({
+  currentView,
+  onNavigate,
+  onOpenCart,
+  onOpenAuth,
+  onSelectOrder,
+  onSelectProduct,
+  searchQuery = '',
+  onSearchChange,
+  onSearchSubmit
+}) => {
+  const { user, logout, cartCount, quickLogin } = useAuth();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+
+  // Autocomplete live search state
+  const [suggestions, setSuggestions] = useState<Product[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+
+  // Debounced autocomplete search
+  useEffect(() => {
+    if (!searchQuery.trim() || searchQuery.trim().length < 1) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const res = await api.getAutocomplete(searchQuery.trim());
+        setSuggestions((res.suggestions || []) as any);
+        setShowSuggestions(true);
+      } catch (err) {
+        // Silent autocomplete failure
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Click outside listener to dismiss suggestions & dropdown
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSearchKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      setShowSuggestions(false);
+      if (onSearchSubmit) onSearchSubmit();
+    }
+  };
+
+  const handleSelectSuggestion = (p: Product) => {
+    setShowSuggestions(false);
+    if (onSelectProduct) {
+      onSelectProduct(p);
+    } else {
+      if (onSearchChange) onSearchChange(p.name);
+      if (onSearchSubmit) onSearchSubmit();
+    }
+  };
+
+  return (
+    <header className="sticky top-0 z-40 bg-[#F4ECDF]/92 backdrop-blur-md border-b border-[#DCCDB6] transition-all">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-4 sm:gap-8">
+        {/* Zone 1: Brand Wordmark with ♻ and Fraunces typography */}
+        <div className="flex items-center gap-3 shrink-0">
+          <button
+            onClick={() => onNavigate('home')}
+            className="flex items-center gap-2.5 text-left group focus-visible:outline-none"
+          >
+            <div className="w-10 h-10 rounded-2xl bg-[#D9542B] text-white flex items-center justify-center font-serif text-lg font-bold shadow-vintage-sm transition-transform duration-200 group-hover:scale-105">
+              ♻
+            </div>
+            <div>
+              <span className="font-serif text-xl sm:text-2xl font-bold tracking-tight text-[#241A14] block leading-none">
+                Đồ Cũ Còn Thương
+              </span>
+              <span className="text-[11px] text-[#74665B] font-medium tracking-wide uppercase mt-1 block">
+                Tiệm second-hand có câu chuyện
+              </span>
+            </div>
+          </button>
+        </div>
+
+        {/* Zone 2: Navigation Links & Live Search with Autocomplete */}
+        <div ref={searchContainerRef} className="hidden md:flex items-center gap-6 flex-1 max-w-md mx-2 relative">
+          {onSearchChange && (
+            <div className="relative w-full">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => onSearchChange(e.target.value)}
+                onKeyDown={handleSearchKeyPress}
+                onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
+                placeholder="Tìm áo da vintage, máy ảnh film, đồng hồ cơ..."
+                className="w-full bg-[#FFFBF4] border border-[#DCCDB6] rounded-full pl-9 pr-8 py-2 text-xs text-[#241A14] placeholder-[#74665B]/70 shadow-vintage-sm focus:outline-none focus:border-[#D9542B] focus:ring-1 focus:ring-[#D9542B] transition-all"
+              />
+              <Search className="w-4 h-4 text-[#74665B] absolute left-3 top-2.5 pointer-events-none" />
+              {isSearching && (
+                <div className="w-3.5 h-3.5 border-2 border-[#D9542B] border-t-transparent rounded-full animate-spin absolute right-3 top-2.5" />
+              )}
+
+              {/* Autocomplete Dropdown Popover */}
+              {showSuggestions && suggestions.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-[#FFFBF4] border border-[#DCCDB6] rounded-2xl shadow-vintage-md overflow-hidden z-50 animate-in fade-in slide-in-from-top-1">
+                  <div className="p-2 border-b border-[#DCCDB6]/50 bg-[#F4ECDF]/50 flex items-center justify-between text-[11px] text-[#74665B] font-medium">
+                    <span className="flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-[#D9542B]" />
+                      Gợi ý tìm kiếm ({suggestions.length})
+                    </span>
+                    <span>Bấm để xem chi tiết</span>
+                  </div>
+                  <div className="divide-y divide-[#DCCDB6]/30 max-h-72 overflow-y-auto">
+                    {suggestions.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => handleSelectSuggestion(p)}
+                        className="w-full p-2.5 flex items-center gap-3 text-left hover:bg-[#F4ECDF] transition-colors group"
+                      >
+                        <img
+                          src={p.image_url}
+                          alt={p.name}
+                          className="w-10 h-10 rounded-xl object-cover border border-[#DCCDB6] shrink-0"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-[#241A14] group-hover:text-[#D9542B] truncate">
+                            {p.name}
+                          </p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-[10px] font-mono font-bold text-[#D9542B]">
+                              {formatVND(p.price)}
+                            </span>
+                            <span className="text-[10px] text-[#74665B] bg-[#EADFCC] px-1.5 py-0.2 rounded-sm font-mono">
+                              Mới {p.condition_pct}%
+                            </span>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Zone 3: Primary Actions, Cart, Notification & User Menu */}
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          {/* Quick Demo Switcher (Instant 1-click test between buyer & seller) */}
+          <div className="hidden xl:flex items-center gap-1 bg-[#EADFCC] p-1 rounded-xl text-xs font-medium text-[#74665B] border border-[#DCCDB6]">
+            <span className="px-2 text-[11px] font-mono text-[#74665B]">Demo:</span>
+            <button
+              onClick={() => quickLogin('buyer')}
+              className={`px-2.5 py-1 rounded-lg transition-colors whitespace-nowrap ${
+                user?.role === 'buyer'
+                  ? 'bg-[#FFFBF4] text-[#241A14] shadow-xs font-semibold'
+                  : 'hover:text-[#241A14]'
+              }`}
+              title="Khách mua: 0987654321 / nguoidung"
+            >
+              Khách mua
+            </button>
+            <button
+              onClick={() => quickLogin('seller')}
+              className={`px-2.5 py-1 rounded-lg transition-colors whitespace-nowrap ${
+                user?.role === 'seller'
+                  ? 'bg-[#FFFBF4] text-[#241A14] shadow-xs font-semibold'
+                  : 'hover:text-[#241A14]'
+              }`}
+              title="Người bán: admin / admin"
+            >
+              Người bán
+            </button>
+          </div>
+
+          {/* Navigation Tab Shortcuts */}
+          <nav className="hidden sm:flex items-center gap-1 text-xs font-medium text-[#74665B]">
+            <button
+              onClick={() => onNavigate('home')}
+              className={`px-3 py-2 rounded-xl transition-colors whitespace-nowrap ${
+                currentView === 'home'
+                  ? 'bg-[#EADFCC] text-[#241A14] font-semibold'
+                  : 'hover:bg-[#EADFCC]/50 text-[#74665B]'
+              }`}
+            >
+              Cửa hàng
+            </button>
+
+            {user && user.role === 'buyer' && (
+              <>
+                <button
+                  onClick={() => onNavigate('orders')}
+                  className={`px-3 py-2 rounded-xl transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+                    currentView === 'orders'
+                      ? 'bg-[#EADFCC] text-[#241A14] font-semibold'
+                      : 'hover:bg-[#EADFCC]/50 text-[#74665B]'
+                  }`}
+                >
+                  <Package className="w-3.5 h-3.5" />
+                  Đơn mua
+                </button>
+
+                <button
+                  onClick={() => onNavigate('account')}
+                  className={`px-3 py-2 rounded-xl transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+                    currentView === 'account'
+                      ? 'bg-[#EADFCC] text-[#241A14] font-semibold'
+                      : 'hover:bg-[#EADFCC]/50 text-[#74665B]'
+                  }`}
+                >
+                  <UserIcon className="w-3.5 h-3.5" />
+                  Tài khoản
+                </button>
+              </>
+            )}
+
+            {user && user.role === 'seller' && (
+              <button
+                onClick={() => onNavigate('seller')}
+                className={`px-3 py-2 rounded-xl transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+                  currentView === 'seller'
+                    ? 'bg-[#D9542B] text-white font-semibold shadow-xs'
+                    : 'hover:bg-[#EADFCC]/50 text-[#74665B]'
+                }`}
+              >
+                <Store className="w-3.5 h-3.5" />
+                Quản trị shop
+              </button>
+            )}
+          </nav>
+
+          {/* Live Notification Bell with unread counter & dropdown */}
+          {user && (
+            <NotificationBell onSelectOrder={onSelectOrder} />
+          )}
+
+          {/* Cart Icon (Buyer only) */}
+          {(!user || user.role === 'buyer') && (
+            <button
+              onClick={onOpenCart}
+              className="relative p-2.5 rounded-xl text-[#241A14] hover:bg-[#EADFCC] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D9542B]"
+              aria-label="Giỏ hàng"
+            >
+              <ShoppingBag className="w-5 h-5 text-[#241A14]" />
+              {cartCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 min-w-[18px] h-[18px] px-1 bg-[#D9542B] text-white text-[10px] font-bold font-mono rounded-full flex items-center justify-center shadow-xs">
+                  {cartCount}
+                </span>
+              )}
+            </button>
+          )}
+
+          {/* User Auth Buttons / Profile Menu */}
+          {user ? (
+            <div className="relative">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    if (user.role === 'buyer') onNavigate('account');
+                    else onNavigate('seller');
+                  }}
+                  className="hidden sm:flex flex-col text-right hover:opacity-80 transition-opacity"
+                >
+                  <span className="text-xs font-semibold text-[#241A14] leading-tight">
+                    {user.full_name}
+                  </span>
+                  <span className="text-[10px] text-[#74665B] font-mono">
+                    {user.role === 'seller' ? 'Người bán (admin)' : 'Khách mua'}
+                  </span>
+                </button>
+
+                <button
+                  onClick={logout}
+                  className="p-2.5 rounded-xl text-[#74665B] hover:text-[#B33F33] hover:bg-[#EADFCC] transition-colors"
+                  title="Đăng xuất"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1 sm:gap-2">
+              <button
+                onClick={() => onOpenAuth('buyer')}
+                className="px-3.5 py-2 rounded-xl text-xs font-medium text-[#241A14] bg-[#FFFBF4] border border-[#DCCDB6] hover:bg-[#EADFCC] transition-colors shadow-vintage-sm whitespace-nowrap"
+              >
+                Đăng nhập
+              </button>
+              <button
+                onClick={() => onOpenAuth('seller')}
+                className="hidden sm:inline-flex px-3 py-2 rounded-xl text-xs font-medium text-[#74665B] hover:text-[#241A14] transition-colors whitespace-nowrap"
+              >
+                Kênh Người bán
+              </button>
+            </div>
+          )}
+
+          {/* Mobile hamburger menu toggle */}
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="sm:hidden p-2 rounded-xl text-[#241A14] hover:bg-[#EADFCC]"
+            aria-label="Menu"
+          >
+            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
+        </div>
+      </div>
+
+      {/* Mobile Drawer Menu */}
+      {mobileMenuOpen && (
+        <div className="sm:hidden bg-[#FFFBF4] border-b border-[#DCCDB6] px-4 py-4 space-y-3">
+          {onSearchChange && (
+            <div className="relative w-full mb-3">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => onSearchChange(e.target.value)}
+                onKeyDown={handleSearchKeyPress}
+                placeholder="Tìm kiếm sản phẩm..."
+                className="w-full bg-[#F4ECDF] border border-[#DCCDB6] rounded-xl pl-9 pr-4 py-2 text-xs text-[#241A14]"
+              />
+              <Search className="w-4 h-4 text-[#74665B] absolute left-3 top-2.5" />
+            </div>
+          )}
+
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={() => { onNavigate('home'); setMobileMenuOpen(false); }}
+              className="text-left px-3 py-2 rounded-xl text-xs font-semibold text-[#241A14] hover:bg-[#EADFCC]"
+            >
+              Cửa hàng
+            </button>
+            {user && user.role === 'buyer' && (
+              <>
+                <button
+                  onClick={() => { onNavigate('orders'); setMobileMenuOpen(false); }}
+                  className="text-left px-3 py-2 rounded-xl text-xs font-semibold text-[#241A14] hover:bg-[#EADFCC]"
+                >
+                  Đơn mua của tôi
+                </button>
+                <button
+                  onClick={() => { onNavigate('account'); setMobileMenuOpen(false); }}
+                  className="text-left px-3 py-2 rounded-xl text-xs font-semibold text-[#241A14] hover:bg-[#EADFCC]"
+                >
+                  Tài khoản của tôi (/account)
+                </button>
+              </>
+            )}
+            {user && user.role === 'seller' && (
+              <button
+                onClick={() => { onNavigate('seller'); setMobileMenuOpen(false); }}
+                className="text-left px-3 py-2 rounded-xl text-xs font-semibold text-[#D9542B] hover:bg-[#EADFCC]"
+              >
+                Quản trị người bán & Vận chuyển
+              </button>
+            )}
+          </div>
+
+          <div className="pt-3 border-t border-[#DCCDB6] flex items-center justify-between text-xs">
+            <span className="text-[#74665B]">Chuyển nhanh tài khoản:</span>
+            <div className="flex gap-2">
+              <button
+                onClick={() => { quickLogin('buyer'); setMobileMenuOpen(false); }}
+                className="px-2 py-1 rounded bg-[#EADFCC] text-[#241A14] font-medium"
+              >
+                Khách
+              </button>
+              <button
+                onClick={() => { quickLogin('seller'); setMobileMenuOpen(false); }}
+                className="px-2 py-1 rounded bg-[#EADFCC] text-[#241A14] font-medium"
+              >
+                Người bán
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </header>
+  );
+};
