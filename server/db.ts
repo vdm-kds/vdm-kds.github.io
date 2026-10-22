@@ -2,23 +2,64 @@ import initSqlJs, { Database } from 'sql.js';
 import fs from 'fs';
 import path from 'path';
 
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const DB_DIR = process.env.VERCEL ? '/tmp' : path.resolve(process.cwd(), 'data');
 const DB_FILE = path.join(DB_DIR, 'store.sqlite');
 
 let dbInstance: Database | null = null;
 
+function getWasmBinary(): Buffer | undefined {
+  const possiblePaths = [
+    path.resolve(process.cwd(), 'server/sql-wasm.wasm'),
+    path.resolve(process.cwd(), 'api/sql-wasm.wasm'),
+    path.resolve(process.cwd(), 'node_modules/sql.js/dist/sql-wasm.wasm'),
+    path.resolve(__dirname, 'sql-wasm.wasm'),
+    path.resolve(__dirname, '../server/sql-wasm.wasm'),
+    path.resolve(__dirname, '../api/sql-wasm.wasm'),
+    path.resolve(__dirname, '../node_modules/sql.js/dist/sql-wasm.wasm'),
+    '/var/task/server/sql-wasm.wasm',
+    '/var/task/api/sql-wasm.wasm',
+    '/var/task/node_modules/sql.js/dist/sql-wasm.wasm'
+  ];
+
+  for (const p of possiblePaths) {
+    try {
+      if (fs.existsSync(p)) {
+        return fs.readFileSync(p);
+      }
+    } catch {
+      // Continue to next path
+    }
+  }
+  return undefined;
+}
+
 export async function getDb(): Promise<Database> {
   if (dbInstance) return dbInstance;
 
-  if (!fs.existsSync(DB_DIR)) {
-    fs.mkdirSync(DB_DIR, { recursive: true });
+  try {
+    if (!fs.existsSync(DB_DIR)) {
+      fs.mkdirSync(DB_DIR, { recursive: true });
+    }
+  } catch (err) {
+    console.warn('DB_DIR mkdir warning:', err);
   }
 
-  const SQL = await initSqlJs();
+  const wasmBinary = getWasmBinary();
+  const SQL = await initSqlJs(wasmBinary ? ({ wasmBinary: wasmBinary.buffer as any }) : {});
 
   if (fs.existsSync(DB_FILE)) {
-    const fileBuffer = fs.readFileSync(DB_FILE);
-    dbInstance = new SQL.Database(fileBuffer);
+    try {
+      const fileBuffer = fs.readFileSync(DB_FILE);
+      dbInstance = new SQL.Database(fileBuffer);
+    } catch (e) {
+      console.warn('Lỗi đọc DB_FILE, khởi tạo DB mới:', e);
+      dbInstance = new SQL.Database();
+    }
   } else {
     dbInstance = new SQL.Database();
   }
@@ -30,9 +71,13 @@ export async function getDb(): Promise<Database> {
 
 export function saveDb(): void {
   if (!dbInstance) return;
-  const data = dbInstance.export();
-  const buffer = Buffer.from(data);
-  fs.writeFileSync(DB_FILE, buffer);
+  try {
+    const data = dbInstance.export();
+    const buffer = Buffer.from(data);
+    fs.writeFileSync(DB_FILE, buffer);
+  } catch (err) {
+    console.warn('Cảnh báo không thể ghi DB vào ổ đĩa:', err);
+  }
 }
 
 function initSchema(db: Database) {
