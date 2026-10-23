@@ -3,6 +3,7 @@ import { ShoppingBag, Check, Star, Heart } from 'lucide-react';
 import { Product } from '../types';
 import { formatVND } from '../utils/format';
 import { Button } from './Button';
+import { ProductFallbackImage } from './ProductFallbackImage';
 
 interface ProductCardProps {
   product: Product;
@@ -11,6 +12,8 @@ interface ProductCardProps {
   isAddingToCart?: boolean;
   isWishlisted?: boolean;
   onToggleWishlist?: (productId: number) => void;
+  disabledBuy?: boolean;
+  onDisabledBuyClick?: () => void;
 }
 
 export const ProductCard: React.FC<ProductCardProps> = ({
@@ -19,7 +22,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   onAddToCart,
   isAddingToCart = false,
   isWishlisted = false,
-  onToggleWishlist
+  onToggleWishlist,
+  disabledBuy = false,
+  onDisabledBuyClick
 }) => {
   const [imgError, setImgError] = useState(false);
   const [justAdded, setJustAdded] = useState(false);
@@ -28,6 +33,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
   const handleAdd = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (disabledBuy) {
+      if (onDisabledBuyClick) onDisabledBuyClick();
+      return;
+    }
     if (isSoldOut) return;
     onAddToCart(product);
     setJustAdded(true);
@@ -48,7 +57,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     >
       {/* Product Image Container */}
       <div className="relative aspect-4/3 w-full bg-[#F5F8EF] overflow-hidden">
-        {!imgError ? (
+        {!imgError && product.image_url ? (
           <img
             src={product.image_url}
             alt={product.name}
@@ -57,17 +66,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
         ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center bg-[#F5F8EF]">
-            <span className="text-[11px] uppercase tracking-wider text-[#5E5E61] font-semibold mb-2">
-              {product.category}
-            </span>
-            <span className="text-base text-[#101410] font-bold line-clamp-2">
-              {product.name}
-            </span>
-            <span className="text-xs text-[#08482D] mt-2 font-mono font-medium">
-              Độ mới {product.condition_pct}%
-            </span>
-          </div>
+          <ProductFallbackImage 
+            name={product.name}
+            category={product.category}
+            conditionPct={product.condition_pct}
+          />
         )}
 
         {/* Mint Studio Condition Badge */}
@@ -160,8 +163,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             size="sm"
             onClick={handleAdd}
             disabled={isSoldOut || isAddingToCart}
-            title={isSoldOut ? 'Hết hàng' : 'Thêm vào giỏ'}
-            className="px-3"
+            title={disabledBuy ? 'Chế độ xem trước — Không thể mua hàng' : isSoldOut ? 'Hết hàng' : 'Thêm vào giỏ'}
+            className={`px-3 ${disabledBuy ? 'opacity-40 cursor-not-allowed hover:bg-transparent' : ''}`}
           >
             {justAdded ? (
               <Check className="w-4 h-4 text-[#08482D]" />

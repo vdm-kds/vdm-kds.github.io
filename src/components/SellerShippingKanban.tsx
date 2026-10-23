@@ -213,29 +213,29 @@ export const SellerShippingKanban: React.FC<SellerShippingKanbanProps> = ({
   return (
     <div className="space-y-6">
       {/* Top Bar Filter */}
-      <div className="bg-[#FFFBF4] border border-[#DCCDB6] rounded-2xl p-4 shadow-vintage-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="bg-[#FFFFFF] border border-[#E2E8D8] rounded-2xl p-4 shadow-vintage-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-[#D9542B]/10 text-[#D9542B] flex items-center justify-center">
+          <div className="w-10 h-10 rounded-xl bg-[#C2522D]/10 text-[#C2522D] flex items-center justify-center">
             <Truck className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="font-serif text-lg font-bold text-[#241A14]">
+            <h2 className="text-lg font-bold text-[#101410]">
               Kanban Điều Phối Vận Chuyển
             </h2>
-            <p className="text-xs text-[#74665B]">
+            <p className="text-xs text-[#5E5E61]">
               Theo dõi và cập nhật 3 chặng giao nhận · Tự động gửi thông báo đến khách hàng
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 text-xs font-medium text-[#74665B]">
+          <div className="flex items-center gap-2 text-xs font-medium text-[#5E5E61]">
             <Filter className="w-3.5 h-3.5" />
             <span>ĐVVC:</span>
             <select
               value={selectedCarrierFilter}
               onChange={(e) => setSelectedCarrierFilter(e.target.value)}
-              className="bg-[#F4ECDF] border border-[#DCCDB6] rounded-xl px-3 py-1.5 text-xs text-[#241A14] focus:outline-none focus:border-[#D9542B]"
+              className="bg-[#F5F8EF] border border-[#E2E8D8] rounded-xl px-3 py-1.5 text-xs text-[#101410] focus:outline-none focus:border-[#C2522D]"
             >
               <option value="all">Tất cả đơn vị ({orders.length})</option>
               {CARRIERS.map(c => (
@@ -247,7 +247,7 @@ export const SellerShippingKanban: React.FC<SellerShippingKanbanProps> = ({
           <button
             onClick={() => fetchOrders(false)}
             disabled={loading}
-            className="p-2 rounded-xl border border-[#DCCDB6] bg-[#F4ECDF] hover:bg-[#EADFCC] text-[#241A14] transition-colors"
+            className="p-2 rounded-xl border border-[#E2E8D8] bg-[#F5F8EF] hover:bg-[#DAE7C7] text-[#101410] transition-colors"
             title="Làm mới dữ liệu"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -258,23 +258,23 @@ export const SellerShippingKanban: React.FC<SellerShippingKanbanProps> = ({
       {/* 3 Columns Kanban Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* ================= COLUMN 1: Chờ Bàn Giao ================= */}
-        <div className="flex flex-col bg-[#EADFCC]/50 border border-[#DCCDB6] rounded-2xl p-4">
-          <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#DCCDB6]">
+        <div className="flex flex-col bg-[#DAE7C7]/50 border border-[#E2E8D8] rounded-2xl p-4">
+          <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#E2E8D8]">
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-[#E3B23C]" />
-              <h3 className="font-serif font-bold text-sm text-[#241A14]">1. Chờ bàn giao</h3>
+              <h3 className="font-bold text-sm text-[#101410]">1. Chờ bàn giao</h3>
             </div>
             <div className="flex items-center gap-2">
               {pendingHandoverOrders.length > 0 && (
                 <button
                   type="button"
                   onClick={() => selectAllPending(pendingHandoverOrders)}
-                  className="text-[11px] font-bold text-[#5E7048] hover:underline"
+                  className="text-[11px] font-bold text-[#08482D] hover:underline"
                 >
                   {selectedPendingIds.length === pendingHandoverOrders.length ? 'Bỏ chọn hết' : 'Chọn tất cả'}
                 </button>
               )}
-              <span className="font-mono text-xs px-2.5 py-0.5 rounded-full bg-[#FFFBF4] border border-[#DCCDB6] text-[#241A14] font-bold">
+              <span className="font-mono text-xs px-2.5 py-0.5 rounded-full bg-[#FFFFFF] border border-[#E2E8D8] text-[#101410] font-bold">
                 {pendingHandoverOrders.length}
               </span>
             </div>
@@ -282,8 +282,8 @@ export const SellerShippingKanban: React.FC<SellerShippingKanbanProps> = ({
 
           {/* Bulk Handover Action Bar */}
           {selectedPendingIds.length > 0 && (
-            <div className="mb-3 p-3 bg-[#FFFBF4] border-2 border-[#D9542B] rounded-xl space-y-2 shadow-sm animate-fade-in">
-              <div className="flex items-center justify-between text-xs font-bold text-[#241A14]">
+            <div className="mb-3 p-3 bg-[#FFFFFF] border-2 border-[#C2522D] rounded-xl space-y-2 shadow-sm animate-fade-in">
+              <div className="flex items-center justify-between text-xs font-bold text-[#101410]">
                 <span>Đã chọn: {selectedPendingIds.length} đơn</span>
                 <button
                   onClick={() => setSelectedPendingIds([])}
@@ -296,14 +296,14 @@ export const SellerShippingKanban: React.FC<SellerShippingKanbanProps> = ({
                 <select
                   value={bulkCarrier}
                   onChange={(e) => setBulkCarrier(e.target.value)}
-                  className="flex-1 bg-[#F4ECDF] border border-[#DCCDB6] rounded-lg px-2.5 py-1.5 text-xs text-[#241A14] font-medium"
+                  className="flex-1 bg-[#F5F8EF] border border-[#E2E8D8] rounded-lg px-2.5 py-1.5 text-xs text-[#101410] font-medium"
                 >
                   {CARRIERS.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
                 <button
                   onClick={handleBulkHandover}
                   disabled={bulkSubmitting}
-                  className="px-3.5 py-1.5 bg-[#D9542B] text-white rounded-lg text-xs font-bold hover:bg-[#B33F33] transition-colors shadow-xs"
+                  className="px-3.5 py-1.5 bg-[#C2522D] text-white rounded-lg text-xs font-bold hover:bg-[#B33F33] transition-colors shadow-xs"
                 >
                   {bulkSubmitting ? 'Đang gửi...' : 'Bàn giao'}
                 </button>
@@ -313,7 +313,7 @@ export const SellerShippingKanban: React.FC<SellerShippingKanbanProps> = ({
 
           <div className="space-y-4 flex-1 overflow-y-auto max-h-[720px] pr-1">
             {pendingHandoverOrders.length === 0 ? (
-              <div className="py-12 text-center text-xs text-[#74665B] bg-[#FFFBF4]/40 border border-dashed border-[#DCCDB6] rounded-xl">
+              <div className="py-12 text-center text-xs text-[#5E5E61] bg-[#FFFFFF]/40 border border-dashed border-[#E2E8D8] rounded-xl">
                 Không có đơn chờ bàn giao
               </div>
             ) : (
@@ -328,8 +328,8 @@ export const SellerShippingKanban: React.FC<SellerShippingKanbanProps> = ({
                 return (
                   <div
                     key={order.id}
-                    className={`bg-[#FFFBF4] border rounded-xl p-4 shadow-vintage-sm hover:shadow-vintage transition-all ${
-                      isSelected ? 'border-[#D9542B] ring-2 ring-[#D9542B]/30' : 'border-[#DCCDB6]'
+                    className={`bg-[#FFFFFF] border rounded-xl p-4 shadow-vintage-sm hover:shadow-vintage transition-all ${
+                      isSelected ? 'border-[#C2522D] ring-2 ring-[#C2522D]/30' : 'border-[#E2E8D8]'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2 mb-2">
@@ -338,43 +338,43 @@ export const SellerShippingKanban: React.FC<SellerShippingKanbanProps> = ({
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => togglePendingOrderSelection(order.id)}
-                          className="w-4 h-4 mt-0.5 rounded border-[#DCCDB6] text-[#D9542B] focus:ring-[#D9542B]"
+                          className="w-4 h-4 mt-0.5 rounded border-[#E2E8D8] text-[#C2522D] focus:ring-[#C2522D]"
                         />
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="font-mono font-bold text-xs text-[#D9542B]">
+                            <span className="font-mono font-bold text-xs text-[#C2522D]">
                               #{order.code}
                             </span>
-                            <span className="text-[11px] px-2 py-0.5 rounded bg-[#EADFCC] text-[#241A14] font-medium">
+                            <span className="text-[11px] px-2 py-0.5 rounded bg-[#DAE7C7] text-[#101410] font-medium">
                               {order.status === 'confirmed' ? 'Đã duyệt đơn' : 'Chờ duyệt'}
                             </span>
                           </div>
-                          <p className="text-xs text-[#74665B] mt-0.5">
+                          <p className="text-xs text-[#5E5E61] mt-0.5">
                             {order.created_at}
                           </p>
                         </div>
                       </div>
-                      <span className="font-mono text-xs font-bold text-[#241A14]">
+                      <span className="font-mono text-xs font-bold text-[#101410]">
                         {formatVND(order.total)}
                       </span>
                     </div>
 
                     {/* Customer info */}
-                    <div className="bg-[#F4ECDF]/50 rounded-lg p-2.5 mb-3 text-xs space-y-1">
-                      <div className="font-medium text-[#241A14] flex items-center gap-1.5">
-                        <User className="w-3.5 h-3.5 text-[#74665B]" />
+                    <div className="bg-[#F5F8EF]/50 rounded-lg p-2.5 mb-3 text-xs space-y-1">
+                      <div className="font-medium text-[#101410] flex items-center gap-1.5">
+                        <User className="w-3.5 h-3.5 text-[#5E5E61]" />
                         {order.recipient_name} · {order.phone}
                       </div>
-                      <div className="text-[#74665B] flex items-start gap-1.5">
-                        <MapPin className="w-3.5 h-3.5 text-[#74665B] shrink-0 mt-0.5" />
+                      <div className="text-[#5E5E61] flex items-start gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-[#5E5E61] shrink-0 mt-0.5" />
                         <span className="line-clamp-2">{order.address}</span>
                       </div>
                     </div>
 
                     {/* Handover Form */}
-                    <div className="space-y-2 border-t border-[#DCCDB6]/60 pt-3">
+                    <div className="space-y-2 border-t border-[#E2E8D8]/60 pt-3">
                       <div>
-                        <label className="block text-[11px] font-medium text-[#74665B] mb-1">
+                        <label className="block text-[11px] font-medium text-[#5E5E61] mb-1">
                           Đơn vị vận chuyển:
                         </label>
                         <select
@@ -383,7 +383,7 @@ export const SellerShippingKanban: React.FC<SellerShippingKanbanProps> = ({
                             ...prev,
                             [order.id]: { ...currentHandover, carrier: e.target.value }
                           }))}
-                          className="w-full bg-[#F4ECDF] border border-[#DCCDB6] rounded-lg px-2.5 py-1.5 text-xs text-[#241A14] focus:outline-none focus:border-[#D9542B]"
+                          className="w-full bg-[#F5F8EF] border border-[#E2E8D8] rounded-lg px-2.5 py-1.5 text-xs text-[#101410] focus:outline-none focus:border-[#C2522D]"
                         >
                           {CARRIERS.map(c => (
                             <option key={c} value={c}>{c}</option>
@@ -392,7 +392,7 @@ export const SellerShippingKanban: React.FC<SellerShippingKanbanProps> = ({
                       </div>
 
                       <div>
-                        <label className="block text-[11px] font-medium text-[#74665B] mb-1">
+                        <label className="block text-[11px] font-medium text-[#5E5E61] mb-1">
                           Điểm lấy / bưu cục:
                         </label>
                         <input
@@ -403,14 +403,14 @@ export const SellerShippingKanban: React.FC<SellerShippingKanbanProps> = ({
                             [order.id]: { ...currentHandover, location: e.target.value }
                           }))}
                           placeholder="Bưu cục Quận 1, TP.HCM"
-                          className="w-full bg-[#F4ECDF] border border-[#DCCDB6] rounded-lg px-2.5 py-1.5 text-xs text-[#241A14] focus:outline-none focus:border-[#D9542B]"
+                          className="w-full bg-[#F5F8EF] border border-[#E2E8D8] rounded-lg px-2.5 py-1.5 text-xs text-[#101410] focus:outline-none focus:border-[#C2522D]"
                         />
                       </div>
 
                       <button
                         onClick={() => handleHandover(order)}
                         disabled={handoverSubmitting === order.id}
-                        className="w-full mt-2 py-2 px-3 bg-[#D9542B] hover:bg-[#B33F33] text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-sm disabled:opacity-50"
+                        className="w-full mt-2 py-2 px-3 bg-[#C2522D] hover:bg-[#B33F33] text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-sm disabled:opacity-50"
                       >
                         <Send className="w-3.5 h-3.5" />
                         {handoverSubmitting === order.id ? 'Đang bàn giao...' : 'Bàn giao cho ĐVVC'}
@@ -424,20 +424,20 @@ export const SellerShippingKanban: React.FC<SellerShippingKanbanProps> = ({
         </div>
 
         {/* ================= COLUMN 2: Đã Giao Cho ĐVVC ================= */}
-        <div className="flex flex-col bg-[#EADFCC]/50 border border-[#DCCDB6] rounded-2xl p-4">
-          <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#DCCDB6]">
+        <div className="flex flex-col bg-[#DAE7C7]/50 border border-[#E2E8D8] rounded-2xl p-4">
+          <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#E2E8D8]">
             <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-[#D9542B] animate-pulse" />
-              <h3 className="font-serif font-bold text-sm text-[#241A14]">2. Đã giao cho ĐVVC</h3>
+              <span className="w-3 h-3 rounded-full bg-[#C2522D] animate-pulse" />
+              <h3 className="font-bold text-sm text-[#101410]">2. Đã giao cho ĐVVC</h3>
             </div>
-            <span className="font-mono text-xs px-2.5 py-0.5 rounded-full bg-[#FFFBF4] border border-[#DCCDB6] text-[#241A14] font-bold">
+            <span className="font-mono text-xs px-2.5 py-0.5 rounded-full bg-[#FFFFFF] border border-[#E2E8D8] text-[#101410] font-bold">
               {shippingOrders.length}
             </span>
           </div>
 
           <div className="space-y-4 flex-1 overflow-y-auto max-h-[720px] pr-1">
             {shippingOrders.length === 0 ? (
-              <div className="py-12 text-center text-xs text-[#74665B] bg-[#FFFBF4]/40 border border-dashed border-[#DCCDB6] rounded-xl">
+              <div className="py-12 text-center text-xs text-[#5E5E61] bg-[#FFFFFF]/40 border border-dashed border-[#E2E8D8] rounded-xl">
                 Không có đơn hàng nào đang vận chuyển
               </div>
             ) : (
@@ -449,55 +449,55 @@ export const SellerShippingKanban: React.FC<SellerShippingKanbanProps> = ({
                 return (
                   <div
                     key={order.id}
-                    className="bg-[#FFFBF4] border border-[#DCCDB6] rounded-xl p-4 shadow-vintage-sm hover:shadow-vintage transition-all"
+                    className="bg-[#FFFFFF] border border-[#E2E8D8] rounded-xl p-4 shadow-vintage-sm hover:shadow-vintage transition-all"
                   >
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div>
-                        <span className="font-mono font-bold text-xs text-[#D9542B]">
+                        <span className="font-mono font-bold text-xs text-[#C2522D]">
                           #{order.code}
                         </span>
-                        <p className="text-xs text-[#74665B] mt-0.5">
+                        <p className="text-xs text-[#5E5E61] mt-0.5">
                           {order.recipient_name} · {order.phone}
                         </p>
                       </div>
-                      <span className="font-mono text-xs font-bold text-[#241A14]">
+                      <span className="font-mono text-xs font-bold text-[#101410]">
                         {formatVND(order.total)}
                       </span>
                     </div>
 
                     {/* Carrier & Tracking Code Badge */}
-                    <div className="bg-[#EADFCC]/70 rounded-xl p-2.5 mb-3 space-y-1.5 border border-[#DCCDB6]">
+                    <div className="bg-[#DAE7C7]/70 rounded-xl p-2.5 mb-3 space-y-1.5 border border-[#E2E8D8]">
                       <div className="flex items-center justify-between text-xs">
-                        <span className="font-semibold text-[#241A14]">
+                        <span className="font-semibold text-[#101410]">
                           {order.carrier || 'ĐVVC Liên kết'}
                         </span>
-                        <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-[#D9542B] text-white">
+                        <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-[#C2522D] text-white">
                           Đang giao
                         </span>
                       </div>
 
                       {order.tracking_code && (
                         <div className="flex items-center justify-between bg-white/70 rounded-lg px-2 py-1 text-xs font-mono">
-                          <span className="text-[#241A14] truncate font-bold">
+                          <span className="text-[#101410] truncate font-bold">
                             {order.tracking_code}
                           </span>
                           <button
                             onClick={() => handleCopyCode(order.tracking_code!)}
-                            className="p-1 hover:text-[#D9542B] transition-colors"
+                            className="p-1 hover:text-[#C2522D] transition-colors"
                             title="Sao chép mã vận đơn"
                           >
                             {copiedCode === order.tracking_code ? (
-                              <Check className="w-3.5 h-3.5 text-[#5E7048]" />
+                              <Check className="w-3.5 h-3.5 text-[#08482D]" />
                             ) : (
-                              <Copy className="w-3.5 h-3.5 text-[#74665B]" />
+                              <Copy className="w-3.5 h-3.5 text-[#5E5E61]" />
                             )}
                           </button>
                         </div>
                       )}
 
                       {latestEvent && (
-                        <div className="text-[11px] text-[#74665B] pt-1 border-t border-[#DCCDB6]/50">
-                          <div className="font-medium text-[#241A14]">
+                        <div className="text-[11px] text-[#5E5E61] pt-1 border-t border-[#E2E8D8]/50">
+                          <div className="font-medium text-[#101410]">
                             {latestEvent.status}
                           </div>
                           <div className="truncate">
@@ -518,14 +518,14 @@ export const SellerShippingKanban: React.FC<SellerShippingKanbanProps> = ({
                           note: 'Shipper đang sắp xếp tuyến giao',
                           submitting: false
                         })}
-                        className="py-1.5 px-2 bg-[#F4ECDF] hover:bg-[#EADFCC] border border-[#DCCDB6] text-[#241A14] rounded-lg text-xs font-medium transition-colors"
+                        className="py-1.5 px-2 bg-[#F5F8EF] hover:bg-[#DAE7C7] border border-[#E2E8D8] text-[#101410] rounded-lg text-xs font-medium transition-colors"
                       >
                         + Cập nhật lộ trình
                       </button>
 
                       <button
                         onClick={() => handleQuickDeliver(order)}
-                        className="py-1.5 px-2 bg-[#5E7048] hover:bg-[#4D5E3B] text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-colors shadow-sm"
+                        className="py-1.5 px-2 bg-[#08482D] hover:bg-[#4D5E3B] text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-colors shadow-sm"
                       >
                         <CheckCircle2 className="w-3.5 h-3.5" />
                         Giao thành công
@@ -535,9 +535,9 @@ export const SellerShippingKanban: React.FC<SellerShippingKanbanProps> = ({
                     {/* Nút In phiếu giao hàng */}
                     <button
                       onClick={() => setLabelModalOrder(order)}
-                      className="w-full mt-2 py-1.5 px-3 bg-white border border-[#DCCDB6] hover:bg-[#F4ECDF] text-[#241A14] rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-xs"
+                      className="w-full mt-2 py-1.5 px-3 bg-white border border-[#E2E8D8] hover:bg-[#F5F8EF] text-[#101410] rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-xs"
                     >
-                      <Printer className="w-3.5 h-3.5 text-[#D9542B]" />
+                      <Printer className="w-3.5 h-3.5 text-[#C2522D]" />
                       In phiếu giao hàng (A6)
                     </button>
                   </div>
@@ -548,60 +548,60 @@ export const SellerShippingKanban: React.FC<SellerShippingKanbanProps> = ({
         </div>
 
         {/* ================= COLUMN 3: Giao Thành Công ================= */}
-        <div className="flex flex-col bg-[#EADFCC]/50 border border-[#DCCDB6] rounded-2xl p-4">
-          <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#DCCDB6]">
+        <div className="flex flex-col bg-[#DAE7C7]/50 border border-[#E2E8D8] rounded-2xl p-4">
+          <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#E2E8D8]">
             <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-[#5E7048]" />
-              <h3 className="font-serif font-bold text-sm text-[#241A14]">3. Giao thành công</h3>
+              <span className="w-3 h-3 rounded-full bg-[#08482D]" />
+              <h3 className="font-bold text-sm text-[#101410]">3. Giao thành công</h3>
             </div>
-            <span className="font-mono text-xs px-2.5 py-0.5 rounded-full bg-[#FFFBF4] border border-[#DCCDB6] text-[#241A14] font-bold">
+            <span className="font-mono text-xs px-2.5 py-0.5 rounded-full bg-[#FFFFFF] border border-[#E2E8D8] text-[#101410] font-bold">
               {deliveredOrders.length}
             </span>
           </div>
 
           <div className="space-y-4 flex-1 overflow-y-auto max-h-[720px] pr-1">
             {deliveredOrders.length === 0 ? (
-              <div className="py-12 text-center text-xs text-[#74665B] bg-[#FFFBF4]/40 border border-dashed border-[#DCCDB6] rounded-xl">
+              <div className="py-12 text-center text-xs text-[#5E5E61] bg-[#FFFFFF]/40 border border-dashed border-[#E2E8D8] rounded-xl">
                 Chưa có đơn hàng nào hoàn tất giao
               </div>
             ) : (
               deliveredOrders.map(order => (
                 <div
                   key={order.id}
-                  className="bg-[#FFFBF4] border border-[#DCCDB6] rounded-xl p-4 shadow-vintage-sm hover:shadow-vintage transition-all"
+                  className="bg-[#FFFFFF] border border-[#E2E8D8] rounded-xl p-4 shadow-vintage-sm hover:shadow-vintage transition-all"
                 >
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div>
-                      <span className="font-mono font-bold text-xs text-[#241A14]">
+                      <span className="font-mono font-bold text-xs text-[#101410]">
                         #{order.code}
                       </span>
-                      <p className="text-xs text-[#74665B] mt-0.5">
+                      <p className="text-xs text-[#5E5E61] mt-0.5">
                         {order.recipient_name} · {order.carrier || 'ĐVVC'}
                       </p>
                     </div>
-                    <span className="font-mono text-xs font-bold text-[#5E7048]">
+                    <span className="font-mono text-xs font-bold text-[#08482D]">
                       {formatVND(order.total)}
                     </span>
                   </div>
 
-                  <div className="bg-[#5E7048]/10 rounded-lg p-2.5 mb-2 border border-[#5E7048]/20 text-xs">
+                  <div className="bg-[#08482D]/10 rounded-lg p-2.5 mb-2 border border-[#08482D]/20 text-xs">
                     <div className="flex items-center justify-between">
-                      <span className="font-semibold text-[#5E7048] flex items-center gap-1.5">
+                      <span className="font-semibold text-[#08482D] flex items-center gap-1.5">
                         <CheckCircle2 className="w-3.5 h-3.5" />
                         {order.status === 'completed' ? 'Khách đã xác nhận nhận hàng' : 'Đã giao thành công'}
                       </span>
                     </div>
-                    <div className="text-[11px] text-[#74665B] mt-1">
-                      Thanh toán: <span className="font-medium text-[#241A14]">{order.payment_method === 'cod' ? 'COD (Đã thu tiền)' : 'Thẻ (Đã thanh toán)'}</span>
+                    <div className="text-[11px] text-[#5E5E61] mt-1">
+                      Thanh toán: <span className="font-medium text-[#101410]">{order.payment_method === 'cod' ? 'COD (Đã thu tiền)' : 'Thẻ (Đã thanh toán)'}</span>
                     </div>
                   </div>
 
                   {order.tracking_code && (
-                    <div className="flex items-center justify-between text-xs font-mono text-[#74665B] px-1">
+                    <div className="flex items-center justify-between text-xs font-mono text-[#5E5E61] px-1">
                       <span>Mã vận đơn: {order.tracking_code}</span>
                       <button
                         onClick={() => handleCopyCode(order.tracking_code!)}
-                        className="hover:text-[#D9542B]"
+                        className="hover:text-[#C2522D]"
                         title="Sao chép"
                       >
                         <Copy className="w-3.5 h-3.5" />
@@ -611,16 +611,16 @@ export const SellerShippingKanban: React.FC<SellerShippingKanbanProps> = ({
 
                   <button
                     onClick={() => setLabelModalOrder(order)}
-                    className="w-full mt-2 py-1.5 px-3 bg-white border border-[#DCCDB6] hover:bg-[#F4ECDF] text-[#241A14] rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-xs"
+                    className="w-full mt-2 py-1.5 px-3 bg-white border border-[#E2E8D8] hover:bg-[#F5F8EF] text-[#101410] rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-xs"
                   >
-                    <Printer className="w-3.5 h-3.5 text-[#D9542B]" />
+                    <Printer className="w-3.5 h-3.5 text-[#C2522D]" />
                     In phiếu giao hàng (A6)
                   </button>
 
                   {onViewOrderDetail && (
                     <button
                       onClick={() => onViewOrderDetail(order)}
-                      className="w-full mt-2 py-1.5 text-xs text-[#74665B] hover:text-[#241A14] border-t border-[#DCCDB6]/50 flex items-center justify-center gap-1 transition-colors"
+                      className="w-full mt-2 py-1.5 text-xs text-[#5E5E61] hover:text-[#101410] border-t border-[#E2E8D8]/50 flex items-center justify-center gap-1 transition-colors"
                     >
                       Xem chi tiết đơn hàng
                       <ChevronRight className="w-3.5 h-3.5" />
@@ -636,19 +636,19 @@ export const SellerShippingKanban: React.FC<SellerShippingKanbanProps> = ({
       {/* Journey Update Modal */}
       {journeyModal.open && journeyModal.order && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
-          <div className="bg-[#FFFBF4] border border-[#DCCDB6] rounded-2xl w-full max-w-md p-6 shadow-vintage-lg space-y-4">
-            <div className="flex items-center justify-between border-b border-[#DCCDB6] pb-3">
+          <div className="bg-[#FFFFFF] border border-[#E2E8D8] rounded-2xl w-full max-w-md p-6 shadow-vintage-lg space-y-4">
+            <div className="flex items-center justify-between border-b border-[#E2E8D8] pb-3">
               <div>
-                <h3 className="font-serif text-lg font-bold text-[#241A14]">
+                <h3 className="text-lg font-bold text-[#101410]">
                   Cập nhật hành trình vận chuyển
                 </h3>
-                <p className="text-xs text-[#74665B] font-mono">
+                <p className="text-xs text-[#5E5E61] font-mono">
                   Đơn #{journeyModal.order.code} · {journeyModal.order.carrier}
                 </p>
               </div>
               <button
                 onClick={() => setJourneyModal(prev => ({ ...prev, open: false }))}
-                className="text-[#74665B] hover:text-[#241A14] text-lg font-bold"
+                className="text-[#5E5E61] hover:text-[#101410] text-lg font-bold"
               >
                 ✕
               </button>
@@ -656,7 +656,7 @@ export const SellerShippingKanban: React.FC<SellerShippingKanbanProps> = ({
 
             <form onSubmit={handleUpdateJourney} className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-[#241A14] mb-1">
+                <label className="block text-xs font-semibold text-[#101410] mb-1">
                   Trạng thái chặng:
                 </label>
                 <input
@@ -665,12 +665,12 @@ export const SellerShippingKanban: React.FC<SellerShippingKanbanProps> = ({
                   value={journeyModal.status}
                   onChange={(e) => setJourneyModal(prev => ({ ...prev, status: e.target.value }))}
                   placeholder="Ví dụ: Đang giao hàng / Đến kho phân loại"
-                  className="w-full bg-[#F4ECDF] border border-[#DCCDB6] rounded-xl px-3 py-2 text-xs text-[#241A14] focus:outline-none focus:border-[#D9542B]"
+                  className="w-full bg-[#F5F8EF] border border-[#E2E8D8] rounded-xl px-3 py-2 text-xs text-[#101410] focus:outline-none focus:border-[#C2522D]"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-[#241A14] mb-1">
+                <label className="block text-xs font-semibold text-[#101410] mb-1">
                   Vị trí hiện tại:
                 </label>
                 <input
@@ -679,12 +679,12 @@ export const SellerShippingKanban: React.FC<SellerShippingKanbanProps> = ({
                   value={journeyModal.location}
                   onChange={(e) => setJourneyModal(prev => ({ ...prev, location: e.target.value }))}
                   placeholder="Ví dụ: Kho trung chuyển Sóng Thần, Bình Dương"
-                  className="w-full bg-[#F4ECDF] border border-[#DCCDB6] rounded-xl px-3 py-2 text-xs text-[#241A14] focus:outline-none focus:border-[#D9542B]"
+                  className="w-full bg-[#F5F8EF] border border-[#E2E8D8] rounded-xl px-3 py-2 text-xs text-[#101410] focus:outline-none focus:border-[#C2522D]"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-[#241A14] mb-1">
+                <label className="block text-xs font-semibold text-[#101410] mb-1">
                   Ghi chú chi tiết (nếu có):
                 </label>
                 <textarea
@@ -692,7 +692,7 @@ export const SellerShippingKanban: React.FC<SellerShippingKanbanProps> = ({
                   value={journeyModal.note}
                   onChange={(e) => setJourneyModal(prev => ({ ...prev, note: e.target.value }))}
                   placeholder="Ghi chú thêm về kiện hàng hoặc tình hình thời tiết / giao nhận"
-                  className="w-full bg-[#F4ECDF] border border-[#DCCDB6] rounded-xl px-3 py-2 text-xs text-[#241A14] focus:outline-none focus:border-[#D9542B]"
+                  className="w-full bg-[#F5F8EF] border border-[#E2E8D8] rounded-xl px-3 py-2 text-xs text-[#101410] focus:outline-none focus:border-[#C2522D]"
                 />
               </div>
 
@@ -700,14 +700,14 @@ export const SellerShippingKanban: React.FC<SellerShippingKanbanProps> = ({
                 <button
                   type="button"
                   onClick={() => setJourneyModal(prev => ({ ...prev, open: false }))}
-                  className="px-4 py-2 border border-[#DCCDB6] rounded-xl text-xs font-medium text-[#74665B] hover:bg-[#EADFCC] transition-colors"
+                  className="px-4 py-2 border border-[#E2E8D8] rounded-xl text-xs font-medium text-[#5E5E61] hover:bg-[#DAE7C7] transition-colors"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
                   disabled={journeyModal.submitting}
-                  className="px-5 py-2 bg-[#D9542B] hover:bg-[#B33F33] text-white rounded-xl text-xs font-semibold transition-colors shadow-sm disabled:opacity-50"
+                  className="px-5 py-2 bg-[#C2522D] hover:bg-[#B33F33] text-white rounded-xl text-xs font-semibold transition-colors shadow-sm disabled:opacity-50"
                 >
                   {journeyModal.submitting ? 'Đang lưu...' : 'Gửi cập nhật & Báo khách'}
                 </button>

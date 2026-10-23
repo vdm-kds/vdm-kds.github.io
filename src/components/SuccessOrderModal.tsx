@@ -30,7 +30,7 @@ export const SuccessOrderModal: React.FC<SuccessOrderModalProps> = ({
           <span className="text-xs font-bold text-[#556B2F] uppercase tracking-wider block mb-1">
             Đặt hàng thành công
           </span>
-          <h3 className="font-serif text-2xl font-bold text-[#2C2724]">
+          <h3 className="text-2xl font-bold text-[#101410]">
             Cảm ơn bạn đã tin tưởng tiệm!
           </h3>
           <p className="text-xs text-[#786F66] mt-1 leading-relaxed">
@@ -59,7 +59,7 @@ export const SuccessOrderModal: React.FC<SuccessOrderModalProps> = ({
             <strong>Thanh toán:</strong>{' '}
             {order.payment_method === 'cod' ? 'Tiền mặt khi nhận hàng (COD)' : `${order.card_type} (•••• ${order.card_last4})`}
           </div>
-          <div className="pt-2 border-t border-[#E6DFD5] flex justify-between font-bold text-[#2C2724]">
+          <div className="pt-2 border-t border-[#E6DFD5] flex justify-between font-bold text-[#101410]">
             <span>Tổng thanh toán:</span>
             <span className="font-mono text-sm">{formatVND(order.total)}</span>
           </div>

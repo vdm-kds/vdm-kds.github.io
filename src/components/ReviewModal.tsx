@@ -91,40 +91,40 @@ export function ReviewModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="relative w-full max-w-lg bg-[#FFFBF4] rounded-3xl border-2 border-[#DCCDB6] shadow-2xl p-6 sm:p-8 overflow-hidden">
+      <div className="relative w-full max-w-lg bg-[#FFFFFF] rounded-3xl border-2 border-[#E2E8D8] shadow-2xl p-6 sm:p-8 overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-[#EADFCC]">
+        <div className="flex items-center justify-between pb-4 border-b border-[#DAE7C7]">
           <div>
-            <span className="text-[11px] font-mono uppercase tracking-wider text-[#D9542B] font-semibold flex items-center gap-1.5">
+            <span className="text-[11px] font-mono uppercase tracking-wider text-[#C2522D] font-semibold flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5" /> Đánh giá món đồ
             </span>
-            <h3 className="font-serif text-xl sm:text-2xl font-bold text-[#241A14]">
+            <h3 className="text-xl sm:text-2xl font-bold text-[#101410]">
               Chia sẻ cảm nhận của bạn
             </h3>
-            <p className="text-xs text-[#74665B] mt-0.5">
+            <p className="text-xs text-[#5E5E61] mt-0.5">
               Đơn hàng #{orderCode}
             </p>
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-full hover:bg-[#EADFCC] text-[#74665B] transition-colors"
+            className="p-2 rounded-full hover:bg-[#DAE7C7] text-[#5E5E61] transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Product preview */}
-        <div className="flex items-center gap-3 my-4 p-3 bg-[#F4ECDF] rounded-2xl border border-[#DCCDB6]">
+        <div className="flex items-center gap-3 my-4 p-3 bg-[#F5F8EF] rounded-2xl border border-[#E2E8D8]">
           <img
             src={product.image_url}
             alt={product.name}
-            className="w-14 h-14 rounded-xl object-cover border border-[#DCCDB6] flex-shrink-0"
+            className="w-14 h-14 rounded-xl object-cover border border-[#E2E8D8] flex-shrink-0"
           />
           <div className="min-w-0 flex-1">
-            <h4 className="font-serif font-bold text-sm text-[#241A14] truncate">
+            <h4 className="font-bold text-sm text-[#101410] truncate">
               {product.name}
             </h4>
-            <span className="inline-block px-2 py-0.5 text-[10px] font-mono bg-[#EADFCC] text-[#5E7048] rounded-full mt-1 font-semibold">
+            <span className="inline-block px-2 py-0.5 text-[10px] font-mono bg-[#DAE7C7] text-[#08482D] rounded-full mt-1 font-semibold">
               Độ mới: {product.condition_pct}%
             </span>
           </div>
@@ -133,7 +133,7 @@ export function ReviewModal({
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* Star selector */}
           <div className="text-center py-2">
-            <p className="text-xs text-[#74665B] mb-2 font-medium">
+            <p className="text-xs text-[#5E5E61] mb-2 font-medium">
               Chất lượng món đồ so với kỳ vọng của bạn?
             </p>
             <div className="flex items-center justify-center gap-2">
@@ -150,20 +150,20 @@ export function ReviewModal({
                     className={`w-8 h-8 transition-colors ${
                       star <= activeStar
                         ? 'text-[#E3B23C] fill-[#E3B23C]'
-                        : 'text-[#DCCDB6]'
+                        : 'text-[#E2E8D8]'
                     }`}
                   />
                 </button>
               ))}
             </div>
-            <p className="text-xs font-serif italic text-[#D9542B] mt-2 font-semibold min-h-[1.25rem]">
+            <p className="text-xs italic text-[#C2522D] mt-2 font-semibold min-h-[1.25rem]">
               {RATING_LABELS[activeStar]}
             </p>
           </div>
 
           {/* Quick tags */}
           <div>
-            <label className="block text-xs font-bold text-[#241A14] uppercase tracking-wider mb-2 font-serif">
+            <label className="block text-xs font-bold text-[#101410] uppercase tracking-wider mb-2">
               Gợi ý nhanh (chọn nhiều)
             </label>
             <div className="flex flex-wrap gap-1.5">
@@ -176,8 +176,8 @@ export function ReviewModal({
                     onClick={() => toggleTag(tag)}
                     className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all border ${
                       isSelected
-                        ? 'bg-[#5E7048] text-white border-[#5E7048] shadow-sm'
-                        : 'bg-[#FFFBF4] text-[#74665B] border-[#DCCDB6] hover:border-[#5E7048]'
+                        ? 'bg-[#08482D] text-white border-[#08482D] shadow-sm'
+                        : 'bg-[#FFFFFF] text-[#5E5E61] border-[#E2E8D8] hover:border-[#08482D]'
                     }`}
                   >
                     {isSelected && '✓ '}
@@ -191,10 +191,10 @@ export function ReviewModal({
           {/* Comment text area */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="text-xs font-bold text-[#241A14] uppercase tracking-wider font-serif">
+              <label className="text-xs font-bold text-[#101410] uppercase tracking-wider">
                 Nhận xét chi tiết *
               </label>
-              <span className={`text-[11px] font-mono ${comment.trim().length < 10 ? 'text-[#B33F33]' : 'text-[#5E7048]'}`}>
+              <span className={`text-[11px] font-mono ${comment.trim().length < 10 ? 'text-[#B33F33]' : 'text-[#08482D]'}`}>
                 {comment.trim().length}/10 ký tự tối thiểu
               </span>
             </div>
@@ -204,24 +204,24 @@ export function ReviewModal({
               placeholder="Hãy kể về tình trạng món đồ khi nhận, mùi hương, đóng gói và cảm nhận khi bạn sử dụng..."
               rows={4}
               required
-              className="w-full px-4 py-3 bg-white border border-[#DCCDB6] rounded-2xl text-xs sm:text-sm text-[#241A14] focus:outline-none focus:ring-2 focus:ring-[#D9542B] focus:border-transparent resize-none leading-relaxed"
+              className="w-full px-4 py-3 bg-white border border-[#E2E8D8] rounded-2xl text-xs sm:text-sm text-[#101410] focus:outline-none focus:ring-2 focus:ring-[#C2522D] focus:border-transparent resize-none leading-relaxed"
             />
           </div>
 
           {/* Actions */}
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#EADFCC]">
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#DAE7C7]">
             <button
               type="button"
               onClick={onClose}
               disabled={submitting}
-              className="px-5 py-2.5 rounded-2xl border border-[#DCCDB6] text-xs font-bold text-[#74665B] hover:bg-[#EADFCC] transition-colors"
+              className="px-5 py-2.5 rounded-2xl border border-[#E2E8D8] text-xs font-bold text-[#5E5E61] hover:bg-[#DAE7C7] transition-colors"
             >
               Hủy
             </button>
             <button
               type="submit"
               disabled={submitting || comment.trim().length < 10}
-              className="px-6 py-2.5 rounded-2xl bg-[#D9542B] text-white text-xs font-bold hover:bg-[#B33F33] transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              className="px-6 py-2.5 rounded-2xl bg-[#C2522D] text-white text-xs font-bold hover:bg-[#B33F33] transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {submitting ? 'Đang gửi...' : 'Gửi đánh giá'}
             </button>

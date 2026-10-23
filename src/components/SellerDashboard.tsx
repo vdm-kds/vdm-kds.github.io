@@ -10,8 +10,13 @@ import { formatVND, formatDate, getOrderStatusBadge, getPaymentStatusBadge } fro
 import { useToast } from '../context/ToastContext';
 import { SellerShippingKanban } from './SellerShippingKanban';
 import { ShippingLabelModal } from './ShippingLabelModal';
+import { Button } from './Button';
 
-export const SellerDashboard: React.FC = () => {
+interface SellerDashboardProps {
+  onViewPreview?: () => void;
+}
+
+export const SellerDashboard: React.FC<SellerDashboardProps> = ({ onViewPreview }) => {
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<'dashboard' | 'shipping' | 'orders' | 'products' | 'coupons'>('dashboard');
 
@@ -367,19 +372,32 @@ export const SellerDashboard: React.FC = () => {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
       {/* Seller Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-[#E6DFD5]">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-[#E2E8D8]">
         <div>
-          <div className="flex items-center gap-2 text-xs font-bold text-[#556B2F] uppercase tracking-wider">
+          <div className="flex items-center gap-2 text-xs font-bold text-[#08482D] uppercase tracking-wider">
             <Store className="w-4 h-4" />
             Kênh Quản Trị Người Bán (Admin)
           </div>
-          <h1 className="font-serif text-3xl font-bold text-[#2C2724] mt-1">
+          <h1 className="text-2xl sm:text-3xl font-bold text-[#101410] mt-1">
             Bảng điều khiển Tiệm Đồ Cũ Còn Thương
           </h1>
         </div>
 
-        {/* Navigation Tabs */}
-        <div className="flex flex-wrap bg-[#DAE7C7]/50 p-1.5 rounded-full text-xs font-bold border border-[#E2E8D8] gap-1">
+        <div className="flex flex-wrap items-center gap-2">
+          {onViewPreview && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={onViewPreview}
+              className="text-xs"
+            >
+              <Eye className="w-3.5 h-3.5 mr-1 text-[#08482D]" />
+              <span>Xem cửa hàng</span>
+            </Button>
+          )}
+
+          {/* Navigation Tabs */}
+          <div className="flex flex-wrap bg-[#DAE7C7]/50 p-1.5 rounded-full text-xs font-bold border border-[#E2E8D8] gap-1">
           <button
             onClick={() => setActiveTab('dashboard')}
             className={`px-4 py-2 rounded-full transition-all ${
@@ -444,6 +462,7 @@ export const SellerDashboard: React.FC = () => {
             <span>Mã giảm giá</span>
           </button>
         </div>
+        </div>
       </div>
 
       {/* TAB: VẬN CHUYỂN (KANBAN) */}
@@ -461,8 +480,8 @@ export const SellerDashboard: React.FC = () => {
       {activeTab === 'dashboard' && (
         <div className="space-y-6 animate-in fade-in">
           {loadingStats || !stats ? (
-            <div className="p-12 text-center bg-[#FFFBF4] rounded-3xl border border-[#DCCDB6]">
-              <RefreshCw className="w-8 h-8 animate-spin text-[#D9542B] mx-auto mb-2" />
+            <div className="p-12 text-center bg-[#FFFFFF] rounded-3xl border border-[#E2E8D8]">
+              <RefreshCw className="w-8 h-8 animate-spin text-[#C2522D] mx-auto mb-2" />
               <p className="text-sm text-[#786F66]">Đang tải dữ liệu kinh doanh...</p>
             </div>
           ) : (
@@ -474,7 +493,7 @@ export const SellerDashboard: React.FC = () => {
                     <span className="text-xs font-semibold uppercase">Tổng doanh thu</span>
                     <DollarSign className="w-4 h-4 text-[#556B2F]" />
                   </div>
-                  <div className="font-mono text-2xl font-bold text-[#2C2724]">
+                  <div className="font-mono text-2xl font-bold text-[#101410]">
                     {formatVND(stats.total_revenue)}
                   </div>
                   <span className="text-[11px] text-[#556B2F] font-medium block">
@@ -487,7 +506,7 @@ export const SellerDashboard: React.FC = () => {
                     <span className="text-xs font-semibold uppercase">Tổng đơn hàng</span>
                     <Package className="w-4 h-4 text-[#3E7B88]" />
                   </div>
-                  <div className="font-mono text-2xl font-bold text-[#2C2724]">
+                  <div className="font-mono text-2xl font-bold text-[#101410]">
                     {stats.total_orders}
                   </div>
                   <span className="text-[11px] text-[#786F66] block">
@@ -524,7 +543,7 @@ export const SellerDashboard: React.FC = () => {
 
               {/* Status Breakdown Bar */}
               <div className="p-6 rounded-3xl bg-white border border-[#E6DFD5] space-y-4">
-                <h3 className="font-serif text-lg font-bold text-[#2C2724]">
+                <h3 className="text-lg font-bold text-[#101410]">
                   Phân bố đơn hàng theo trạng thái
                 </h3>
                 <div className="grid grid-cols-2 sm:grid-cols-6 gap-3 text-center">
@@ -570,7 +589,7 @@ export const SellerDashboard: React.FC = () => {
               {/* Recent Orders Table */}
               <div className="p-6 rounded-3xl bg-white border border-[#E6DFD5] space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="font-serif text-lg font-bold text-[#2C2724]">
+                  <h3 className="text-lg font-bold text-[#101410]">
                     Các đơn hàng vừa đặt gần đây
                   </h3>
                   <button
@@ -596,15 +615,15 @@ export const SellerDashboard: React.FC = () => {
                     <tbody className="divide-y divide-[#F2ECE3]">
                       {stats.recent_orders.map(ord => (
                         <tr key={ord.id} className="hover:bg-[#FAF7F2]">
-                          <td className="py-3 font-mono font-bold text-[#2C2724]">{ord.code}</td>
-                          <td className="py-3 text-[#2C2724]">
+                          <td className="py-3 font-mono font-bold text-[#101410]">{ord.code}</td>
+                          <td className="py-3 text-[#101410]">
                             <div className="font-semibold">{ord.buyer_name}</div>
                             <div className="text-[10px] text-stone-500">{ord.phone}</div>
                           </td>
                           <td className="py-3 text-[#524B46]">
                             {ord.items?.map(i => i.product_name).join(', ')}
                           </td>
-                          <td className="py-3 font-mono font-bold text-[#2C2724]">
+                          <td className="py-3 font-mono font-bold text-[#101410]">
                             {formatVND(ord.total)}
                           </td>
                           <td className="py-3">
@@ -664,7 +683,7 @@ export const SellerDashboard: React.FC = () => {
                 <button
                   onClick={handleBulkConfirm}
                   disabled={bulkApproveLoading}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#5E7048] hover:bg-[#4d5c3b] text-white text-xs font-bold transition-all shadow-xs disabled:opacity-50"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#08482D] hover:bg-[#4d5c3b] text-white text-xs font-bold transition-all shadow-xs disabled:opacity-50"
                 >
                   {bulkApproveLoading ? (
                     <RefreshCw className="w-3.5 h-3.5 animate-spin" />
@@ -678,10 +697,10 @@ export const SellerDashboard: React.FC = () => {
               {/* Nút Xuất báo cáo CSV */}
               <button
                 onClick={handleExportCsv}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#DCCDB6] text-xs font-semibold text-[#241A14] hover:bg-[#FAF7F2] shadow-2xs"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#E2E8D8] text-xs font-semibold text-[#101410] hover:bg-[#FAF7F2] shadow-2xs"
                 title="Tải báo cáo đơn hàng định dạng CSV (UTF-8 BOM cho Excel)"
               >
-                <Download className="w-3.5 h-3.5 text-[#D9542B]" />
+                <Download className="w-3.5 h-3.5 text-[#C2522D]" />
                 <span>Xuất CSV</span>
               </button>
 
@@ -697,20 +716,20 @@ export const SellerDashboard: React.FC = () => {
 
           {/* Bulk Select All bar if orders exist */}
           {orders.length > 0 && (
-            <div className="flex items-center justify-between text-xs text-[#74665B] px-2">
+            <div className="flex items-center justify-between text-xs text-[#5E5E61] px-2">
               <button
                 onClick={handleSelectAllOrders}
-                className="flex items-center gap-1.5 hover:text-[#241A14] font-medium"
+                className="flex items-center gap-1.5 hover:text-[#101410] font-medium"
               >
                 {selectedOrderIds.length === orders.length ? (
-                  <CheckSquare className="w-4 h-4 text-[#5E7048]" />
+                  <CheckSquare className="w-4 h-4 text-[#08482D]" />
                 ) : (
-                  <Square className="w-4 h-4 text-[#DCCDB6]" />
+                  <Square className="w-4 h-4 text-[#E2E8D8]" />
                 )}
                 <span>Chọn tất cả ({orders.length} đơn)</span>
               </button>
               {selectedOrderIds.length > 0 && (
-                <span className="text-xs font-semibold text-[#D9542B]">
+                <span className="text-xs font-semibold text-[#C2522D]">
                   Đã chọn {selectedOrderIds.length} đơn
                 </span>
               )}
@@ -755,16 +774,16 @@ export const SellerDashboard: React.FC = () => {
                               e.stopPropagation();
                               handleToggleOrderSelect(ord.id);
                             }}
-                            className="p-1 text-[#74665B] hover:text-[#241A14]"
+                            className="p-1 text-[#5E5E61] hover:text-[#101410]"
                           >
                             {isChecked ? (
-                              <CheckSquare className="w-4 h-4 text-[#5E7048]" />
+                              <CheckSquare className="w-4 h-4 text-[#08482D]" />
                             ) : (
-                              <Square className="w-4 h-4 text-[#DCCDB6]" />
+                              <Square className="w-4 h-4 text-[#E2E8D8]" />
                             )}
                           </button>
                           <div>
-                            <span className="font-mono text-xs font-bold text-[#2C2724]">{ord.code}</span>
+                            <span className="font-mono text-xs font-bold text-[#101410]">{ord.code}</span>
                             <span className="text-[10px] text-stone-400 block">{formatDate(ord.created_at)}</span>
                           </div>
                         </div>
@@ -782,7 +801,7 @@ export const SellerDashboard: React.FC = () => {
                           <strong>Món:</strong> {ord.items?.map(i => `${i.product_name} (x${i.quantity})`).join(', ')}
                         </div>
                         {ord.coupon_code && (
-                          <div className="text-[11px] text-[#5E7048]">
+                          <div className="text-[11px] text-[#08482D]">
                             Mã giảm: <span className="font-mono font-bold">{ord.coupon_code}</span> (-{formatVND(ord.discount_amount || 0)})
                           </div>
                         )}
@@ -792,7 +811,7 @@ export const SellerDashboard: React.FC = () => {
                         <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${payBadge.bg} ${payBadge.text}`}>
                           {payBadge.label}
                         </span>
-                        <span className="font-mono text-sm font-bold text-[#2C2724]">
+                        <span className="font-mono text-sm font-bold text-[#101410]">
                           {formatVND(ord.total)}
                         </span>
                       </div>
@@ -810,7 +829,7 @@ export const SellerDashboard: React.FC = () => {
                     <span className="text-xs font-bold text-[#556B2F] uppercase block mb-1">
                       Xử lý đơn hàng
                     </span>
-                    <h3 className="font-serif text-2xl font-bold text-[#2C2724]">
+                    <h3 className="text-2xl font-bold text-[#101410]">
                       {selectedOrder.code}
                     </h3>
                     <span className="text-xs text-stone-400">
@@ -832,7 +851,7 @@ export const SellerDashboard: React.FC = () => {
 
                 {/* Seller Workflow Control Bar */}
                 <div className="p-4 rounded-2xl bg-[#FAF7F2] border border-[#E6DFD5] space-y-3">
-                  <span className="text-xs font-bold text-[#2C2724] uppercase tracking-wider block">
+                  <span className="text-xs font-bold text-[#101410] uppercase tracking-wider block">
                     Hành động của người bán:
                   </span>
 
@@ -852,7 +871,7 @@ export const SellerDashboard: React.FC = () => {
                     {(selectedOrder.status === 'pending' || selectedOrder.status === 'confirmed' || selectedOrder.status === 'shipping') && (
                       <button
                         onClick={() => setCarrierModalOrder(selectedOrder)}
-                        className="px-4 py-2 bg-white border border-[#D8CEBE] hover:bg-[#FAF7F2] text-[#2C2724] rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs"
+                        className="px-4 py-2 bg-white border border-[#D8CEBE] hover:bg-[#FAF7F2] text-[#101410] rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs"
                       >
                         <Truck className="w-4 h-4 text-[#47533E]" />
                         {selectedOrder.carrier ? 'Đổi đơn vị vận chuyển' : 'Chọn đơn vị vận chuyển'}
@@ -863,9 +882,9 @@ export const SellerDashboard: React.FC = () => {
                     {selectedOrder.carrier && selectedOrder.status !== 'cancelled' && (
                       <button
                         onClick={() => setLabelModalOrder(selectedOrder)}
-                        className="px-4 py-2 bg-[#241A14] hover:bg-[#382b22] text-[#F4ECDF] rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs"
+                        className="px-4 py-2 bg-[#101410] hover:bg-[#382b22] text-[#F5F8EF] rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs"
                       >
-                        <Printer className="w-4 h-4 text-[#D9542B]" />
+                        <Printer className="w-4 h-4 text-[#C2522D]" />
                         In phiếu giao hàng (A6)
                       </button>
                     )}
@@ -874,7 +893,7 @@ export const SellerDashboard: React.FC = () => {
                     {selectedOrder.status !== 'cancelled' && (
                       <button
                         onClick={() => setShipmentEventModalOrder(selectedOrder)}
-                        className="px-4 py-2 bg-white border border-[#D8CEBE] hover:bg-[#FAF7F2] text-[#2C2724] rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs"
+                        className="px-4 py-2 bg-white border border-[#D8CEBE] hover:bg-[#FAF7F2] text-[#101410] rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs"
                       >
                         <Send className="w-4 h-4 text-[#1967D2]" />
                         Gửi báo cáo tình trạng giao hàng
@@ -898,7 +917,7 @@ export const SellerDashboard: React.FC = () => {
                 <div className="grid sm:grid-cols-2 gap-4 text-xs">
                   <div className="p-4 rounded-xl bg-white border border-[#E6DFD5]">
                     <span className="text-[#786F66] block font-semibold mb-1">Khách hàng & Địa chỉ:</span>
-                    <div className="font-bold text-[#2C2724]">{selectedOrder.recipient_name} ({selectedOrder.phone})</div>
+                    <div className="font-bold text-[#101410]">{selectedOrder.recipient_name} ({selectedOrder.phone})</div>
                     <div className="text-stone-600 mt-1 leading-relaxed">{selectedOrder.address}</div>
                     {selectedOrder.note && (
                       <div className="mt-2 text-stone-500 italic">"Ghi chú: {selectedOrder.note}"</div>
@@ -917,7 +936,7 @@ export const SellerDashboard: React.FC = () => {
 
                 {/* Ordered Items Table */}
                 <div>
-                  <h4 className="text-xs font-bold text-[#2C2724] uppercase tracking-wider mb-2">
+                  <h4 className="text-xs font-bold text-[#101410] uppercase tracking-wider mb-2">
                     Sản phẩm trong đơn ({selectedOrder.items?.length})
                   </h4>
                   <div className="border border-[#E6DFD5] rounded-xl overflow-hidden divide-y divide-[#F2ECE3]">
@@ -926,16 +945,16 @@ export const SellerDashboard: React.FC = () => {
                         <div className="flex items-center gap-3">
                           <img src={it.image_url} alt="" className="w-10 h-10 rounded-lg object-cover bg-stone-100" />
                           <div>
-                            <div className="font-bold text-[#2C2724]">{it.product_name}</div>
+                            <div className="font-bold text-[#101410]">{it.product_name}</div>
                             <div className="text-stone-500">Độ mới {it.condition_pct}% · Số lượng: {it.quantity}</div>
                           </div>
                         </div>
-                        <div className="font-mono font-bold text-[#2C2724]">
+                        <div className="font-mono font-bold text-[#101410]">
                           {formatVND(it.price * it.quantity)}
                         </div>
                       </div>
                     ))}
-                    <div className="p-3 bg-[#FAF7F2] flex justify-between text-xs font-bold text-[#2C2724]">
+                    <div className="p-3 bg-[#FAF7F2] flex justify-between text-xs font-bold text-[#101410]">
                       <span>Tổng tiền thu:</span>
                       <span className="font-mono text-sm">{formatVND(selectedOrder.total)}</span>
                     </div>
@@ -944,7 +963,7 @@ export const SellerDashboard: React.FC = () => {
 
                 {/* Timeline Báo cáo Vận chuyển đã gửi */}
                 <div className="space-y-3">
-                  <h4 className="text-xs font-bold text-[#2C2724] uppercase tracking-wider flex items-center gap-2">
+                  <h4 className="text-xs font-bold text-[#101410] uppercase tracking-wider flex items-center gap-2">
                     <Clock className="w-4 h-4 text-[#47533E]" />
                     Lịch sử sự kiện vận chuyển đã ghi nhận
                   </h4>
@@ -953,7 +972,7 @@ export const SellerDashboard: React.FC = () => {
                     {selectedOrder.shipment_events?.map((ev, idx) => (
                       <div key={idx} className="relative">
                         <div className="absolute -left-[23px] top-1.5 w-3 h-3 rounded-full bg-[#47533E] ring-4 ring-white" />
-                        <div className="text-xs font-bold text-[#2C2724]">
+                        <div className="text-xs font-bold text-[#101410]">
                           {ev.status} · {ev.location}
                         </div>
                         <div className="text-[10px] text-stone-400">{formatDate(ev.created_at)}</div>
@@ -973,7 +992,7 @@ export const SellerDashboard: React.FC = () => {
         <div className="space-y-6 animate-in fade-in">
           <div className="flex items-center justify-between pb-4 border-b border-[#E6DFD5]">
             <div>
-              <h3 className="font-serif text-xl font-bold text-[#2C2724]">
+              <h3 className="text-xl font-bold text-[#101410]">
                 Danh sách đồ cũ trong kho
               </h3>
               <p className="text-xs text-[#786F66]">
@@ -1017,11 +1036,11 @@ export const SellerDashboard: React.FC = () => {
                           <img src={prod.image_url} alt="" className="w-12 h-12 rounded-lg object-cover bg-[#F4EFEA]" />
                         </td>
                         <td className="py-3 px-4">
-                          <div className="font-bold text-[#2C2724]">{prod.name}</div>
+                          <div className="font-bold text-[#101410]">{prod.name}</div>
                           <div className="text-[11px] text-stone-500 line-clamp-1">{prod.condition_detail}</div>
                         </td>
                         <td className="py-3 px-4 font-medium text-[#524B46]">{prod.category}</td>
-                        <td className="py-3 px-4 font-mono font-bold text-[#2C2724]">
+                        <td className="py-3 px-4 font-mono font-bold text-[#101410]">
                           {formatVND(prod.price)}
                           {prod.original_price > prod.price && (
                             <span className="block text-[10px] text-stone-400 line-through">
@@ -1035,7 +1054,7 @@ export const SellerDashboard: React.FC = () => {
                           </span>
                         </td>
                         <td className="py-3 px-4 font-mono font-bold">
-                          <span className={prod.stock <= 1 ? 'text-[#D97746]' : 'text-[#2C2724]'}>
+                          <span className={prod.stock <= 1 ? 'text-[#D97746]' : 'text-[#101410]'}>
                             {prod.stock} món
                           </span>
                         </td>
@@ -1070,7 +1089,7 @@ export const SellerDashboard: React.FC = () => {
         <div className="space-y-6 animate-in fade-in">
           <div className="flex items-center justify-between pb-4 border-b border-[#E6DFD5]">
             <div>
-              <h3 className="font-serif text-xl font-bold text-[#2C2724]">
+              <h3 className="text-xl font-bold text-[#101410]">
                 Quản lý Mã giảm giá (Coupons)
               </h3>
               <p className="text-xs text-[#786F66]">
@@ -1080,7 +1099,7 @@ export const SellerDashboard: React.FC = () => {
 
             <button
               onClick={() => setCouponModalOpen(true)}
-              className="px-4 py-2.5 rounded-xl bg-[#D9542B] hover:bg-[#c24621] text-white text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs"
+              className="px-4 py-2.5 rounded-xl bg-[#C2522D] hover:bg-[#c24621] text-white text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs"
             >
               <Plus className="w-4 h-4" />
               Tạo mã giảm giá mới
@@ -1089,7 +1108,7 @@ export const SellerDashboard: React.FC = () => {
 
           {loadingCoupons ? (
             <div className="p-12 text-center bg-white rounded-3xl border border-[#E6DFD5]">
-              <RefreshCw className="w-8 h-8 animate-spin text-[#D9542B] mx-auto mb-2" />
+              <RefreshCw className="w-8 h-8 animate-spin text-[#C2522D] mx-auto mb-2" />
               <p className="text-sm text-[#786F66]">Đang tải danh sách mã giảm giá...</p>
             </div>
           ) : coupons.length === 0 ? (
@@ -1116,15 +1135,15 @@ export const SellerDashboard: React.FC = () => {
                   <tbody className="divide-y divide-[#F2ECE3]">
                     {coupons.map(cpn => (
                       <tr key={cpn.id} className="hover:bg-[#FAF7F2]">
-                        <td className="py-3.5 px-4 font-mono font-bold text-sm text-[#D9542B]">
+                        <td className="py-3.5 px-4 font-mono font-bold text-sm text-[#C2522D]">
                           {cpn.code}
                         </td>
-                        <td className="py-3.5 px-4 text-[#2C2724]">
+                        <td className="py-3.5 px-4 text-[#101410]">
                           {cpn.type === 'percent' && 'Giảm phần trăm (%)'}
                           {cpn.type === 'fixed' && 'Giảm tiền cố định'}
                           {cpn.type === 'shipping' && 'Miễn phí vận chuyển'}
                         </td>
-                        <td className="py-3.5 px-4 font-bold text-[#2C2724]">
+                        <td className="py-3.5 px-4 font-bold text-[#101410]">
                           {cpn.type === 'percent' && `${cpn.value}%`}
                           {cpn.type === 'fixed' && formatVND(cpn.value)}
                           {cpn.type === 'shipping' && '100% Phí ship'}
@@ -1135,7 +1154,7 @@ export const SellerDashboard: React.FC = () => {
                         <td className="py-3.5 px-4 font-mono text-[#524B46]">
                           {cpn.max_discount ? formatVND(cpn.max_discount) : 'Không giới hạn'}
                         </td>
-                        <td className="py-3.5 px-4 font-mono font-bold text-center text-[#2C2724]">
+                        <td className="py-3.5 px-4 font-mono font-bold text-center text-[#101410]">
                           {cpn.usage_count || 0} lượt
                         </td>
                         <td className="py-3.5 px-4 text-center">
@@ -1174,8 +1193,8 @@ export const SellerDashboard: React.FC = () => {
         <div className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-white rounded-3xl border border-[#D8CEBE] shadow-2xl p-6 sm:p-8 space-y-4 animate-in zoom-in-95">
             <div className="flex items-center justify-between pb-3 border-b border-[#E6DFD5]">
-              <h3 className="font-serif text-xl font-bold text-[#2C2724] flex items-center gap-2">
-                <Tag className="w-5 h-5 text-[#D9542B]" />
+              <h3 className="text-xl font-bold text-[#101410] flex items-center gap-2">
+                <Tag className="w-5 h-5 text-[#C2522D]" />
                 Tạo mã giảm giá mới
               </h3>
               <button onClick={() => setCouponModalOpen(false)} className="text-stone-400 hover:text-stone-700">
@@ -1260,7 +1279,7 @@ export const SellerDashboard: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="py-2.5 px-4 rounded-xl bg-[#D9542B] text-white text-xs font-bold hover:bg-[#c24621] shadow-xs"
+                  className="py-2.5 px-4 rounded-xl bg-[#C2522D] text-white text-xs font-bold hover:bg-[#c24621] shadow-xs"
                 >
                   Tạo mã
                 </button>
@@ -1275,7 +1294,7 @@ export const SellerDashboard: React.FC = () => {
         <div className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="w-full max-w-lg bg-white rounded-3xl border border-[#D8CEBE] shadow-2xl p-6 sm:p-8 space-y-4 max-h-[90vh] overflow-y-auto animate-in zoom-in-95">
             <div className="flex items-center justify-between pb-3 border-b border-[#E6DFD5]">
-              <h3 className="font-serif text-xl font-bold text-[#2C2724]">
+              <h3 className="text-xl font-bold text-[#101410]">
                 {productModal.mode === 'add' ? 'Thêm món đồ cũ mới' : 'Chỉnh sửa sản phẩm'}
               </h3>
               <button onClick={() => setProductModal({ open: false, mode: 'add' })} className="text-stone-400 hover:text-stone-700">
@@ -1411,7 +1430,7 @@ export const SellerDashboard: React.FC = () => {
         <div className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-white rounded-3xl border border-[#D8CEBE] shadow-2xl p-6 space-y-4 animate-in zoom-in-95">
             <div className="flex items-center justify-between pb-2 border-b border-[#E6DFD5]">
-              <h3 className="font-serif text-lg font-bold text-[#2C2724] flex items-center gap-2">
+              <h3 className="text-lg font-bold text-[#101410] flex items-center gap-2">
                 <Truck className="w-5 h-5 text-[#47533E]" />
                 Chọn đối tác vận chuyển
               </h3>
@@ -1436,7 +1455,7 @@ export const SellerDashboard: React.FC = () => {
                   key={c.name}
                   className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer text-xs transition-colors ${
                     selectedCarrier === c.name
-                      ? 'border-[#47533E] bg-[#F2F5EF] font-bold text-[#2C2724]'
+                      ? 'border-[#47533E] bg-[#F2F5EF] font-bold text-[#101410]'
                       : 'border-[#E6DFD5] hover:bg-[#FAF7F2]'
                   }`}
                 >
@@ -1478,7 +1497,7 @@ export const SellerDashboard: React.FC = () => {
         <div className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="w-full max-w-lg bg-white rounded-3xl border border-[#D8CEBE] shadow-2xl p-6 sm:p-8 space-y-4 max-h-[90vh] overflow-y-auto animate-in zoom-in-95">
             <div className="flex items-center justify-between pb-3 border-b border-[#E6DFD5]">
-              <h3 className="font-serif text-lg font-bold text-[#2C2724] flex items-center gap-2">
+              <h3 className="text-lg font-bold text-[#101410] flex items-center gap-2">
                 <Send className="w-5 h-5 text-[#1967D2]" />
                 Báo cáo tình trạng giao hàng ({shipmentEventModalOrder.code})
               </h3>
@@ -1573,7 +1592,7 @@ export const SellerDashboard: React.FC = () => {
         <div className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-white rounded-3xl border border-[#D8CEBE] shadow-2xl p-6 space-y-4 animate-in zoom-in-95">
             <div className="flex items-center justify-between pb-2 border-b border-[#E6DFD5]">
-              <h3 className="font-serif text-lg font-bold text-red-800 flex items-center gap-2">
+              <h3 className="text-lg font-bold text-red-800 flex items-center gap-2">
                 <XCircle className="w-5 h-5 text-red-600" />
                 Người bán hủy đơn {cancelModalOrder.code}
               </h3>
@@ -1587,7 +1606,7 @@ export const SellerDashboard: React.FC = () => {
             </p>
 
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-[#2C2724] block">Lý do hủy đơn:</label>
+              <label className="text-xs font-semibold text-[#101410] block">Lý do hủy đơn:</label>
               <textarea
                 rows={3}
                 value={cancelReason}

@@ -230,21 +230,21 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
         {/* Left List of Orders */}
         <div className={`space-y-4 ${selectedOrder ? 'lg:col-span-5' : 'lg:col-span-12'}`}>
           {loading && orders.length === 0 ? (
-            <div className="bg-[#FFFBF4] border border-[#DCCDB6] rounded-2xl p-12 text-center text-xs text-[#74665B]">
+            <div className="bg-[#FFFFFF] border border-[#E2E8D8] rounded-2xl p-12 text-center text-xs text-[#5E5E61]">
               Đang tải danh sách đơn hàng...
             </div>
           ) : orders.length === 0 ? (
-            <div className="bg-[#FFFBF4] border border-[#DCCDB6] rounded-2xl p-12 text-center">
-              <Package className="w-12 h-12 mx-auto text-[#74665B] stroke-1 mb-3" />
-              <h3 className="font-serif text-lg font-bold text-[#241A14] mb-1">
+            <div className="bg-[#FFFFFF] border border-[#E2E8D8] rounded-2xl p-12 text-center">
+              <Package className="w-12 h-12 mx-auto text-[#5E5E61] stroke-1 mb-3" />
+              <h3 className="text-lg font-bold text-[#101410] mb-1">
                 Không tìm thấy đơn hàng nào
               </h3>
-              <p className="text-xs text-[#74665B] mb-4">
+              <p className="text-xs text-[#5E5E61] mb-4">
                 Bạn chưa có đơn hàng nào trong mục này
               </p>
               <button
                 onClick={onBackToShop}
-                className="px-4 py-2 bg-[#D9542B] text-white text-xs font-semibold rounded-xl hover:bg-[#B33F33] transition-colors shadow-sm"
+                className="px-4 py-2 bg-[#C2522D] text-white text-xs font-semibold rounded-xl hover:bg-[#B33F33] transition-colors shadow-sm"
               >
                 Khám phá tiệm đồ cũ ngay
               </button>
@@ -257,24 +257,24 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                 <div
                   key={order.id}
                   onClick={() => handleSelectOrder(order.id)}
-                  className={`bg-[#FFFBF4] border rounded-2xl p-5 cursor-pointer transition-all ${
+                  className={`bg-[#FFFFFF] border rounded-2xl p-5 cursor-pointer transition-all ${
                     isSelected
-                      ? 'border-[#D9542B] ring-2 ring-[#D9542B]/20 shadow-vintage-lg'
-                      : 'border-[#DCCDB6] hover:border-[#74665B] shadow-vintage-sm'
+                      ? 'border-[#C2522D] ring-2 ring-[#C2522D]/20 shadow-vintage-lg'
+                      : 'border-[#E2E8D8] hover:border-[#5E5E61] shadow-vintage-sm'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3 mb-3">
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-sm text-[#D9542B]">
+                        <span className="font-mono font-bold text-sm text-[#C2522D]">
                           #{order.code}
                         </span>
                         <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                          order.status === 'shipping' ? 'bg-[#D9542B] text-white' :
-                          order.status === 'delivered' ? 'bg-[#5E7048] text-white' :
-                          order.status === 'completed' ? 'bg-[#241A14] text-white' :
+                          order.status === 'shipping' ? 'bg-[#C2522D] text-white' :
+                          order.status === 'delivered' ? 'bg-[#08482D] text-white' :
+                          order.status === 'completed' ? 'bg-[#101410] text-white' :
                           order.status === 'cancelled' ? 'bg-[#B33F33] text-white' :
-                          'bg-[#EADFCC] text-[#241A14]'
+                          'bg-[#DAE7C7] text-[#101410]'
                         }`}>
                           {order.status === 'pending' ? 'Chờ duyệt' :
                            order.status === 'confirmed' ? 'Đã duyệt' :
@@ -283,43 +283,43 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                            order.status === 'completed' ? 'Hoàn tất' : 'Đã hủy'}
                         </span>
                       </div>
-                      <span className="text-[11px] text-[#74665B] mt-0.5 block">
+                      <span className="text-[11px] text-[#5E5E61] mt-0.5 block">
                         Ngày đặt: {formatDate(order.created_at)}
                       </span>
                     </div>
 
                     <div className="text-right">
-                      <span className="font-mono text-base font-bold text-[#241A14] block">
+                      <span className="font-mono text-base font-bold text-[#101410] block">
                         {formatVND(order.total)}
                       </span>
-                      <span className="text-[10px] text-[#74665B] uppercase font-mono">
+                      <span className="text-[10px] text-[#5E5E61] uppercase font-mono">
                         {order.payment_method === 'cod' ? 'Thanh toán COD' : 'Thanh toán thẻ'}
                       </span>
                     </div>
                   </div>
 
                   {/* Items preview */}
-                  <div className="border-t border-[#DCCDB6]/50 pt-3 space-y-2">
+                  <div className="border-t border-[#E2E8D8]/50 pt-3 space-y-2">
                     {order.items?.slice(0, 2).map((item, idx) => (
                       <div key={idx} className="flex items-center gap-3 text-xs">
                         <img
                           src={item.image_url}
                           alt={item.product_name}
                           referrerPolicy="no-referrer"
-                          className="w-10 h-10 rounded-lg object-cover bg-[#EADFCC] shrink-0"
+                          className="w-10 h-10 rounded-lg object-cover bg-[#DAE7C7] shrink-0"
                         />
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium text-[#241A14] truncate">
+                          <p className="font-medium text-[#101410] truncate">
                             {item.product_name}
                           </p>
-                          <span className="text-[11px] text-[#74665B]">
+                          <span className="text-[11px] text-[#5E5E61]">
                             {item.quantity} × {formatVND(item.price)}
                           </span>
                         </div>
                       </div>
                     ))}
                     {(order.items?.length || 0) > 2 && (
-                      <p className="text-[11px] text-[#74665B] italic pt-1">
+                      <p className="text-[11px] text-[#5E5E61] italic pt-1">
                         + {(order.items?.length || 0) - 2} món đồ khác...
                       </p>
                     )}
@@ -327,9 +327,9 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
 
                   {/* Carrier info pill */}
                   {order.carrier && (
-                    <div className="mt-3 pt-2 border-t border-[#DCCDB6]/40 flex items-center justify-between text-xs text-[#74665B]">
-                      <span className="flex items-center gap-1 font-medium text-[#241A14]">
-                        <Truck className="w-3.5 h-3.5 text-[#D9542B]" />
+                    <div className="mt-3 pt-2 border-t border-[#E2E8D8]/40 flex items-center justify-between text-xs text-[#5E5E61]">
+                      <span className="flex items-center gap-1 font-medium text-[#101410]">
+                        <Truck className="w-3.5 h-3.5 text-[#C2522D]" />
                         {order.carrier}
                       </span>
                       {order.tracking_code && (
@@ -340,7 +340,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                     </div>
                   )}
 
-                  <div className="mt-3 pt-2 flex items-center justify-end text-xs font-semibold text-[#D9542B]">
+                  <div className="mt-3 pt-2 flex items-center justify-end text-xs font-semibold text-[#C2522D]">
                     <span>Xem hành trình chi tiết</span>
                     <ChevronRight className="w-4 h-4 ml-0.5" />
                   </div>
@@ -355,25 +355,25 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
           <div className="lg:col-span-7 space-y-6">
             {/* Friendly Status Hero Banner */}
             <div className={`p-6 rounded-3xl border shadow-vintage-sm ${
-              selectedOrder.status === 'shipping' ? 'bg-[#D9542B]/10 border-[#D9542B]/30' :
-              selectedOrder.status === 'delivered' ? 'bg-[#5E7048]/10 border-[#5E7048]/30' :
-              selectedOrder.status === 'completed' ? 'bg-[#EADFCC] border-[#DCCDB6]' :
+              selectedOrder.status === 'shipping' ? 'bg-[#C2522D]/10 border-[#C2522D]/30' :
+              selectedOrder.status === 'delivered' ? 'bg-[#08482D]/10 border-[#08482D]/30' :
+              selectedOrder.status === 'completed' ? 'bg-[#DAE7C7] border-[#E2E8D8]' :
               selectedOrder.status === 'cancelled' ? 'bg-[#B33F33]/10 border-[#B33F33]/30' :
-              'bg-[#FFFBF4] border-[#DCCDB6]'
+              'bg-[#FFFFFF] border-[#E2E8D8]'
             }`}>
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <span className="text-[11px] font-mono uppercase tracking-wider text-[#74665B] block mb-1">
+                  <span className="text-[11px] font-mono uppercase tracking-wider text-[#5E5E61] block mb-1">
                     Trạng thái đơn #{selectedOrder.code}
                   </span>
-                  <h3 className="font-serif text-xl sm:text-2xl font-bold text-[#241A14]">
+                  <h3 className="text-xl sm:text-2xl font-bold text-[#101410]">
                     {selectedOrder.status === 'shipping' ? 'Kiện hàng đang lăn bánh trên đường tới bạn' :
                      selectedOrder.status === 'delivered' ? 'Kiện hàng đã giao thành công!' :
                      selectedOrder.status === 'completed' ? 'Đơn hàng đã hoàn tất trọn vẹn' :
                      selectedOrder.status === 'confirmed' ? 'Tiệm đã xác nhận đơn & đang đóng gói' :
                      selectedOrder.status === 'cancelled' ? 'Đơn hàng đã được hủy' : 'Tiệm đang chuẩn bị đơn'}
                   </h3>
-                  <p className="text-xs text-[#74665B] mt-1.5 leading-relaxed">
+                  <p className="text-xs text-[#5E5E61] mt-1.5 leading-relaxed">
                     {selectedOrder.status === 'shipping' ? (
                       `Được vận chuyển bởi ${selectedOrder.carrier || 'đơn vị đối tác'}. Bưu tá đang di chuyển theo lộ trình dự kiến.`
                     ) : selectedOrder.status === 'delivered' ? (
@@ -387,7 +387,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                 </div>
 
                 {selectedOrder.status === 'shipping' && (
-                  <div className="w-12 h-12 rounded-2xl bg-[#D9542B] text-white flex items-center justify-center shrink-0 shadow-sm animate-bounce">
+                  <div className="w-12 h-12 rounded-2xl bg-[#C2522D] text-white flex items-center justify-center shrink-0 shadow-sm animate-bounce">
                     <Truck className="w-6 h-6" />
                   </div>
                 )}
@@ -395,12 +395,12 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
 
               {/* 5-Step Stepper Progress Bar */}
               {selectedOrder.status !== 'cancelled' && (
-                <div className="mt-6 pt-5 border-t border-[#DCCDB6]/60">
+                <div className="mt-6 pt-5 border-t border-[#E2E8D8]/60">
                   <div className="relative flex items-center justify-between">
                     {/* Connecting line */}
-                    <div className="absolute top-4 left-4 right-4 h-1 bg-[#DCCDB6] -z-0" />
+                    <div className="absolute top-4 left-4 right-4 h-1 bg-[#E2E8D8] -z-0" />
                     <div 
-                      className="absolute top-4 left-4 h-1 bg-[#D9542B] transition-all duration-500 -z-0"
+                      className="absolute top-4 left-4 h-1 bg-[#C2522D] transition-all duration-500 -z-0"
                       style={{
                         width: `${(Math.max(0, getStepperIndex(selectedOrder.status)) / 4) * 100}%`
                       }}
@@ -415,15 +415,15 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                         <div key={stg.key} className="flex flex-col items-center relative z-10">
                           <div className={`w-8 h-8 rounded-full flex items-center justify-center font-mono text-xs font-bold transition-all shadow-xs ${
                             isCurrent
-                              ? 'bg-[#D9542B] text-white ring-4 ring-[#D9542B]/20 scale-110'
+                              ? 'bg-[#C2522D] text-white ring-4 ring-[#C2522D]/20 scale-110'
                               : isPast
-                              ? 'bg-[#5E7048] text-white'
-                              : 'bg-[#FFFBF4] border border-[#DCCDB6] text-[#74665B]'
+                              ? 'bg-[#08482D] text-white'
+                              : 'bg-[#FFFFFF] border border-[#E2E8D8] text-[#5E5E61]'
                           }`}>
                             {isPast && !isCurrent ? '✓' : idx + 1}
                           </div>
                           <span className={`text-[10px] sm:text-xs mt-2 text-center max-w-[70px] leading-tight font-medium ${
-                            isCurrent ? 'font-bold text-[#D9542B]' : isPast ? 'text-[#241A14]' : 'text-[#74665B]'
+                            isCurrent ? 'font-bold text-[#C2522D]' : isPast ? 'text-[#101410]' : 'text-[#5E5E61]'
                           }`}>
                             {stg.label}
                           </span>
@@ -437,32 +437,32 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
 
             {/* Carrier & Tracking details box */}
             {selectedOrder.carrier && (
-              <div className="bg-[#FFFBF4] border border-[#DCCDB6] rounded-2xl p-5 shadow-vintage-sm space-y-3">
+              <div className="bg-[#FFFFFF] border border-[#E2E8D8] rounded-2xl p-5 shadow-vintage-sm space-y-3">
                 <div className="flex items-center justify-between">
-                  <h4 className="font-serif text-sm font-bold text-[#241A14] flex items-center gap-2">
-                    <Truck className="w-4 h-4 text-[#D9542B]" />
+                  <h4 className="text-sm font-bold text-[#101410] flex items-center gap-2">
+                    <Truck className="w-4 h-4 text-[#C2522D]" />
                     Thông tin vận đơn
                   </h4>
-                  <span className="text-xs font-semibold px-2 py-0.5 rounded bg-[#EADFCC] text-[#241A14]">
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded bg-[#DAE7C7] text-[#101410]">
                     {selectedOrder.carrier}
                   </span>
                 </div>
 
                 {selectedOrder.tracking_code && (
-                  <div className="flex items-center justify-between bg-[#F4ECDF] rounded-xl px-4 py-2.5 border border-[#DCCDB6]">
+                  <div className="flex items-center justify-between bg-[#F5F8EF] rounded-xl px-4 py-2.5 border border-[#E2E8D8]">
                     <div>
-                      <span className="text-[10px] text-[#74665B] block">Mã vận đơn:</span>
-                      <span className="font-mono text-sm font-bold text-[#241A14]">
+                      <span className="text-[10px] text-[#5E5E61] block">Mã vận đơn:</span>
+                      <span className="font-mono text-sm font-bold text-[#101410]">
                         {selectedOrder.tracking_code}
                       </span>
                     </div>
                     <button
                       onClick={() => handleCopyCode(selectedOrder.tracking_code!)}
-                      className="p-2 text-[#74665B] hover:text-[#D9542B] transition-colors rounded-lg bg-white/70"
+                      className="p-2 text-[#5E5E61] hover:text-[#C2522D] transition-colors rounded-lg bg-white/70"
                       title="Sao chép mã"
                     >
                       {copiedCode === selectedOrder.tracking_code ? (
-                        <Check className="w-4 h-4 text-[#5E7048]" />
+                        <Check className="w-4 h-4 text-[#08482D]" />
                       ) : (
                         <Copy className="w-4 h-4" />
                       )}
@@ -473,45 +473,45 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
             )}
 
             {/* Vertical Shipment Timeline */}
-            <div className="bg-[#FFFBF4] border border-[#DCCDB6] rounded-2xl p-5 shadow-vintage-sm space-y-4">
-              <h4 className="font-serif text-sm font-bold text-[#241A14] flex items-center gap-2">
-                <Clock className="w-4 h-4 text-[#74665B]" />
+            <div className="bg-[#FFFFFF] border border-[#E2E8D8] rounded-2xl p-5 shadow-vintage-sm space-y-4">
+              <h4 className="text-sm font-bold text-[#101410] flex items-center gap-2">
+                <Clock className="w-4 h-4 text-[#5E5E61]" />
                 Nhật ký hành trình chi tiết
               </h4>
 
               {(!selectedOrder.shipment_events || selectedOrder.shipment_events.length === 0) ? (
-                <div className="text-xs text-[#74665B] py-4 text-center">
+                <div className="text-xs text-[#5E5E61] py-4 text-center">
                   Đang khởi tạo lộ trình từ kho tiệm...
                 </div>
               ) : (
-                <div className="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-[#DCCDB6]">
+                <div className="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-[#E2E8D8]">
                   {selectedOrder.shipment_events.map((evt, idx) => {
                     const isLatest = idx === selectedOrder.shipment_events!.length - 1;
 
                     return (
                       <div key={evt.id} className="relative group">
                         {/* Dot indicator (pulsing for latest) */}
-                        <div className={`absolute -left-[27px] top-1.5 w-3 h-3 rounded-full border-2 border-[#FFFBF4] ${
-                          isLatest ? 'bg-[#D9542B] ring-4 ring-[#D9542B]/20 animate-pulse' : 'bg-[#5E7048]'
+                        <div className={`absolute -left-[27px] top-1.5 w-3 h-3 rounded-full border-2 border-[#FFFFFF] ${
+                          isLatest ? 'bg-[#C2522D] ring-4 ring-[#C2522D]/20 animate-pulse' : 'bg-[#08482D]'
                         }`} />
 
-                        <div className="bg-[#F4ECDF]/60 rounded-xl p-3 border border-[#DCCDB6]/60">
+                        <div className="bg-[#F5F8EF]/60 rounded-xl p-3 border border-[#E2E8D8]/60">
                           <div className="flex items-baseline justify-between gap-2 mb-1">
-                            <span className={`text-xs font-bold ${isLatest ? 'text-[#D9542B]' : 'text-[#241A14]'}`}>
+                            <span className={`text-xs font-bold ${isLatest ? 'text-[#C2522D]' : 'text-[#101410]'}`}>
                               {evt.status}
                             </span>
-                            <span className="text-[10px] text-[#74665B] font-mono">
+                            <span className="text-[10px] text-[#5E5E61] font-mono">
                               {evt.created_at}
                             </span>
                           </div>
 
-                          <div className="text-xs text-[#74665B] flex items-center gap-1.5 mb-1">
-                            <MapPin className="w-3.5 h-3.5 text-[#74665B] shrink-0" />
+                          <div className="text-xs text-[#5E5E61] flex items-center gap-1.5 mb-1">
+                            <MapPin className="w-3.5 h-3.5 text-[#5E5E61] shrink-0" />
                             <span>{evt.location}</span>
                           </div>
 
                           {evt.note && (
-                            <p className="text-[11px] text-[#74665B] italic pt-1 border-t border-[#DCCDB6]/40">
+                            <p className="text-[11px] text-[#5E5E61] italic pt-1 border-t border-[#E2E8D8]/40">
                               {evt.note}
                             </p>
                           )}
@@ -524,13 +524,13 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
             </div>
 
             {/* Chi tiết kiện hàng & Nút Đánh Giá khi Hoàn thành */}
-            <div className="bg-[#FFFBF4] border border-[#DCCDB6] rounded-2xl p-5 shadow-vintage-sm space-y-3">
-              <h4 className="font-serif text-sm font-bold text-[#241A14] flex items-center gap-2">
-                <Package className="w-4 h-4 text-[#D9542B]" />
+            <div className="bg-[#FFFFFF] border border-[#E2E8D8] rounded-2xl p-5 shadow-vintage-sm space-y-3">
+              <h4 className="text-sm font-bold text-[#101410] flex items-center gap-2">
+                <Package className="w-4 h-4 text-[#C2522D]" />
                 Sản phẩm trong kiện hàng
               </h4>
 
-              <div className="divide-y divide-[#DCCDB6]/50">
+              <div className="divide-y divide-[#E2E8D8]/50">
                 {(selectedOrder.items || []).map((item, idx) => {
                   const isReviewed = reviewedProductIds.includes(item.product_id);
 
@@ -540,29 +540,29 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                         <img
                           src={item.image_url}
                           alt={item.product_name}
-                          className="w-12 h-12 rounded-xl object-cover bg-[#EADFCC] border border-[#DCCDB6] shrink-0"
+                          className="w-12 h-12 rounded-xl object-cover bg-[#DAE7C7] border border-[#E2E8D8] shrink-0"
                         />
                         <div className="min-w-0">
-                          <h5 className="font-serif font-bold text-xs text-[#241A14] truncate">
+                          <h5 className="font-bold text-xs text-[#101410] truncate">
                             {item.product_name}
                           </h5>
-                          <div className="flex items-center gap-2 text-[11px] text-[#74665B] mt-0.5">
+                          <div className="flex items-center gap-2 text-[11px] text-[#5E5E61] mt-0.5">
                             <span>x{item.quantity}</span>
                             <span>·</span>
-                            <span className="font-mono text-[#D9542B]">Độ mới {item.condition_pct}%</span>
+                            <span className="font-mono text-[#C2522D]">Độ mới {item.condition_pct}%</span>
                           </div>
                         </div>
                       </div>
 
                       <div className="flex flex-col items-end gap-1.5 shrink-0">
-                        <span className="font-mono font-bold text-[#241A14]">
+                        <span className="font-mono font-bold text-[#101410]">
                           {formatVND(item.price * item.quantity)}
                         </span>
 
                         {/* Nút đánh giá khi đơn đã Hoàn thành */}
                         {selectedOrder.status === 'completed' && (
                           isReviewed ? (
-                            <span className="text-[11px] font-mono text-[#5E7048] font-bold flex items-center gap-1 bg-[#5E7048]/10 px-2 py-0.5 rounded-full">
+                            <span className="text-[11px] font-mono text-[#08482D] font-bold flex items-center gap-1 bg-[#08482D]/10 px-2 py-0.5 rounded-full">
                               ✓ Đã đánh giá
                             </span>
                           ) : (
@@ -573,7 +573,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                                 image_url: item.image_url,
                                 condition_pct: item.condition_pct
                               })}
-                              className="px-2.5 py-1 bg-[#D9542B] text-white text-[11px] font-bold rounded-lg hover:bg-[#B33F33] transition-colors shadow-xs"
+                              className="px-2.5 py-1 bg-[#C2522D] text-white text-[11px] font-bold rounded-lg hover:bg-[#B33F33] transition-colors shadow-xs"
                             >
                               ⭐ Đánh giá
                             </button>
@@ -586,26 +586,26 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
               </div>
 
               {/* Thông tin tài chính & Mã giảm giá */}
-              <div className="border-t border-[#DCCDB6] pt-3 space-y-1.5 text-xs text-[#74665B]">
+              <div className="border-t border-[#E2E8D8] pt-3 space-y-1.5 text-xs text-[#5E5E61]">
                 <div className="flex justify-between">
                   <span>Tạm tính hàng:</span>
-                  <span className="font-mono text-[#241A14]">{formatVND(selectedOrder.subtotal)}</span>
+                  <span className="font-mono text-[#101410]">{formatVND(selectedOrder.subtotal)}</span>
                 </div>
                 {selectedOrder.discount_amount && selectedOrder.discount_amount > 0 ? (
-                  <div className="flex justify-between text-[#5E7048] font-semibold">
+                  <div className="flex justify-between text-[#08482D] font-semibold">
                     <span>Giảm giá ({selectedOrder.coupon_code || 'Khuyến mãi'}):</span>
                     <span className="font-mono">-{formatVND(selectedOrder.discount_amount)}</span>
                   </div>
                 ) : null}
                 <div className="flex justify-between">
                   <span>Phí vận chuyển:</span>
-                  <span className="font-mono text-[#241A14]">
+                  <span className="font-mono text-[#101410]">
                     {selectedOrder.shipping_fee === 0 ? '0đ (Miễn phí)' : formatVND(selectedOrder.shipping_fee)}
                   </span>
                 </div>
-                <div className="flex justify-between pt-1 border-t border-[#DCCDB6]/40 font-bold text-sm text-[#241A14]">
-                  <span className="font-serif">Tổng thanh toán:</span>
-                  <span className="font-mono text-[#D9542B]">{formatVND(selectedOrder.total)}</span>
+                <div className="flex justify-between pt-1 border-t border-[#E2E8D8]/40 font-bold text-sm text-[#101410]">
+                  <span className="font-sans">Tổng thanh toán:</span>
+                  <span className="font-mono text-[#C2522D]">{formatVND(selectedOrder.total)}</span>
                 </div>
               </div>
             </div>
@@ -615,7 +615,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
               {selectedOrder.status === 'delivered' && (
                 <button
                   onClick={() => handleCompleteOrder(selectedOrder.id)}
-                  className="flex-1 py-3 px-4 bg-[#5E7048] hover:bg-[#4D5E3B] text-white rounded-xl text-xs font-bold transition-all shadow-vintage-sm flex items-center justify-center gap-2"
+                  className="flex-1 py-3 px-4 bg-[#08482D] hover:bg-[#4D5E3B] text-white rounded-xl text-xs font-bold transition-all shadow-vintage-sm flex items-center justify-center gap-2"
                 >
                   <CheckCircle2 className="w-4 h-4" />
                   Đã nhận được hàng
@@ -638,31 +638,31 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
       {/* Cancel Order Modal */}
       {cancelModalOrder && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-[#FFFBF4] border border-[#DCCDB6] rounded-2xl p-6 w-full max-w-md shadow-vintage-lg space-y-4">
-            <div className="flex items-center justify-between border-b border-[#DCCDB6] pb-3">
-              <h3 className="font-serif text-lg font-bold text-[#241A14]">
+          <div className="bg-[#FFFFFF] border border-[#E2E8D8] rounded-2xl p-6 w-full max-w-md shadow-vintage-lg space-y-4">
+            <div className="flex items-center justify-between border-b border-[#E2E8D8] pb-3">
+              <h3 className="text-lg font-bold text-[#101410]">
                 Xác nhận hủy đơn #{cancelModalOrder.code}
               </h3>
               <button
                 onClick={() => setCancelModalOrder(null)}
-                className="text-[#74665B] hover:text-[#241A14]"
+                className="text-[#5E5E61] hover:text-[#101410]"
               >
                 ✕
               </button>
             </div>
 
-            <p className="text-xs text-[#74665B]">
+            <p className="text-xs text-[#5E5E61]">
               Bạn có chắc chắn muốn hủy đơn hàng này? Tồn kho của các món đồ sẽ được hoàn lại cho cửa hàng.
             </p>
 
             <div className="space-y-2">
-              <label className="block text-xs font-semibold text-[#241A14]">
+              <label className="block text-xs font-semibold text-[#101410]">
                 Lý do hủy đơn:
               </label>
               <select
                 value={cancelReason}
                 onChange={(e) => setCancelReason(e.target.value)}
-                className="w-full bg-[#F4ECDF] border border-[#DCCDB6] rounded-xl px-3 py-2 text-xs text-[#241A14]"
+                className="w-full bg-[#F5F8EF] border border-[#E2E8D8] rounded-xl px-3 py-2 text-xs text-[#101410]"
               >
                 <option value="Đổi ý không muốn mua nữa">Đổi ý không muốn mua nữa</option>
                 <option value="Muốn thay đổi địa chỉ nhận hàng">Muốn thay đổi địa chỉ nhận hàng</option>
@@ -676,7 +676,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                   value={customCancelReason}
                   onChange={(e) => setCustomCancelReason(e.target.value)}
                   placeholder="Nhập lý do cụ thể..."
-                  className="w-full bg-[#F4ECDF] border border-[#DCCDB6] rounded-xl px-3 py-2 text-xs text-[#241A14] mt-2"
+                  className="w-full bg-[#F5F8EF] border border-[#E2E8D8] rounded-xl px-3 py-2 text-xs text-[#101410] mt-2"
                 />
               )}
             </div>
@@ -685,7 +685,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
               <button
                 type="button"
                 onClick={() => setCancelModalOrder(null)}
-                className="flex-1 py-2 rounded-xl border border-[#DCCDB6] text-xs font-semibold text-[#74665B] hover:bg-[#EADFCC]"
+                className="flex-1 py-2 rounded-xl border border-[#E2E8D8] text-xs font-semibold text-[#5E5E61] hover:bg-[#DAE7C7]"
               >
                 Giữ đơn hàng
               </button>

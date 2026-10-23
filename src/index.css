@@ -74,7 +74,7 @@
 }
 
 .draw-stroke {
-  animation: dashDraw 1.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: dashDraw 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 /* Custom scrollbar */
@@ -109,3 +109,132 @@
     animation: none !important;
   }
 }
+
+/* ==========================================================================
+   Curved Cylindrical Carousel Styles (Exact Specification)
+   ========================================================================== */
+.curved-band {
+  position: relative;
+  width: 100%;
+  align-self: stretch;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.curved-band:active { cursor: grabbing; }
+
+.curved-card {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: hidden;
+  background: linear-gradient(160deg, #08482D, #2E7D4F);
+  will-change: transform, clip-path;
+  cursor: pointer;
+  outline: none;
+}
+.curved-card:focus-visible { filter: brightness(1.1); }
+
+.curved-fallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 16px;
+  text-align: center;
+  color: #fff;
+  font-family: 'Be Vietnam Pro', sans-serif;
+}
+.curved-fallback-cat { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #DAE7C7; }
+.curved-fallback-name { font-size: 13px; font-weight: 600; line-height: 1.3; }
+
+.curved-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+  animation: curved-kenburns 14s ease-in-out infinite alternate;
+  transition: filter .3s;
+}
+@keyframes curved-kenburns { from { transform: scale(1); } to { transform: scale(1.1); } }
+.curved-card:hover .curved-img { filter: brightness(1.06); }
+.curved-card.is-sold .curved-img { filter: grayscale(1) brightness(.85); }
+
+.curved-inner {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  pointer-events: none;
+}
+.curved-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 6px; }
+.curved-stamp {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #DAE7C7;
+  color: #08482D;
+  font: 600 12px/1.2 'Be Vietnam Pro', sans-serif;
+  white-space: nowrap;
+}
+.curved-cart {
+  pointer-events: auto;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, .88);
+  backdrop-filter: blur(8px);
+  color: #08482D;
+  cursor: pointer;
+  transition: transform .15s, background .15s;
+}
+.curved-cart:hover { transform: scale(1.08); background: #fff; }
+.curved-cart:active { transform: scale(.94); }
+
+.curved-bottom { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.curved-name {
+  max-width: 100%;
+  color: #fff;
+  font: 600 13px/1.3 'Be Vietnam Pro', sans-serif;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, .45);
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity .25s, transform .25s;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.curved-card:hover .curved-name,
+.curved-card:focus-visible .curved-name { opacity: 1; transform: none; }
+.curved-price {
+  max-width: 100%;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .88);
+  backdrop-filter: blur(8px);
+  color: #101410;
+  font: 600 14px/1 'Be Vietnam Pro', sans-serif;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.curved-card.is-narrow .curved-cart { display: none; }
+.curved-card.is-narrow .curved-stamp { font-size: 10px; padding: 3px 7px; }
+.curved-card.is-narrow .curved-price { font-size: 11px; padding: 4px 8px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .curved-img { animation: none; }
+}
+

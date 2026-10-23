@@ -18,9 +18,9 @@ export function PolicyModal({ type, isOpen, onClose }: PolicyModalProps) {
       subtitle: 'Bảo vệ quyền lợi tối đa cho người yêu đồ second-hand tuyển chọn',
       icon: ShieldCheck,
       content: (
-        <div className="space-y-4 text-xs sm:text-sm text-[#74665B] leading-relaxed">
-          <div className="p-3 bg-[#F4ECDF] rounded-2xl border border-[#DCCDB6] text-[#241A14]">
-            <p className="font-bold text-xs uppercase tracking-wide text-[#D9542B] mb-1">
+        <div className="space-y-4 text-xs sm:text-sm text-[#5E5E61] leading-relaxed">
+          <div className="p-3 bg-[#F5F8EF] rounded-2xl border border-[#E2E8D8] text-[#101410]">
+            <p className="font-bold text-xs uppercase tracking-wide text-[#C2522D] mb-1">
               Cam kết cốt lõi của Tiệm
             </p>
             <p className="text-xs">
@@ -29,7 +29,7 @@ export function PolicyModal({ type, isOpen, onClose }: PolicyModalProps) {
           </div>
 
           <div>
-            <h4 className="font-serif font-bold text-sm text-[#241A14] mb-1.5">
+            <h4 className="font-bold text-sm text-[#101410] mb-1.5">
               1. Điều kiện áp dụng đổi trả
             </h4>
             <ul className="list-disc pl-5 space-y-1">
@@ -41,7 +41,7 @@ export function PolicyModal({ type, isOpen, onClose }: PolicyModalProps) {
           </div>
 
           <div>
-            <h4 className="font-serif font-bold text-sm text-[#241A14] mb-1.5">
+            <h4 className="font-bold text-sm text-[#101410] mb-1.5">
               2. Quy trình xử lý và hoàn tiền
             </h4>
             <ul className="list-disc pl-5 space-y-1">
@@ -58,16 +58,16 @@ export function PolicyModal({ type, isOpen, onClose }: PolicyModalProps) {
       subtitle: 'Đồng hành cùng 4 đơn vị vận chuyển uy tín nhất Việt Nam',
       icon: Truck,
       content: (
-        <div className="space-y-4 text-xs sm:text-sm text-[#74665B] leading-relaxed">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs font-mono font-bold text-[#241A14]">
-            <div className="p-2 bg-[#F4ECDF] rounded-xl border border-[#DCCDB6]">GHN Express</div>
-            <div className="p-2 bg-[#F4ECDF] rounded-xl border border-[#DCCDB6]">Viettel Post</div>
-            <div className="p-2 bg-[#F4ECDF] rounded-xl border border-[#DCCDB6]">GHTK</div>
-            <div className="p-2 bg-[#F4ECDF] rounded-xl border border-[#DCCDB6]">VNPost</div>
+        <div className="space-y-4 text-xs sm:text-sm text-[#5E5E61] leading-relaxed">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs font-mono font-bold text-[#101410]">
+            <div className="p-2 bg-[#F5F8EF] rounded-xl border border-[#E2E8D8]">GHN Express</div>
+            <div className="p-2 bg-[#F5F8EF] rounded-xl border border-[#E2E8D8]">Viettel Post</div>
+            <div className="p-2 bg-[#F5F8EF] rounded-xl border border-[#E2E8D8]">GHTK</div>
+            <div className="p-2 bg-[#F5F8EF] rounded-xl border border-[#E2E8D8]">VNPost</div>
           </div>
 
           <div>
-            <h4 className="font-serif font-bold text-sm text-[#241A14] mb-1.5">
+            <h4 className="font-bold text-sm text-[#101410] mb-1.5">
               1. Phí giao hàng & Ưu đãi
             </h4>
             <ul className="list-disc pl-5 space-y-1">
@@ -78,7 +78,7 @@ export function PolicyModal({ type, isOpen, onClose }: PolicyModalProps) {
           </div>
 
           <div>
-            <h4 className="font-serif font-bold text-sm text-[#241A14] mb-1.5">
+            <h4 className="font-bold text-sm text-[#101410] mb-1.5">
               2. Thời gian giao hàng dự kiến
             </h4>
             <ul className="list-disc pl-5 space-y-1">
@@ -95,30 +95,30 @@ export function PolicyModal({ type, isOpen, onClose }: PolicyModalProps) {
       subtitle: 'Cách đọc thang đo độ mới và trải nghiệm mua sắm an tâm',
       icon: BookOpen,
       content: (
-        <div className="space-y-4 text-xs sm:text-sm text-[#74665B] leading-relaxed">
+        <div className="space-y-4 text-xs sm:text-sm text-[#5E5E61] leading-relaxed">
           <div>
-            <h4 className="font-serif font-bold text-sm text-[#241A14] mb-1.5">
+            <h4 className="font-bold text-sm text-[#101410] mb-1.5">
               1. Thang đo độ mới (%) tại tiệm
             </h4>
             <div className="space-y-2 text-xs">
-              <div className="p-2.5 bg-[#F4ECDF] rounded-xl border border-[#DCCDB6]">
-                <strong className="text-[#5E7048]">95% – 99% (Như mới / Like New):</strong> Hầu như chưa qua sử dụng hoặc chỉ mặc/thử 1–2 lần, không có khuyết tật.
+              <div className="p-2.5 bg-[#F5F8EF] rounded-xl border border-[#E2E8D8]">
+                <strong className="text-[#08482D]">95% – 99% (Như mới / Like New):</strong> Hầu như chưa qua sử dụng hoặc chỉ mặc/thử 1–2 lần, không có khuyết tật.
               </div>
-              <div className="p-2.5 bg-[#F4ECDF] rounded-xl border border-[#DCCDB6]">
-                <strong className="text-[#D9542B]">85% – 90% (Rất tốt):</strong> Có dấu vết sử dụng nhẹ tự nhiên (phai màu vintage nhẹ, xước dăm), máy móc chạy hoàn hảo.
+              <div className="p-2.5 bg-[#F5F8EF] rounded-xl border border-[#E2E8D8]">
+                <strong className="text-[#C2522D]">85% – 90% (Rất tốt):</strong> Có dấu vết sử dụng nhẹ tự nhiên (phai màu vintage nhẹ, xước dăm), máy móc chạy hoàn hảo.
               </div>
-              <div className="p-2.5 bg-[#F4ECDF] rounded-xl border border-[#DCCDB6]">
-                <strong className="text-[#74665B]">80% (Khá):</strong> Đã qua sử dụng nhiều nhưng kết cấu chắc chắn, giá bán siêu tiết kiệm.
+              <div className="p-2.5 bg-[#F5F8EF] rounded-xl border border-[#E2E8D8]">
+                <strong className="text-[#5E5E61]">80% (Khá):</strong> Đã qua sử dụng nhiều nhưng kết cấu chắc chắn, giá bán siêu tiết kiệm.
               </div>
             </div>
           </div>
 
           <div>
-            <h4 className="font-serif font-bold text-sm text-[#241A14] mb-1.5">
+            <h4 className="font-bold text-sm text-[#101410] mb-1.5">
               2. Hướng dẫn thanh toán giả lập OTP
             </h4>
             <p className="text-xs">
-              Tiệm hỗ trợ thanh toán thẻ quốc tế Visa/Mastercard và thẻ ATM nội địa NAPAS. Để bạn test tính năng thanh toán, hãy dùng số thẻ Visa test: <code className="font-mono bg-white px-1.5 py-0.5 rounded border border-[#DCCDB6] text-[#D9542B] font-bold">4111 1111 1111 1111</code> và mã OTP demo: <code className="font-mono bg-white px-1.5 py-0.5 rounded border border-[#DCCDB6] text-[#5E7048] font-bold">123456</code>.
+              Tiệm hỗ trợ thanh toán thẻ quốc tế Visa/Mastercard và thẻ ATM nội địa NAPAS. Để bạn test tính năng thanh toán, hãy dùng số thẻ Visa test: <code className="font-mono bg-white px-1.5 py-0.5 rounded border border-[#E2E8D8] text-[#C2522D] font-bold">4111 1111 1111 1111</code> và mã OTP demo: <code className="font-mono bg-white px-1.5 py-0.5 rounded border border-[#E2E8D8] text-[#08482D] font-bold">123456</code>.
             </p>
           </div>
         </div>
@@ -129,14 +129,14 @@ export function PolicyModal({ type, isOpen, onClose }: PolicyModalProps) {
       subtitle: 'Nơi những món đồ vintage tìm thấy người tri kỷ tiếp theo',
       icon: HeartHandshake,
       content: (
-        <div className="space-y-4 text-xs sm:text-sm text-[#74665B] leading-relaxed">
+        <div className="space-y-4 text-xs sm:text-sm text-[#5E5E61] leading-relaxed">
           <p>
             Ra đời từ tình yêu với những món đồ cũ mang đậm hơi thở thời gian, <strong>"Đồ Cũ Còn Thương"</strong> không đơn thuần là một trang thương mại điện tử, mà là một góc nhỏ tôn vinh lối sống bền vững và tái sử dụng.
           </p>
           <p>
             Mỗi chiếc máy ảnh film, chiếc áo khoác denim patina, hay cuốn sách ố vàng màu thời gian đều mang theo một linh hồn riêng. Khi bạn chọn mua một món đồ cũ được kiểm định kỹ lưỡng, bạn không chỉ tiết kiệm ngân sách mà còn góp phần giảm thiểu rác thải tiêu dùng và trao thêm một vòng đời ý nghĩa cho món đồ.
           </p>
-          <div className="p-3 bg-[#F4ECDF] rounded-2xl border border-[#DCCDB6] italic font-serif text-[#241A14] text-center">
+          <div className="p-3 bg-[#F5F8EF] rounded-2xl border border-[#E2E8D8] italic text-[#101410] text-center">
             "Mỗi món đồ cũ đều còn một câu chuyện... và bạn chính là chương tiếp theo."
           </div>
         </div>
@@ -147,9 +147,9 @@ export function PolicyModal({ type, isOpen, onClose }: PolicyModalProps) {
       subtitle: 'Chúng tôi luôn lắng nghe và sẵn sàng hỗ trợ bạn mỗi ngày',
       icon: PhoneCall,
       content: (
-        <div className="space-y-4 text-xs sm:text-sm text-[#74665B] leading-relaxed">
+        <div className="space-y-4 text-xs sm:text-sm text-[#5E5E61] leading-relaxed">
           <div className="space-y-2 font-medium">
-            <div className="p-3 bg-[#F4ECDF] rounded-2xl border border-[#DCCDB6] space-y-1">
+            <div className="p-3 bg-[#F5F8EF] rounded-2xl border border-[#E2E8D8] space-y-1">
               <div>📍 <strong>Cửa hàng chính:</strong> 128 Đường Hai Bà Trưng, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh</div>
               <div>📞 <strong>Hotline hỗ trợ:</strong> 0987 654 321 (8:00 – 21:00 hàng ngày)</div>
               <div>✉️ <strong>Hòm thư điện tử:</strong> docuconthuong@vintage.vn</div>
@@ -166,25 +166,25 @@ export function PolicyModal({ type, isOpen, onClose }: PolicyModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in font-sans">
-      <div className="relative w-full max-w-xl bg-[#FFFBF4] rounded-3xl border-2 border-[#DCCDB6] shadow-2xl p-6 sm:p-8 overflow-hidden max-h-[90vh] flex flex-col">
+      <div className="relative w-full max-w-xl bg-[#FFFFFF] rounded-3xl border-2 border-[#E2E8D8] shadow-2xl p-6 sm:p-8 overflow-hidden max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-start justify-between pb-4 border-b border-[#EADFCC]">
+        <div className="flex items-start justify-between pb-4 border-b border-[#DAE7C7]">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-[#D9542B] text-white flex items-center justify-center flex-shrink-0 shadow-md">
+            <div className="w-10 h-10 rounded-2xl bg-[#C2522D] text-white flex items-center justify-center flex-shrink-0 shadow-md">
               <Icon className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-serif text-lg sm:text-xl font-bold text-[#241A14]">
+              <h3 className="text-lg sm:text-xl font-bold text-[#101410]">
                 {current.title}
               </h3>
-              <p className="text-xs text-[#74665B] mt-0.5">
+              <p className="text-xs text-[#5E5E61] mt-0.5">
                 {current.subtitle}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-full hover:bg-[#EADFCC] text-[#74665B] transition-colors"
+            className="p-2 rounded-full hover:bg-[#DAE7C7] text-[#5E5E61] transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -196,10 +196,10 @@ export function PolicyModal({ type, isOpen, onClose }: PolicyModalProps) {
         </div>
 
         {/* Footer */}
-        <div className="pt-4 border-t border-[#EADFCC] flex justify-end">
+        <div className="pt-4 border-t border-[#DAE7C7] flex justify-end">
           <button
             onClick={onClose}
-            className="px-6 py-2.5 rounded-2xl bg-[#241A14] text-[#FFFBF4] text-xs font-bold hover:bg-[#D9542B] transition-colors shadow-sm"
+            className="px-6 py-2.5 rounded-2xl bg-[#101410] text-[#FFFFFF] text-xs font-bold hover:bg-[#C2522D] transition-colors shadow-sm"
           >
             Đã hiểu & Đóng
           </button>

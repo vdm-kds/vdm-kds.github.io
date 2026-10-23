@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { Settings2, UserCheck, Shield, RotateCcw, X, Check, AlertTriangle, Sparkles } from 'lucide-react';
+import { Settings2, UserCheck, Shield, RotateCcw, X, Check, AlertTriangle, Eye, UserX } from 'lucide-react';
 import { api, setStoredToken } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 
 interface DemoControllerProps {
-  onRoleSwitched?: (role: 'buyer' | 'seller') => void;
+  onRoleSwitched?: (role: 'buyer' | 'seller' | 'guest') => void;
   onDataReset?: () => void;
 }
 
@@ -14,7 +14,7 @@ export function DemoController({ onRoleSwitched, onDataReset }: DemoControllerPr
   const [showConfirmReset, setShowConfirmReset] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [switching, setSwitching] = useState(false);
-  const { user, quickLogin, refreshUser } = useAuth();
+  const { user, logout, refreshUser } = useAuth();
   const { showToast } = useToast();
 
   const handleSwitchBuyer = async () => {
@@ -49,6 +49,13 @@ export function DemoController({ onRoleSwitched, onDataReset }: DemoControllerPr
     }
   };
 
+  const handleSwitchGuest = () => {
+    logout();
+    setIsOpen(false);
+    showToast('Đang xem giao diện dưới vai Khách vãng lai', 'info');
+    if (onRoleSwitched) onRoleSwitched('guest');
+  };
+
   const handleConfirmReset = async () => {
     setResetting(true);
     try {
@@ -74,17 +81,17 @@ export function DemoController({ onRoleSwitched, onDataReset }: DemoControllerPr
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="group relative flex items-center gap-2.5 px-4 py-2.5 bg-[#241A14] text-[#FFFBF4] rounded-full shadow-2xl border-2 border-[#DCCDB6] hover:bg-[#D9542B] transition-all duration-300 hover:scale-105 active:scale-95"
+          className="group relative flex items-center gap-2.5 px-4 py-2.5 bg-[#08482D] text-white rounded-full shadow-2xl border-2 border-[#DAE7C7] hover:bg-[#063A24] transition-all duration-300 hover:scale-105 active:scale-95"
           title="Bảng điều khiển Demo 1-1"
         >
           <div className="relative">
-            <Settings2 className="w-5 h-5 animate-spin-slow text-[#E3B23C] group-hover:text-white transition-colors" />
-            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-[#5E7048] rounded-full border-2 border-[#241A14]" />
+            <Settings2 className="w-5 h-5 text-[#DAE7C7] group-hover:text-white transition-colors" />
+            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-[#DAE7C7] rounded-full border-2 border-[#08482D]" />
           </div>
-          <span className="font-serif text-xs font-bold tracking-wide">
+          <span className="text-xs font-bold tracking-wide">
             Điều Khiển Demo
           </span>
-          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/10 uppercase">
+          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-white/15 uppercase">
             1-1
           </span>
         </button>
@@ -92,18 +99,18 @@ export function DemoController({ onRoleSwitched, onDataReset }: DemoControllerPr
 
       {/* Floating Popup Card */}
       {isOpen && (
-        <div className="w-80 sm:w-96 bg-[#FFFBF4] rounded-3xl border-2 border-[#DCCDB6] shadow-2xl overflow-hidden animate-fade-in text-[#241A14]">
+        <div className="w-80 sm:w-96 bg-white rounded-3xl border border-[#E2E8D8] shadow-2xl overflow-hidden animate-fade-in text-[#101410]">
           {/* Card Header */}
-          <div className="p-4 bg-[#F4ECDF] border-b border-[#DCCDB6] flex items-center justify-between">
+          <div className="p-4 bg-[#F5F8EF] border-b border-[#E2E8D8] flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-xl bg-[#D9542B] text-white flex items-center justify-center font-bold text-xs shadow-sm">
+              <div className="w-8 h-8 rounded-xl bg-[#08482D] text-white flex items-center justify-center font-bold text-xs shadow-xs">
                 ⚙️
               </div>
               <div>
-                <h4 className="font-serif font-bold text-sm text-[#241A14]">
+                <h4 className="font-bold text-sm text-[#101410]">
                   Bảng Điều Khiển Demo
                 </h4>
-                <p className="text-[10px] text-[#74665B]">
+                <p className="text-[10px] text-[#5E5E61]">
                   Chuyển nhanh vai trò & reset cơ sở dữ liệu
                 </p>
               </div>
@@ -113,7 +120,7 @@ export function DemoController({ onRoleSwitched, onDataReset }: DemoControllerPr
                 setIsOpen(false);
                 setShowConfirmReset(false);
               }}
-              className="p-1.5 rounded-full hover:bg-[#EADFCC] text-[#74665B] transition-colors"
+              className="p-1.5 rounded-full hover:bg-[#DAE7C7]/40 text-[#5E5E61] transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
@@ -121,104 +128,132 @@ export function DemoController({ onRoleSwitched, onDataReset }: DemoControllerPr
 
           <div className="p-4 space-y-4 text-xs">
             {/* Current Active Account Status */}
-            <div className="p-3 bg-[#EADFCC]/60 rounded-2xl border border-[#DCCDB6] flex items-center justify-between">
+            <div className="p-3 bg-[#F5F8EF] rounded-2xl border border-[#E2E8D8] flex items-center justify-between">
               <div>
-                <span className="text-[10px] font-mono uppercase tracking-wider text-[#74665B]">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-[#5E5E61]">
                   Đang đăng nhập:
                 </span>
-                <div className="font-serif font-bold text-sm text-[#241A14]">
-                  {user ? user.full_name : 'Chưa đăng nhập (Khách vãng lai)'}
+                <div className="font-bold text-sm text-[#101410]">
+                  {user ? user.full_name : 'Khách vãng lai (Chưa đăng nhập)'}
                 </div>
               </div>
               <span className={`px-2.5 py-1 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider ${
                 user?.role === 'seller' 
-                  ? 'bg-[#D9542B] text-white' 
+                  ? 'bg-[#08482D] text-white' 
                   : user?.role === 'buyer' 
-                  ? 'bg-[#5E7048] text-white'
-                  : 'bg-gray-300 text-gray-700'
+                  ? 'bg-[#DAE7C7] text-[#08482D]'
+                  : 'bg-stone-200 text-stone-700'
               }`}>
-                {user?.role === 'seller' ? 'Chủ Tiệm (Seller)' : user?.role === 'buyer' ? 'Khách Mua (Buyer)' : 'Guest'}
+                {user?.role === 'seller' ? 'Chủ Tiệm (Seller)' : user?.role === 'buyer' ? 'Khách Mua (Buyer)' : 'Khách'}
               </span>
             </div>
 
             {/* Role Switcher Actions */}
             <div className="space-y-2">
-              <label className="text-[11px] font-bold text-[#74665B] uppercase tracking-wider font-serif">
+              <label className="text-[11px] font-bold text-[#5E5E61] uppercase tracking-wider block">
                 Chuyển nhanh vai trò (Mô hình 1-1)
               </label>
 
-              {/* Vào vai Khách mua */}
+              {/* 1. Vào vai Khách mua */}
               <button
                 onClick={handleSwitchBuyer}
                 disabled={switching}
                 className={`w-full p-2.5 rounded-2xl border flex items-center justify-between transition-all ${
                   user?.role === 'buyer'
-                    ? 'bg-[#5E7048]/10 border-[#5E7048] font-bold'
-                    : 'bg-white border-[#DCCDB6] hover:border-[#5E7048] hover:bg-[#F4ECDF]/50'
+                    ? 'bg-[#DAE7C7]/40 border-[#08482D] font-bold'
+                    : 'bg-white border-[#E2E8D8] hover:border-[#08482D] hover:bg-[#F5F8EF]'
                 }`}
               >
                 <div className="flex items-center gap-2.5 text-left">
-                  <div className="w-8 h-8 rounded-xl bg-[#5E7048] text-white flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-xl bg-[#08482D] text-white flex items-center justify-center">
                     <UserCheck className="w-4 h-4" />
                   </div>
                   <div>
-                    <div className="font-serif font-bold text-xs text-[#241A14]">
+                    <div className="font-bold text-xs text-[#101410]">
                       Vào vai Khách hàng (Buyer)
                     </div>
-                    <div className="text-[10px] font-mono text-[#74665B]">
+                    <div className="text-[10px] font-mono text-[#5E5E61]">
                       SĐT: 0987654321 · MK: nguoidung
                     </div>
                   </div>
                 </div>
                 {user?.role === 'buyer' && (
-                  <Check className="w-4 h-4 text-[#5E7048]" />
+                  <Check className="w-4 h-4 text-[#08482D]" />
                 )}
               </button>
 
-              {/* Vào vai Người bán */}
+              {/* 2. Vào vai Người bán */}
               <button
                 onClick={handleSwitchSeller}
                 disabled={switching}
                 className={`w-full p-2.5 rounded-2xl border flex items-center justify-between transition-all ${
                   user?.role === 'seller'
-                    ? 'bg-[#D9542B]/10 border-[#D9542B] font-bold'
-                    : 'bg-white border-[#DCCDB6] hover:border-[#D9542B] hover:bg-[#F4ECDF]/50'
+                    ? 'bg-[#08482D]/10 border-[#08482D] font-bold'
+                    : 'bg-white border-[#E2E8D8] hover:border-[#08482D] hover:bg-[#F5F8EF]'
                 }`}
               >
                 <div className="flex items-center gap-2.5 text-left">
-                  <div className="w-8 h-8 rounded-xl bg-[#D9542B] text-white flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-xl bg-[#08482D] text-white flex items-center justify-center">
                     <Shield className="w-4 h-4" />
                   </div>
                   <div>
-                    <div className="font-serif font-bold text-xs text-[#241A14]">
+                    <div className="font-bold text-xs text-[#101410]">
                       Vào vai Người bán (Seller)
                     </div>
-                    <div className="text-[10px] font-mono text-[#74665B]">
+                    <div className="text-[10px] font-mono text-[#5E5E61]">
                       admin · MK: admin
                     </div>
                   </div>
                 </div>
                 {user?.role === 'seller' && (
-                  <Check className="w-4 h-4 text-[#D9542B]" />
+                  <Check className="w-4 h-4 text-[#08482D]" />
+                )}
+              </button>
+
+              {/* 3. Xem như Khách vãng lai (2.7) */}
+              <button
+                onClick={handleSwitchGuest}
+                disabled={switching}
+                className={`w-full p-2.5 rounded-2xl border flex items-center justify-between transition-all ${
+                  !user
+                    ? 'bg-[#DAE7C7]/40 border-[#08482D] font-bold'
+                    : 'bg-white border-[#E2E8D8] hover:border-[#08482D] hover:bg-[#F5F8EF]'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 text-left">
+                  <div className="w-8 h-8 rounded-xl bg-[#DAE7C7] text-[#08482D] flex items-center justify-center font-bold">
+                    <Eye className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="font-bold text-xs text-[#101410]">
+                      Xem như khách vãng lai
+                    </div>
+                    <div className="text-[10px] text-[#5E5E61]">
+                      Đăng xuất để thấy Hero dải thẻ cong
+                    </div>
+                  </div>
+                </div>
+                {!user && (
+                  <Check className="w-4 h-4 text-[#08482D]" />
                 )}
               </button>
             </div>
 
             {/* Reset Database Section */}
-            <div className="pt-2 border-t border-[#EADFCC]">
+            <div className="pt-2 border-t border-[#E2E8D8]">
               {!showConfirmReset ? (
                 <button
                   type="button"
                   onClick={() => setShowConfirmReset(true)}
-                  className="w-full py-2.5 px-3 rounded-2xl border border-[#B33F33]/40 text-[#B33F33] hover:bg-[#B33F33]/10 font-bold flex items-center justify-center gap-2 transition-colors"
+                  className="w-full py-2.5 px-3 rounded-2xl border border-[#B3362F]/40 text-[#B3362F] hover:bg-[#F6DDDB] font-bold flex items-center justify-center gap-2 transition-colors"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                   Reset dữ liệu demo ban đầu
                 </button>
               ) : (
-                <div className="p-3 bg-[#B33F33]/10 rounded-2xl border border-[#B33F33]/40 space-y-2.5 animate-fade-in">
-                  <div className="flex items-start gap-2 text-[#B33F33]">
-                    <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <div className="p-3 bg-[#F6DDDB] rounded-2xl border border-[#B3362F]/40 space-y-2.5 animate-fade-in">
+                  <div className="flex items-start gap-2 text-[#B3362F]">
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                     <p className="text-[11px] leading-snug font-medium">
                       Xác nhận đưa hệ thống về trạng thái sạch ban đầu? (2 tài khoản mẫu, 10 sản phẩm gốc, 2 mã giảm giá, xóa toàn bộ đơn và đánh giá).
                     </p>
@@ -228,7 +263,7 @@ export function DemoController({ onRoleSwitched, onDataReset }: DemoControllerPr
                       type="button"
                       onClick={() => setShowConfirmReset(false)}
                       disabled={resetting}
-                      className="px-3 py-1.5 rounded-xl border border-[#DCCDB6] bg-white text-[11px] font-bold text-[#74665B] hover:bg-[#EADFCC]"
+                      className="px-3 py-1.5 rounded-xl border border-[#E2E8D8] bg-white text-[11px] font-bold text-[#5E5E61] hover:bg-[#F5F8EF]"
                     >
                       Hủy bỏ
                     </button>
@@ -236,7 +271,7 @@ export function DemoController({ onRoleSwitched, onDataReset }: DemoControllerPr
                       type="button"
                       onClick={handleConfirmReset}
                       disabled={resetting}
-                      className="px-3 py-1.5 rounded-xl bg-[#B33F33] text-white text-[11px] font-bold hover:bg-red-800 flex items-center gap-1.5 shadow-sm"
+                      className="px-3 py-1.5 rounded-xl bg-[#B3362F] text-white text-[11px] font-bold hover:bg-red-800 flex items-center gap-1.5 shadow-xs"
                     >
                       <RotateCcw className={`w-3 h-3 ${resetting ? 'animate-spin' : ''}`} />
                       {resetting ? 'Đang reset...' : 'Đồng ý Reset'}

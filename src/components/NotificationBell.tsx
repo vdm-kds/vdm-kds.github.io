@@ -122,19 +122,19 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onSelectOrde
   const getIconForType = (type: string) => {
     switch (type) {
       case 'new_order':
-        return <ShoppingBag className="w-4 h-4 text-[#D9542B]" />;
+        return <ShoppingBag className="w-4 h-4 text-[#C2522D]" />;
       case 'order_confirmed':
-        return <Package className="w-4 h-4 text-[#5E7048]" />;
+        return <Package className="w-4 h-4 text-[#08482D]" />;
       case 'order_shipping':
       case 'shipment_update':
-        return <Truck className="w-4 h-4 text-[#D9542B]" />;
+        return <Truck className="w-4 h-4 text-[#C2522D]" />;
       case 'order_delivered':
       case 'order_completed':
-        return <CheckCircle2 className="w-4 h-4 text-[#5E7048]" />;
+        return <CheckCircle2 className="w-4 h-4 text-[#08482D]" />;
       case 'order_cancelled':
         return <AlertCircle className="w-4 h-4 text-[#B33F33]" />;
       default:
-        return <Bell className="w-4 h-4 text-[#74665B]" />;
+        return <Bell className="w-4 h-4 text-[#5E5E61]" />;
     }
   };
 
@@ -145,28 +145,28 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onSelectOrde
           setIsOpen(!isOpen);
           if (!isOpen) fetchNotifications(true);
         }}
-        className={`relative p-2.5 rounded-xl text-[#241A14] hover:bg-[#EADFCC] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D9542B] ${
+        className={`relative p-2.5 rounded-xl text-[#101410] hover:bg-[#DAE7C7] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C2522D] ${
           hasShaked ? 'animate-bounce' : ''
         }`}
         aria-label="Thông báo"
         title="Thông báo đơn hàng & vận chuyển"
       >
-        <Bell className="w-5 h-5 text-[#241A14]" />
+        <Bell className="w-5 h-5 text-[#101410]" />
         {unreadCount > 0 && (
-          <span className="absolute top-1.5 right-1.5 min-w-[18px] h-[18px] px-1 bg-[#D9542B] text-white text-[10px] font-bold font-mono rounded-full flex items-center justify-center shadow-sm animate-pulse">
+          <span className="absolute top-1.5 right-1.5 min-w-[18px] h-[18px] px-1 bg-[#C2522D] text-white text-[10px] font-bold font-mono rounded-full flex items-center justify-center shadow-sm animate-pulse">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-[#FFFBF4] border border-[#DCCDB6] rounded-2xl shadow-vintage-lg z-50 overflow-hidden text-[#241A14]">
+        <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-[#FFFFFF] border border-[#E2E8D8] rounded-2xl shadow-vintage-lg z-50 overflow-hidden text-[#101410]">
           {/* Header */}
-          <div className="px-4 py-3 bg-[#EADFCC]/60 border-b border-[#DCCDB6] flex items-center justify-between">
+          <div className="px-4 py-3 bg-[#DAE7C7]/60 border-b border-[#E2E8D8] flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="font-serif font-bold text-base text-[#241A14]">Thông báo</span>
+              <span className="font-bold text-base text-[#101410]">Thông báo</span>
               {unreadCount > 0 && (
-                <span className="text-[11px] font-mono px-2 py-0.5 bg-[#D9542B] text-white rounded-full">
+                <span className="text-[11px] font-mono px-2 py-0.5 bg-[#C2522D] text-white rounded-full">
                   {unreadCount} mới
                 </span>
               )}
@@ -176,7 +176,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onSelectOrde
               {unreadCount > 0 && (
                 <button
                   onClick={handleMarkAllRead}
-                  className="text-xs text-[#74665B] hover:text-[#D9542B] flex items-center gap-1 transition-colors font-medium"
+                  className="text-xs text-[#5E5E61] hover:text-[#C2522D] flex items-center gap-1 transition-colors font-medium"
                   title="Đánh dấu đã đọc tất cả"
                 >
                   <CheckCheck className="w-3.5 h-3.5" />
@@ -185,7 +185,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onSelectOrde
               )}
               <button
                 onClick={() => setIsOpen(false)}
-                className="p-1 text-[#74665B] hover:text-[#241A14] rounded-lg"
+                className="p-1 text-[#5E5E61] hover:text-[#101410] rounded-lg"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -193,18 +193,18 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onSelectOrde
           </div>
 
           {/* List */}
-          <div className="max-h-[380px] overflow-y-auto divide-y divide-[#DCCDB6]/40">
+          <div className="max-h-[380px] overflow-y-auto divide-y divide-[#E2E8D8]/40">
             {isLoading && notifications.length === 0 ? (
-              <div className="py-8 text-center text-xs text-[#74665B]">
+              <div className="py-8 text-center text-xs text-[#5E5E61]">
                 Đang tải thông báo...
               </div>
             ) : notifications.length === 0 ? (
               <div className="py-12 px-6 text-center">
-                <div className="w-12 h-12 mx-auto rounded-full bg-[#EADFCC] flex items-center justify-center mb-3 text-[#74665B]">
+                <div className="w-12 h-12 mx-auto rounded-full bg-[#DAE7C7] flex items-center justify-center mb-3 text-[#5E5E61]">
                   <Bell className="w-6 h-6 stroke-1" />
                 </div>
-                <p className="font-serif text-sm font-semibold text-[#241A14] mb-1">Chưa có thông báo nào</p>
-                <p className="text-xs text-[#74665B]">
+                <p className="text-sm font-semibold text-[#101410] mb-1">Chưa có thông báo nào</p>
+                <p className="text-xs text-[#5E5E61]">
                   Cập nhật đơn hàng và lộ trình giao nhận sẽ xuất hiện tại đây
                 </p>
               </div>
@@ -213,32 +213,32 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onSelectOrde
                 <div
                   key={notif.id}
                   onClick={() => handleItemClick(notif)}
-                  className={`p-3.5 hover:bg-[#F4ECDF]/70 cursor-pointer transition-colors flex items-start gap-3 relative ${
-                    !notif.is_read ? 'bg-[#F4ECDF]/40' : ''
+                  className={`p-3.5 hover:bg-[#F5F8EF]/70 cursor-pointer transition-colors flex items-start gap-3 relative ${
+                    !notif.is_read ? 'bg-[#F5F8EF]/40' : ''
                   }`}
                 >
-                  <div className="p-2 rounded-xl bg-[#EADFCC] shrink-0 mt-0.5">
+                  <div className="p-2 rounded-xl bg-[#DAE7C7] shrink-0 mt-0.5">
                     {getIconForType(notif.type)}
                   </div>
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2 mb-0.5">
                       <h4 className={`text-xs font-semibold truncate ${
-                        !notif.is_read ? 'text-[#241A14] font-bold' : 'text-[#5A4F46]'
+                        !notif.is_read ? 'text-[#101410] font-bold' : 'text-[#5A4F46]'
                       }`}>
                         {notif.title}
                       </h4>
-                      <span className="text-[10px] text-[#74665B] whitespace-nowrap font-mono">
+                      <span className="text-[10px] text-[#5E5E61] whitespace-nowrap font-mono">
                         {formatRelativeTime(notif.created_at)}
                       </span>
                     </div>
-                    <p className="text-xs text-[#74665B] leading-relaxed line-clamp-2">
+                    <p className="text-xs text-[#5E5E61] leading-relaxed line-clamp-2">
                       {notif.message}
                     </p>
                   </div>
 
                   {!notif.is_read && (
-                    <span className="w-2 h-2 rounded-full bg-[#D9542B] shrink-0 self-center" />
+                    <span className="w-2 h-2 rounded-full bg-[#C2522D] shrink-0 self-center" />
                   )}
                 </div>
               ))
@@ -246,8 +246,8 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onSelectOrde
           </div>
 
           {/* Footer */}
-          <div className="px-4 py-2 bg-[#EADFCC]/30 border-t border-[#DCCDB6] text-center">
-            <span className="text-[11px] text-[#74665B]">
+          <div className="px-4 py-2 bg-[#DAE7C7]/30 border-t border-[#E2E8D8] text-center">
+            <span className="text-[11px] text-[#5E5E61]">
               Tự động cập nhật mỗi 10 giây · Tiệm Đồ Cũ Còn Thương
             </span>
           </div>

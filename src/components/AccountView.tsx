@@ -253,26 +253,26 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart }: Acco
       <div className="flex items-center gap-3 mb-6">
         <button
           onClick={onBackToHome}
-          className="flex items-center gap-1.5 text-xs font-bold text-[#74665B] hover:text-[#D9542B] transition-colors"
+          className="flex items-center gap-1.5 text-xs font-bold text-[#5E5E61] hover:text-[#C2522D] transition-colors"
         >
           <ArrowLeft className="w-4 h-4" /> Quay lại trang chủ
         </button>
-        <span className="text-[#DCCDB6]">/</span>
-        <span className="text-xs font-serif font-bold text-[#241A14]">Tài khoản của tôi</span>
+        <span className="text-[#E2E8D8]">/</span>
+        <span className="text-xs font-bold text-[#101410]">Tài khoản của tôi</span>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-start">
         {/* Sidebar Nav */}
-        <div className="bg-[#FFFBF4] rounded-3xl border-2 border-[#DCCDB6] p-5 shadow-sm space-y-4">
-          <div className="flex items-center gap-3 pb-4 border-b border-[#EADFCC]">
-            <div className="w-12 h-12 rounded-2xl bg-[#D9542B] text-white flex items-center justify-center font-serif text-lg font-bold shadow-md">
+        <div className="bg-[#FFFFFF] rounded-3xl border-2 border-[#E2E8D8] p-5 shadow-sm space-y-4">
+          <div className="flex items-center gap-3 pb-4 border-b border-[#DAE7C7]">
+            <div className="w-12 h-12 rounded-2xl bg-[#C2522D] text-white flex items-center justify-center text-lg font-bold shadow-md">
               {user?.full_name ? user.full_name[0].toUpperCase() : 'A'}
             </div>
             <div className="min-w-0 flex-1">
-              <h3 className="font-serif font-bold text-sm text-[#241A14] truncate">
+              <h3 className="font-bold text-sm text-[#101410] truncate">
                 {user?.full_name || 'Khách hàng'}
               </h3>
-              <p className="font-mono text-[11px] text-[#74665B] truncate">
+              <p className="font-mono text-[11px] text-[#5E5E61] truncate">
                 {user?.phone || user?.username}
               </p>
             </div>
@@ -283,8 +283,8 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart }: Acco
               onClick={() => setActiveTab('profile')}
               className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all text-left ${
                 activeTab === 'profile'
-                  ? 'bg-[#D9542B] text-white shadow-sm'
-                  : 'text-[#74665B] hover:bg-[#F4ECDF] hover:text-[#241A14]'
+                  ? 'bg-[#C2522D] text-white shadow-sm'
+                  : 'text-[#5E5E61] hover:bg-[#F5F8EF] hover:text-[#101410]'
               }`}
             >
               <User className="w-4 h-4" /> Hồ sơ cá nhân
@@ -294,8 +294,8 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart }: Acco
               onClick={() => setActiveTab('addresses')}
               className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all text-left ${
                 activeTab === 'addresses'
-                  ? 'bg-[#D9542B] text-white shadow-sm'
-                  : 'text-[#74665B] hover:bg-[#F4ECDF] hover:text-[#241A14]'
+                  ? 'bg-[#C2522D] text-white shadow-sm'
+                  : 'text-[#5E5E61] hover:bg-[#F5F8EF] hover:text-[#101410]'
               }`}
             >
               <MapPin className="w-4 h-4" /> Sổ địa chỉ nhận hàng
@@ -305,8 +305,8 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart }: Acco
               onClick={() => setActiveTab('password')}
               className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all text-left ${
                 activeTab === 'password'
-                  ? 'bg-[#D9542B] text-white shadow-sm'
-                  : 'text-[#74665B] hover:bg-[#F4ECDF] hover:text-[#241A14]'
+                  ? 'bg-[#C2522D] text-white shadow-sm'
+                  : 'text-[#5E5E61] hover:bg-[#F5F8EF] hover:text-[#101410]'
               }`}
             >
               <KeyRound className="w-4 h-4" /> Đổi mật khẩu
@@ -316,8 +316,8 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart }: Acco
               onClick={() => setActiveTab('wishlist')}
               className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all text-left ${
                 activeTab === 'wishlist'
-                  ? 'bg-[#D9542B] text-white shadow-sm'
-                  : 'text-[#74665B] hover:bg-[#F4ECDF] hover:text-[#241A14]'
+                  ? 'bg-[#C2522D] text-white shadow-sm'
+                  : 'text-[#5E5E61] hover:bg-[#F5F8EF] hover:text-[#101410]'
               }`}
             >
               <Heart className="w-4 h-4" /> Sản phẩm yêu thích
@@ -327,8 +327,8 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart }: Acco
               onClick={() => setActiveTab('notifications')}
               className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all text-left ${
                 activeTab === 'notifications'
-                  ? 'bg-[#D9542B] text-white shadow-sm'
-                  : 'text-[#74665B] hover:bg-[#F4ECDF] hover:text-[#241A14]'
+                  ? 'bg-[#C2522D] text-white shadow-sm'
+                  : 'text-[#5E5E61] hover:bg-[#F5F8EF] hover:text-[#101410]'
               }`}
             >
               <Bell className="w-4 h-4" /> Tất cả thông báo
@@ -337,37 +337,37 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart }: Acco
         </div>
 
         {/* Tab Content */}
-        <div className="md:col-span-3 bg-[#FFFBF4] rounded-3xl border-2 border-[#DCCDB6] p-6 sm:p-8 shadow-sm">
+        <div className="md:col-span-3 bg-[#FFFFFF] rounded-3xl border-2 border-[#E2E8D8] p-6 sm:p-8 shadow-sm">
           {/* TAB 1: PROFILE */}
           {activeTab === 'profile' && (
             <div className="space-y-6">
               <div>
-                <h3 className="font-serif text-xl font-bold text-[#241A14]">
+                <h3 className="text-xl font-bold text-[#101410]">
                   Hồ Sơ Của Tôi
                 </h3>
-                <p className="text-xs text-[#74665B] mt-1">
+                <p className="text-xs text-[#5E5E61] mt-1">
                   Quản lý thông tin hồ sơ để bảo mật tài khoản và giao hàng chính xác
                 </p>
               </div>
 
               <form onSubmit={handleUpdateProfile} className="max-w-lg space-y-4 pt-2">
                 <div>
-                  <label className="block text-xs font-bold text-[#241A14] uppercase tracking-wider mb-1.5 font-serif">
+                  <label className="block text-xs font-bold text-[#101410] uppercase tracking-wider mb-1.5">
                     Số điện thoại / Tên đăng nhập
                   </label>
                   <input
                     type="text"
                     disabled
                     value={user?.username || ''}
-                    className="w-full px-4 py-2.5 rounded-2xl border border-[#DCCDB6] bg-[#F4ECDF]/60 text-xs font-mono text-[#74665B] cursor-not-allowed"
+                    className="w-full px-4 py-2.5 rounded-2xl border border-[#E2E8D8] bg-[#F5F8EF]/60 text-xs font-mono text-[#5E5E61] cursor-not-allowed"
                   />
-                  <span className="text-[10px] text-[#74665B] mt-1 block">
+                  <span className="text-[10px] text-[#5E5E61] mt-1 block">
                     Số điện thoại định danh không thể thay đổi
                   </span>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-[#241A14] uppercase tracking-wider mb-1.5 font-serif">
+                  <label className="block text-xs font-bold text-[#101410] uppercase tracking-wider mb-1.5">
                     Họ và tên *
                   </label>
                   <input
@@ -376,12 +376,12 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart }: Acco
                     value={fullName}
                     onChange={e => setFullName(e.target.value)}
                     placeholder="Nhập họ và tên đầy đủ"
-                    className="w-full px-4 py-2.5 rounded-2xl border border-[#DCCDB6] bg-white text-xs text-[#241A14] focus:outline-none focus:ring-2 focus:ring-[#D9542B]"
+                    className="w-full px-4 py-2.5 rounded-2xl border border-[#E2E8D8] bg-white text-xs text-[#101410] focus:outline-none focus:ring-2 focus:ring-[#C2522D]"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-[#241A14] uppercase tracking-wider mb-1.5 font-serif">
+                  <label className="block text-xs font-bold text-[#101410] uppercase tracking-wider mb-1.5">
                     Số điện thoại liên hệ nhận hàng
                   </label>
                   <input
@@ -389,7 +389,7 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart }: Acco
                     value={phone}
                     onChange={e => setPhone(e.target.value)}
                     placeholder="VD: 0987654321"
-                    className="w-full px-4 py-2.5 rounded-2xl border border-[#DCCDB6] bg-white text-xs text-[#241A14] focus:outline-none focus:ring-2 focus:ring-[#D9542B]"
+                    className="w-full px-4 py-2.5 rounded-2xl border border-[#E2E8D8] bg-white text-xs text-[#101410] focus:outline-none focus:ring-2 focus:ring-[#C2522D]"
                   />
                 </div>
 
@@ -397,7 +397,7 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart }: Acco
                   <button
                     type="submit"
                     disabled={savingProfile}
-                    className="px-6 py-2.5 rounded-2xl bg-[#D9542B] text-white text-xs font-bold hover:bg-[#B33F33] transition-all shadow-md disabled:opacity-50"
+                    className="px-6 py-2.5 rounded-2xl bg-[#C2522D] text-white text-xs font-bold hover:bg-[#B33F33] transition-all shadow-md disabled:opacity-50"
                   >
                     {savingProfile ? 'Đang lưu...' : 'Lưu thay đổi'}
                   </button>
@@ -409,29 +409,29 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart }: Acco
           {/* TAB 2: ADDRESS BOOK */}
           {activeTab === 'addresses' && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between pb-4 border-b border-[#EADFCC]">
+              <div className="flex items-center justify-between pb-4 border-b border-[#DAE7C7]">
                 <div>
-                  <h3 className="font-serif text-xl font-bold text-[#241A14]">
+                  <h3 className="text-xl font-bold text-[#101410]">
                     Sổ Địa Chỉ Nhận Hàng
                   </h3>
-                  <p className="text-xs text-[#74665B] mt-1">
+                  <p className="text-xs text-[#5E5E61] mt-1">
                     Địa chỉ mặc định sẽ tự động chọn khi bạn tiến hành thanh toán
                   </p>
                 </div>
                 <button
                   onClick={openNewAddressModal}
-                  className="px-4 py-2 rounded-2xl bg-[#5E7048] text-white text-xs font-bold hover:bg-[#4d5c3b] transition-all flex items-center gap-1.5 shadow-sm"
+                  className="px-4 py-2 rounded-2xl bg-[#08482D] text-white text-xs font-bold hover:bg-[#4d5c3b] transition-all flex items-center gap-1.5 shadow-sm"
                 >
                   <Plus className="w-4 h-4" /> Thêm địa chỉ mới
                 </button>
               </div>
 
               {loadingAddresses ? (
-                <div className="py-8 text-center text-xs text-[#74665B]">Đang tải sổ địa chỉ...</div>
+                <div className="py-8 text-center text-xs text-[#5E5E61]">Đang tải sổ địa chỉ...</div>
               ) : addresses.length === 0 ? (
-                <div className="text-center py-10 bg-[#F4ECDF]/40 rounded-2xl border border-dashed border-[#DCCDB6]">
-                  <MapPin className="w-8 h-8 text-[#74665B] mx-auto mb-2 opacity-50" />
-                  <p className="text-xs text-[#74665B]">Bạn chưa lưu địa chỉ giao hàng nào</p>
+                <div className="text-center py-10 bg-[#F5F8EF]/40 rounded-2xl border border-dashed border-[#E2E8D8]">
+                  <MapPin className="w-8 h-8 text-[#5E5E61] mx-auto mb-2 opacity-50" />
+                  <p className="text-xs text-[#5E5E61]">Bạn chưa lưu địa chỉ giao hàng nào</p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -440,26 +440,26 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart }: Acco
                       key={addr.id}
                       className={`p-4 rounded-2xl border transition-all ${
                         addr.is_default === 1
-                          ? 'bg-[#F4ECDF]/70 border-[#D9542B]/60 shadow-sm'
-                          : 'bg-white border-[#DCCDB6]'
+                          ? 'bg-[#F5F8EF]/70 border-[#C2522D]/60 shadow-sm'
+                          : 'bg-white border-[#E2E8D8]'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
-                            <span className="font-serif font-bold text-sm text-[#241A14]">
+                            <span className="font-bold text-sm text-[#101410]">
                               {addr.recipient_name}
                             </span>
-                            <span className="font-mono text-xs text-[#74665B]">
+                            <span className="font-mono text-xs text-[#5E5E61]">
                               ({addr.phone})
                             </span>
                             {addr.is_default === 1 && (
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[#D9542B] text-white">
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[#C2522D] text-white">
                                 Mặc định
                               </span>
                             )}
                           </div>
-                          <p className="text-xs text-[#74665B] leading-relaxed">
+                          <p className="text-xs text-[#5E5E61] leading-relaxed">
                             {addr.address_line}
                           </p>
                         </div>
@@ -467,7 +467,7 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart }: Acco
                         <div className="flex items-center gap-2 flex-shrink-0">
                           <button
                             onClick={() => openEditAddressModal(addr)}
-                            className="p-1.5 rounded-xl border border-[#DCCDB6] text-[#74665B] hover:bg-[#F4ECDF] transition-colors"
+                            className="p-1.5 rounded-xl border border-[#E2E8D8] text-[#5E5E61] hover:bg-[#F5F8EF] transition-colors"
                             title="Sửa địa chỉ"
                           >
                             <Edit2 className="w-3.5 h-3.5" />
@@ -475,7 +475,7 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart }: Acco
                           {addresses.length > 1 && (
                             <button
                               onClick={() => handleDeleteAddress(addr.id)}
-                              className="p-1.5 rounded-xl border border-[#DCCDB6] text-[#B33F33] hover:bg-red-50 transition-colors"
+                              className="p-1.5 rounded-xl border border-[#E2E8D8] text-[#B33F33] hover:bg-red-50 transition-colors"
                               title="Xóa địa chỉ"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -485,10 +485,10 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart }: Acco
                       </div>
 
                       {addr.is_default !== 1 && (
-                        <div className="mt-3 pt-2 border-t border-[#DCCDB6]/50 flex justify-end">
+                        <div className="mt-3 pt-2 border-t border-[#E2E8D8]/50 flex justify-end">
                           <button
                             onClick={() => handleSetDefaultAddress(addr.id)}
-                            className="text-[11px] font-bold text-[#5E7048] hover:underline"
+                            className="text-[11px] font-bold text-[#08482D] hover:underline"
                           >
                             Thiết lập làm mặc định
                           </button>
@@ -505,17 +505,17 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart }: Acco
           {activeTab === 'password' && (
             <div className="space-y-6">
               <div>
-                <h3 className="font-serif text-xl font-bold text-[#241A14]">
+                <h3 className="text-xl font-bold text-[#101410]">
                   Đổi Mật Khẩu
                 </h3>
-                <p className="text-xs text-[#74665B] mt-1">
+                <p className="text-xs text-[#5E5E61] mt-1">
                   Để bảo mật tài khoản, vui lòng không chia sẻ mật khẩu cho người khác
                 </p>
               </div>
 
               <form onSubmit={handleChangePassword} className="max-w-lg space-y-4 pt-2">
                 <div>
-                  <label className="block text-xs font-bold text-[#241A14] uppercase tracking-wider mb-1.5 font-serif">
+                  <label className="block text-xs font-bold text-[#101410] uppercase tracking-wider mb-1.5">
                     Mật khẩu hiện tại *
                   </label>
                   <input
@@ -524,12 +524,12 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart }: Acco
                     value={oldPassword}
                     onChange={e => setOldPassword(e.target.value)}
                     placeholder="Nhập mật khẩu hiện tại"
-                    className="w-full px-4 py-2.5 rounded-2xl border border-[#DCCDB6] bg-white text-xs text-[#241A14] focus:outline-none focus:ring-2 focus:ring-[#D9542B]"
+                    className="w-full px-4 py-2.5 rounded-2xl border border-[#E2E8D8] bg-white text-xs text-[#101410] focus:outline-none focus:ring-2 focus:ring-[#C2522D]"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-[#241A14] uppercase tracking-wider mb-1.5 font-serif">
+                  <label className="block text-xs font-bold text-[#101410] uppercase tracking-wider mb-1.5">
                     Mật khẩu mới * (Tối thiểu 6 ký tự)
                   </label>
                   <input
@@ -538,12 +538,12 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart }: Acco
                     value={newPassword}
                     onChange={e => setNewPassword(e.target.value)}
                     placeholder="Nhập mật khẩu mới"
-                    className="w-full px-4 py-2.5 rounded-2xl border border-[#DCCDB6] bg-white text-xs text-[#241A14] focus:outline-none focus:ring-2 focus:ring-[#D9542B]"
+                    className="w-full px-4 py-2.5 rounded-2xl border border-[#E2E8D8] bg-white text-xs text-[#101410] focus:outline-none focus:ring-2 focus:ring-[#C2522D]"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-[#241A14] uppercase tracking-wider mb-1.5 font-serif">
+                  <label className="block text-xs font-bold text-[#101410] uppercase tracking-wider mb-1.5">
                     Xác nhận mật khẩu mới *
                   </label>
                   <input
@@ -552,7 +552,7 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart }: Acco
                     value={confirmPassword}
                     onChange={e => setConfirmPassword(e.target.value)}
                     placeholder="Nhập lại mật khẩu mới"
-                    className="w-full px-4 py-2.5 rounded-2xl border border-[#DCCDB6] bg-white text-xs text-[#241A14] focus:outline-none focus:ring-2 focus:ring-[#D9542B]"
+                    className="w-full px-4 py-2.5 rounded-2xl border border-[#E2E8D8] bg-white text-xs text-[#101410] focus:outline-none focus:ring-2 focus:ring-[#C2522D]"
                   />
                 </div>
 
@@ -560,7 +560,7 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart }: Acco
                   <button
                     type="submit"
                     disabled={savingPassword}
-                    className="px-6 py-2.5 rounded-2xl bg-[#D9542B] text-white text-xs font-bold hover:bg-[#B33F33] transition-all shadow-md disabled:opacity-50"
+                    className="px-6 py-2.5 rounded-2xl bg-[#C2522D] text-white text-xs font-bold hover:bg-[#B33F33] transition-all shadow-md disabled:opacity-50"
                   >
                     {savingPassword ? 'Đang cập nhật...' : 'Xác nhận đổi mật khẩu'}
                   </button>
@@ -573,23 +573,23 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart }: Acco
           {activeTab === 'wishlist' && (
             <div className="space-y-6">
               <div>
-                <h3 className="font-serif text-xl font-bold text-[#241A14]">
+                <h3 className="text-xl font-bold text-[#101410]">
                   Sản Phẩm Yêu Thích
                 </h3>
-                <p className="text-xs text-[#74665B] mt-1">
+                <p className="text-xs text-[#5E5E61] mt-1">
                   Những món đồ vintage bạn đã lưu để theo dõi hoặc mua sau
                 </p>
               </div>
 
               {loadingWishlist ? (
-                <div className="py-8 text-center text-xs text-[#74665B]">Đang tải danh sách yêu thích...</div>
+                <div className="py-8 text-center text-xs text-[#5E5E61]">Đang tải danh sách yêu thích...</div>
               ) : wishlistProducts.length === 0 ? (
-                <div className="text-center py-12 bg-[#F4ECDF]/40 rounded-2xl border border-dashed border-[#DCCDB6]">
-                  <Heart className="w-10 h-10 text-[#74665B] mx-auto mb-2 opacity-40" />
-                  <p className="text-xs text-[#74665B]">Bạn chưa lưu món đồ nào vào mục yêu thích</p>
+                <div className="text-center py-12 bg-[#F5F8EF]/40 rounded-2xl border border-dashed border-[#E2E8D8]">
+                  <Heart className="w-10 h-10 text-[#5E5E61] mx-auto mb-2 opacity-40" />
+                  <p className="text-xs text-[#5E5E61]">Bạn chưa lưu món đồ nào vào mục yêu thích</p>
                   <button
                     onClick={onBackToHome}
-                    className="mt-3 px-4 py-2 rounded-xl bg-[#D9542B] text-white text-xs font-bold hover:bg-[#B33F33] transition-colors"
+                    className="mt-3 px-4 py-2 rounded-xl bg-[#C2522D] text-white text-xs font-bold hover:bg-[#B33F33] transition-colors"
                   >
                     Khám phá sản phẩm ngay
                   </button>
@@ -599,9 +599,9 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart }: Acco
                   {wishlistProducts.map(prod => (
                     <div
                       key={prod.id}
-                      className="bg-white rounded-2xl border border-[#DCCDB6] p-3 shadow-sm hover:shadow-md transition-shadow space-y-3"
+                      className="bg-white rounded-2xl border border-[#E2E8D8] p-3 shadow-sm hover:shadow-md transition-shadow space-y-3"
                     >
-                      <div className="relative aspect-square rounded-xl overflow-hidden bg-[#F4ECDF]">
+                      <div className="relative aspect-square rounded-xl overflow-hidden bg-[#F5F8EF]">
                         <img
                           src={prod.image_url}
                           alt={prod.name}
@@ -615,7 +615,7 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart }: Acco
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
-                        <span className="absolute bottom-2 left-2 px-2 py-0.5 text-[10px] font-mono bg-[#241A14]/80 text-[#FFFBF4] rounded-md backdrop-blur-sm">
+                        <span className="absolute bottom-2 left-2 px-2 py-0.5 text-[10px] font-mono bg-[#101410]/80 text-[#FFFFFF] rounded-md backdrop-blur-sm">
                           {prod.condition_pct}% MỚI
                         </span>
                       </div>
@@ -623,15 +623,15 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart }: Acco
                       <div>
                         <h4
                           onClick={() => onSelectProduct(prod)}
-                          className="font-serif font-bold text-xs text-[#241A14] truncate cursor-pointer hover:text-[#D9542B]"
+                          className="font-bold text-xs text-[#101410] truncate cursor-pointer hover:text-[#C2522D]"
                         >
                           {prod.name}
                         </h4>
                         <div className="flex items-baseline gap-2 mt-1">
-                          <span className="font-mono font-bold text-xs text-[#D9542B]">
+                          <span className="font-mono font-bold text-xs text-[#C2522D]">
                             {formatVND(prod.price)}
                           </span>
-                          <span className="text-[10px] text-[#74665B] line-through">
+                          <span className="text-[10px] text-[#5E5E61] line-through">
                             {formatVND(prod.original_price)}
                           </span>
                         </div>
@@ -640,7 +640,7 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart }: Acco
                       <button
                         onClick={() => onAddToCart(prod)}
                         disabled={prod.stock <= 0}
-                        className="w-full py-2 bg-[#F4ECDF] hover:bg-[#D9542B] hover:text-white text-[#241A14] rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
+                        className="w-full py-2 bg-[#F5F8EF] hover:bg-[#C2522D] hover:text-white text-[#101410] rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
                       >
                         <ShoppingCart className="w-3.5 h-3.5" />
                         {prod.stock > 0 ? 'Thêm vào giỏ' : 'Hết hàng'}
@@ -655,19 +655,19 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart }: Acco
           {/* TAB 5: NOTIFICATIONS */}
           {activeTab === 'notifications' && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between pb-4 border-b border-[#EADFCC]">
+              <div className="flex items-center justify-between pb-4 border-b border-[#DAE7C7]">
                 <div>
-                  <h3 className="font-serif text-xl font-bold text-[#241A14]">
+                  <h3 className="text-xl font-bold text-[#101410]">
                     Tất Cả Thông Báo
                   </h3>
-                  <p className="text-xs text-[#74665B] mt-1">
+                  <p className="text-xs text-[#5E5E61] mt-1">
                     Cập nhật tiến độ đơn hàng và các hoạt động vận chuyển
                   </p>
                 </div>
                 {notifications.some(n => n.is_read === 0) && (
                   <button
                     onClick={handleMarkAllRead}
-                    className="text-xs font-bold text-[#5E7048] hover:underline"
+                    className="text-xs font-bold text-[#08482D] hover:underline"
                   >
                     Đánh dấu đã đọc tất cả
                   </button>
@@ -675,11 +675,11 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart }: Acco
               </div>
 
               {loadingNotifications ? (
-                <div className="py-8 text-center text-xs text-[#74665B]">Đang tải thông báo...</div>
+                <div className="py-8 text-center text-xs text-[#5E5E61]">Đang tải thông báo...</div>
               ) : notifications.length === 0 ? (
-                <div className="text-center py-10 bg-[#F4ECDF]/40 rounded-2xl border border-dashed border-[#DCCDB6]">
-                  <Bell className="w-8 h-8 text-[#74665B] mx-auto mb-2 opacity-50" />
-                  <p className="text-xs text-[#74665B]">Chưa có thông báo nào</p>
+                <div className="text-center py-10 bg-[#F5F8EF]/40 rounded-2xl border border-dashed border-[#E2E8D8]">
+                  <Bell className="w-8 h-8 text-[#5E5E61] mx-auto mb-2 opacity-50" />
+                  <p className="text-xs text-[#5E5E61]">Chưa có thông báo nào</p>
                 </div>
               ) : (
                 <div className="space-y-2.5">
@@ -688,23 +688,23 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart }: Acco
                       key={item.id}
                       className={`p-4 rounded-2xl border transition-all ${
                         item.is_read === 0
-                          ? 'bg-[#F4ECDF]/70 border-[#D9542B]/50'
-                          : 'bg-white border-[#DCCDB6]'
+                          ? 'bg-[#F5F8EF]/70 border-[#C2522D]/50'
+                          : 'bg-white border-[#E2E8D8]'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="space-y-1">
-                          <h4 className="font-serif font-bold text-xs text-[#241A14] flex items-center gap-2">
+                          <h4 className="font-bold text-xs text-[#101410] flex items-center gap-2">
                             {item.is_read === 0 && (
-                              <span className="w-2 h-2 rounded-full bg-[#D9542B]" />
+                              <span className="w-2 h-2 rounded-full bg-[#C2522D]" />
                             )}
                             {item.title}
                           </h4>
-                          <p className="text-xs text-[#74665B] leading-relaxed">
+                          <p className="text-xs text-[#5E5E61] leading-relaxed">
                             {item.message}
                           </p>
                         </div>
-                        <span className="text-[10px] font-mono text-[#74665B] flex-shrink-0">
+                        <span className="text-[10px] font-mono text-[#5E5E61] flex-shrink-0">
                           {new Date(item.created_at).toLocaleDateString('vi-VN')}
                         </span>
                       </div>
@@ -720,14 +720,14 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart }: Acco
       {/* Address Form Modal */}
       {addressModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="relative w-full max-w-md bg-[#FFFBF4] rounded-3xl border-2 border-[#DCCDB6] shadow-2xl p-6">
-            <h3 className="font-serif text-lg font-bold text-[#241A14] mb-4">
+          <div className="relative w-full max-w-md bg-[#FFFFFF] rounded-3xl border-2 border-[#E2E8D8] shadow-2xl p-6">
+            <h3 className="text-lg font-bold text-[#101410] mb-4">
               {editingAddressId ? 'Chỉnh sửa địa chỉ' : 'Thêm địa chỉ giao hàng mới'}
             </h3>
 
             <form onSubmit={handleSaveAddress} className="space-y-3.5 text-xs">
               <div>
-                <label className="block font-bold text-[#241A14] uppercase tracking-wider mb-1 font-serif">
+                <label className="block font-bold text-[#101410] uppercase tracking-wider mb-1">
                   Họ tên người nhận *
                 </label>
                 <input
@@ -736,12 +736,12 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart }: Acco
                   value={addrRecipient}
                   onChange={e => setAddrRecipient(e.target.value)}
                   placeholder="VD: Nguyễn Văn A"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#DCCDB6] bg-white focus:outline-none focus:ring-2 focus:ring-[#D9542B]"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#E2E8D8] bg-white focus:outline-none focus:ring-2 focus:ring-[#C2522D]"
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-[#241A14] uppercase tracking-wider mb-1 font-serif">
+                <label className="block font-bold text-[#101410] uppercase tracking-wider mb-1">
                   Số điện thoại người nhận *
                 </label>
                 <input
@@ -750,12 +750,12 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart }: Acco
                   value={addrPhone}
                   onChange={e => setAddrPhone(e.target.value)}
                   placeholder="VD: 0987654321"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#DCCDB6] bg-white focus:outline-none focus:ring-2 focus:ring-[#D9542B]"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#E2E8D8] bg-white focus:outline-none focus:ring-2 focus:ring-[#C2522D]"
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-[#241A14] uppercase tracking-wider mb-1 font-serif">
+                <label className="block font-bold text-[#101410] uppercase tracking-wider mb-1">
                   Địa chỉ chi tiết (Số nhà, đường, phường/xã, quận/huyện, tỉnh/thành) *
                 </label>
                 <textarea
@@ -764,7 +764,7 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart }: Acco
                   value={addrLine}
                   onChange={e => setAddrLine(e.target.value)}
                   placeholder="VD: 128 Hai Bà Trưng, Phường Bến Nghé, Quận 1, TP.HCM"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#DCCDB6] bg-white focus:outline-none focus:ring-2 focus:ring-[#D9542B] resize-none"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#E2E8D8] bg-white focus:outline-none focus:ring-2 focus:ring-[#C2522D] resize-none"
                 />
               </div>
 
@@ -774,26 +774,26 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart }: Acco
                   id="addr_default"
                   checked={addrDefault}
                   onChange={e => setAddrDefault(e.target.checked)}
-                  className="w-4 h-4 text-[#D9542B] rounded border-[#DCCDB6] focus:ring-[#D9542B]"
+                  className="w-4 h-4 text-[#C2522D] rounded border-[#E2E8D8] focus:ring-[#C2522D]"
                 />
-                <label htmlFor="addr_default" className="text-xs text-[#241A14] font-medium cursor-pointer">
+                <label htmlFor="addr_default" className="text-xs text-[#101410] font-medium cursor-pointer">
                   Đặt làm địa chỉ nhận hàng mặc định
                 </label>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#EADFCC]">
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#DAE7C7]">
                 <button
                   type="button"
                   onClick={() => setAddressModalOpen(false)}
                   disabled={savingAddress}
-                  className="px-4 py-2 rounded-xl border border-[#DCCDB6] text-xs font-bold text-[#74665B] hover:bg-[#EADFCC]"
+                  className="px-4 py-2 rounded-xl border border-[#E2E8D8] text-xs font-bold text-[#5E5E61] hover:bg-[#DAE7C7]"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
                   disabled={savingAddress}
-                  className="px-5 py-2 rounded-xl bg-[#D9542B] text-white text-xs font-bold hover:bg-[#B33F33] transition-colors"
+                  className="px-5 py-2 rounded-xl bg-[#C2522D] text-white text-xs font-bold hover:bg-[#B33F33] transition-colors"
                 >
                   {savingAddress ? 'Đang lưu...' : 'Lưu địa chỉ'}
                 </button>

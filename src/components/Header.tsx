@@ -11,10 +11,10 @@ import { formatVND } from '../utils/format';
 import { Button } from './Button';
 
 interface HeaderProps {
-  currentView: 'home' | 'orders' | 'seller' | 'account' | '404';
+  currentView: 'home' | 'orders' | 'seller' | 'account' | 'preview' | '404';
   onNavigate: (view: 'home' | 'orders' | 'seller' | 'account') => void;
   onOpenCart: () => void;
-  onOpenAuth: (role: 'buyer' | 'seller') => void;
+  onOpenAuth: (role: 'buyer' | 'seller', isRegister?: boolean) => void;
   onSelectOrder?: (orderId: number) => void;
   onSelectProduct?: (product: Product) => void;
   searchQuery?: string;
@@ -102,7 +102,10 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Zone 1: Brand Wordmark with ♻ and leaf logo */}
         <div className="flex items-center gap-3 shrink-0">
           <button
-            onClick={() => onNavigate('home')}
+            onClick={() => {
+              if (user?.role === 'seller') onNavigate('seller');
+              else onNavigate('home');
+            }}
             className="flex items-center gap-2.5 text-left group focus-visible:outline-none"
           >
             <div className="w-10 h-10 rounded-2xl bg-[#08482D] text-white flex items-center justify-center font-bold text-lg shadow-sm transition-transform duration-200 group-hover:scale-105">
@@ -273,7 +276,7 @@ export const Header: React.FC<HeaderProps> = ({
           )}
 
           {/* Cart Icon (Buyer only) */}
-          {(!user || user.role === 'buyer') && (
+          {user && user.role === 'buyer' && (
             <button
               onClick={onOpenCart}
               className="relative p-2.5 rounded-xl text-[#101410] hover:bg-[#DAE7C7]/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#08482D]"
@@ -317,22 +320,22 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
             </div>
           ) : (
-            <div className="flex items-center gap-1 sm:gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2">
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={() => onOpenAuth('buyer')}
-                className="text-xs"
+                onClick={() => onOpenAuth('buyer', false)}
+                className="text-xs font-semibold"
               >
                 Đăng nhập
               </Button>
               <Button
                 variant="primary"
                 size="sm"
-                onClick={() => onOpenAuth('seller')}
-                className="hidden sm:inline-flex text-xs"
+                onClick={() => onOpenAuth('buyer', true)}
+                className="text-xs font-semibold"
               >
-                Kênh Người bán
+                Đăng ký
               </Button>
             </div>
           )}
@@ -340,7 +343,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Mobile hamburger menu toggle */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="sm:hidden p-2 rounded-xl text-[#241A14] hover:bg-[#EADFCC]"
+            className="sm:hidden p-2 rounded-xl text-[#101410] hover:bg-[#DAE7C7]/50"
             aria-label="Menu"
           >
             {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -350,7 +353,7 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Mobile Drawer Menu */}
       {mobileMenuOpen && (
-        <div className="sm:hidden bg-[#FFFBF4] border-b border-[#DCCDB6] px-4 py-4 space-y-3">
+        <div className="sm:hidden bg-[#F5F8EF] border-b border-[#E2E8D8] px-4 py-4 space-y-3">
           {onSearchChange && (
             <div className="relative w-full mb-3">
               <input
@@ -359,16 +362,16 @@ export const Header: React.FC<HeaderProps> = ({
                 onChange={(e) => onSearchChange(e.target.value)}
                 onKeyDown={handleSearchKeyPress}
                 placeholder="Tìm kiếm sản phẩm..."
-                className="w-full bg-[#F4ECDF] border border-[#DCCDB6] rounded-xl pl-9 pr-4 py-2 text-xs text-[#241A14]"
+                className="w-full bg-white border border-[#E2E8D8] rounded-xl pl-9 pr-4 py-2 text-xs text-[#101410] focus:outline-none focus:border-[#08482D]"
               />
-              <Search className="w-4 h-4 text-[#74665B] absolute left-3 top-2.5" />
+              <Search className="w-4 h-4 text-[#5E5E61] absolute left-3 top-2.5" />
             </div>
           )}
 
           <div className="flex flex-col gap-2">
             <button
               onClick={() => { onNavigate('home'); setMobileMenuOpen(false); }}
-              className="text-left px-3 py-2 rounded-xl text-xs font-semibold text-[#241A14] hover:bg-[#EADFCC]"
+              className="text-left px-3 py-2 rounded-xl text-xs font-semibold text-[#101410] hover:bg-[#DAE7C7]/50"
             >
               Cửa hàng
             </button>
@@ -376,13 +379,13 @@ export const Header: React.FC<HeaderProps> = ({
               <>
                 <button
                   onClick={() => { onNavigate('orders'); setMobileMenuOpen(false); }}
-                  className="text-left px-3 py-2 rounded-xl text-xs font-semibold text-[#241A14] hover:bg-[#EADFCC]"
+                  className="text-left px-3 py-2 rounded-xl text-xs font-semibold text-[#101410] hover:bg-[#DAE7C7]/50"
                 >
                   Đơn mua của tôi
                 </button>
                 <button
                   onClick={() => { onNavigate('account'); setMobileMenuOpen(false); }}
-                  className="text-left px-3 py-2 rounded-xl text-xs font-semibold text-[#241A14] hover:bg-[#EADFCC]"
+                  className="text-left px-3 py-2 rounded-xl text-xs font-semibold text-[#101410] hover:bg-[#DAE7C7]/50"
                 >
                   Tài khoản của tôi (/account)
                 </button>
@@ -391,25 +394,33 @@ export const Header: React.FC<HeaderProps> = ({
             {user && user.role === 'seller' && (
               <button
                 onClick={() => { onNavigate('seller'); setMobileMenuOpen(false); }}
-                className="text-left px-3 py-2 rounded-xl text-xs font-semibold text-[#D9542B] hover:bg-[#EADFCC]"
+                className="text-left px-3 py-2 rounded-xl text-xs font-semibold text-[#08482D] hover:bg-[#DAE7C7]/50"
               >
                 Quản trị người bán & Vận chuyển
               </button>
             )}
+            {!user && (
+              <button
+                onClick={() => { onOpenAuth('seller', false); setMobileMenuOpen(false); }}
+                className="text-left px-3 py-2 rounded-xl text-xs font-semibold text-[#08482D] hover:bg-[#DAE7C7]/50"
+              >
+                Kênh người bán
+              </button>
+            )}
           </div>
 
-          <div className="pt-3 border-t border-[#DCCDB6] flex items-center justify-between text-xs">
-            <span className="text-[#74665B]">Chuyển nhanh tài khoản:</span>
+          <div className="pt-3 border-t border-[#E2E8D8] flex items-center justify-between text-xs">
+            <span className="text-[#5E5E61]">Chuyển nhanh tài khoản:</span>
             <div className="flex gap-2">
               <button
                 onClick={() => { quickLogin('buyer'); setMobileMenuOpen(false); }}
-                className="px-2 py-1 rounded bg-[#EADFCC] text-[#241A14] font-medium"
+                className="px-2.5 py-1 rounded bg-[#DAE7C7] text-[#08482D] font-medium"
               >
                 Khách
               </button>
               <button
                 onClick={() => { quickLogin('seller'); setMobileMenuOpen(false); }}
-                className="px-2 py-1 rounded bg-[#EADFCC] text-[#241A14] font-medium"
+                className="px-2.5 py-1 rounded bg-[#DAE7C7] text-[#08482D] font-medium"
               >
                 Người bán
               </button>

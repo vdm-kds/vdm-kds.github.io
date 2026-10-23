@@ -61,18 +61,18 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
           </div>
 
           {/* Freeship Alert Strip */}
-          <div className="bg-[#F4ECDF] px-6 py-3 border-b border-[#DCCDB6]">
-            <div className="flex items-center gap-2 text-xs font-medium text-[#241A14] mb-1.5">
-              <Truck className="w-4 h-4 shrink-0 text-[#D9542B]" />
+          <div className="bg-[#F5F8EF] px-6 py-3 border-b border-[#E2E8D8]">
+            <div className="flex items-center gap-2 text-xs font-medium text-[#101410] mb-1.5">
+              <Truck className="w-4 h-4 shrink-0 text-[#C2522D]" />
               {remainingForFreeship === 0 ? (
-                <span className="text-[#5E7048] font-bold">🎉 Đơn hàng đã đạt mốc MIỄN PHÍ VẬN CHUYỂN!</span>
+                <span className="text-[#08482D] font-bold">🎉 Đơn hàng đã đạt mốc MIỄN PHÍ VẬN CHUYỂN!</span>
               ) : (
-                <span>Mua thêm <strong className="font-mono text-[#D9542B]">{formatVND(remainingForFreeship)}</strong> để freeship (đơn &ge; 1.000.000đ)</span>
+                <span>Mua thêm <strong className="font-mono text-[#C2522D]">{formatVND(remainingForFreeship)}</strong> để freeship (đơn &ge; 1.000.000đ)</span>
               )}
             </div>
-            <div className="w-full bg-[#EADFCC] h-1.5 rounded-full overflow-hidden">
+            <div className="w-full bg-[#DAE7C7] h-1.5 rounded-full overflow-hidden">
               <div
-                className="bg-[#5E7048] h-full rounded-full transition-all duration-300"
+                className="bg-[#08482D] h-full rounded-full transition-all duration-300"
                 style={{ width: `${freeshipProgress}%` }}
               />
             </div>
@@ -81,11 +81,11 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
           {/* Cart Item List */}
           <div className="flex-1 overflow-y-auto p-6 space-y-4">
             {items.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-center p-6 text-[#74665B]">
-                <div className="w-16 h-16 rounded-2xl bg-[#EADFCC] flex items-center justify-center text-[#74665B] mb-4">
+              <div className="h-full flex flex-col items-center justify-center text-center p-6 text-[#5E5E61]">
+                <div className="w-16 h-16 rounded-2xl bg-[#DAE7C7] flex items-center justify-center text-[#5E5E61] mb-4">
                   <ShoppingBag className="w-8 h-8" />
                 </div>
-                <h4 className="font-serif text-lg font-bold text-[#241A14] mb-1">
+                <h4 className="text-lg font-bold text-[#101410] mb-1">
                   Giỏ hàng đang trống
                 </h4>
                 <p className="text-xs max-w-xs leading-relaxed mb-6">
@@ -93,7 +93,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 </p>
                 <button
                   onClick={onClose}
-                  className="px-5 py-2.5 bg-[#D9542B] text-white rounded-xl text-xs font-semibold hover:bg-[#B33F33] transition-colors shadow-vintage-sm"
+                  className="px-5 py-2.5 bg-[#C2522D] text-white rounded-xl text-xs font-semibold hover:bg-[#B33F33] transition-colors shadow-vintage-sm"
                 >
                   Khám phá đồ cũ ngay
                 </button>
@@ -102,40 +102,40 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
               items.map(item => (
                 <div
                   key={item.id}
-                  className="p-4 rounded-2xl bg-[#F4ECDF]/60 border border-[#DCCDB6] flex gap-4 relative group"
+                  className="p-4 rounded-2xl bg-[#F5F8EF]/60 border border-[#E2E8D8] flex gap-4 relative group"
                 >
                   <img
                     src={item.image_url}
                     alt={item.name}
                     referrerPolicy="no-referrer"
-                    className="w-16 h-16 rounded-xl object-cover bg-[#EADFCC] shrink-0"
+                    className="w-16 h-16 rounded-xl object-cover bg-[#DAE7C7] shrink-0"
                   />
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
-                      <h5 className="font-serif text-sm font-bold text-[#241A14] truncate">
+                      <h5 className="text-sm font-bold text-[#101410] truncate">
                         {item.name}
                       </h5>
                       <button
                         onClick={() => onRemoveItem(item.id)}
-                        className="text-[#74665B] hover:text-[#B33F33] p-1 transition-colors"
+                        className="text-[#5E5E61] hover:text-[#B33F33] p-1 transition-colors"
                         title="Xóa"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
 
-                    <div className="text-[11px] text-[#74665B] mt-0.5">
+                    <div className="text-[11px] text-[#5E5E61] mt-0.5">
                       Độ mới: {item.condition_pct}% · Tồn: {item.stock}
                     </div>
 
                     <div className="flex items-center justify-between mt-3">
                       {/* Quantity Stepper */}
-                      <div className="flex items-center border border-[#DCCDB6] rounded-lg bg-[#FFFBF4] p-0.5 font-mono text-xs">
+                      <div className="flex items-center border border-[#E2E8D8] rounded-lg bg-[#FFFFFF] p-0.5 font-mono text-xs">
                         <button
                           onClick={() => onUpdateQty(item.id, item.quantity - 1)}
                           disabled={item.quantity <= 1}
-                          className="w-6 h-6 flex items-center justify-center hover:bg-[#EADFCC] rounded disabled:opacity-30"
+                          className="w-6 h-6 flex items-center justify-center hover:bg-[#DAE7C7] rounded disabled:opacity-30"
                         >
                           -
                         </button>
@@ -143,13 +143,13 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                         <button
                           onClick={() => onUpdateQty(item.id, item.quantity + 1)}
                           disabled={item.quantity >= item.stock}
-                          className="w-6 h-6 flex items-center justify-center hover:bg-[#EADFCC] rounded disabled:opacity-30"
+                          className="w-6 h-6 flex items-center justify-center hover:bg-[#DAE7C7] rounded disabled:opacity-30"
                         >
                           +
                         </button>
                       </div>
 
-                      <span className="font-mono text-xs font-bold text-[#D9542B]">
+                      <span className="font-mono text-xs font-bold text-[#C2522D]">
                         {formatVND(item.price * item.quantity)}
                       </span>
                     </div>

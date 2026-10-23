@@ -290,25 +290,25 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     <>
       <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
         <div 
-          className="relative w-full max-w-4xl bg-[#F4ECDF] rounded-3xl border border-[#DCCDB6] shadow-vintage-lg overflow-hidden my-6"
+          className="relative w-full max-w-4xl bg-[#F5F8EF] rounded-3xl border border-[#E2E8D8] shadow-vintage-lg overflow-hidden my-6"
           onClick={e => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="p-6 border-b border-[#DCCDB6] bg-[#FFFBF4] flex items-center justify-between">
+          <div className="p-6 border-b border-[#E2E8D8] bg-[#FFFFFF] flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <span className="w-9 h-9 rounded-xl bg-[#D9542B] text-white flex items-center justify-center font-bold text-sm shadow-vintage-sm">
+              <span className="w-9 h-9 rounded-xl bg-[#C2522D] text-white flex items-center justify-center font-bold text-sm shadow-vintage-sm">
                 ✓
               </span>
               <div>
-                <h3 className="font-serif text-xl sm:text-2xl font-bold text-[#241A14]">
+                <h3 className="text-xl sm:text-2xl font-bold text-[#101410]">
                   Xác nhận & Đặt hàng
                 </h3>
-                <p className="text-xs text-[#74665B]">
+                <p className="text-xs text-[#5E5E61]">
                   Bước cuối để đón món đồ cũ yêu thích về nhà
                 </p>
               </div>
             </div>
-            <button onClick={onClose} className="p-2 rounded-xl text-[#74665B] hover:text-[#241A14] hover:bg-[#EADFCC]">
+            <button onClick={onClose} className="p-2 rounded-xl text-[#5E5E61] hover:text-[#101410] hover:bg-[#DAE7C7]">
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -317,22 +317,22 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             {/* Cột trái: Thông tin nhận hàng & Thanh toán */}
             <div className="md:col-span-7 space-y-6">
               {/* Notice */}
-              <div className="p-3.5 rounded-xl bg-[#FFFBF4] border border-[#DCCDB6] flex items-start gap-2.5 text-xs text-[#74665B]">
-                <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5 text-[#D9542B]" />
+              <div className="p-3.5 rounded-xl bg-[#FFFFFF] border border-[#E2E8D8] flex items-start gap-2.5 text-xs text-[#5E5E61]">
+                <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5 text-[#C2522D]" />
                 <div>
-                  <strong className="text-[#241A14]">Môi trường thử nghiệm an toàn:</strong> Bạn có thể dùng thẻ Visa test <code className="bg-[#EADFCC] px-1 py-0.5 rounded text-[#241A14] font-mono">4111 1111 1111 1111</code>, OTP <code className="bg-[#EADFCC] px-1 py-0.5 rounded text-[#241A14] font-mono">123456</code>.
+                  <strong className="text-[#101410]">Môi trường thử nghiệm an toàn:</strong> Bạn có thể dùng thẻ Visa test <code className="bg-[#DAE7C7] px-1 py-0.5 rounded text-[#101410] font-mono">4111 1111 1111 1111</code>, OTP <code className="bg-[#DAE7C7] px-1 py-0.5 rounded text-[#101410] font-mono">123456</code>.
                 </div>
               </div>
 
               {/* 1. Thông tin giao hàng */}
-              <div className="bg-[#FFFBF4] p-5 rounded-2xl border border-[#DCCDB6] space-y-4 shadow-vintage-sm">
-                <h4 className="font-serif text-sm font-bold text-[#241A14]">
+              <div className="bg-[#FFFFFF] p-5 rounded-2xl border border-[#E2E8D8] space-y-4 shadow-vintage-sm">
+                <h4 className="text-sm font-bold text-[#101410]">
                   1. Địa chỉ giao hàng
                 </h4>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs font-semibold text-[#74665B] block mb-1">
+                    <label className="text-xs font-semibold text-[#5E5E61] block mb-1">
                       Người nhận *
                     </label>
                     <input
@@ -341,12 +341,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       value={recipientName}
                       onChange={(e) => setRecipientName(e.target.value)}
                       placeholder="Nguyễn Văn A"
-                      className="w-full bg-[#F4ECDF] border border-[#DCCDB6] rounded-xl px-3 py-2 text-xs text-[#241A14] focus:outline-none focus:border-[#D9542B]"
+                      className="w-full bg-[#F5F8EF] border border-[#E2E8D8] rounded-xl px-3 py-2 text-xs text-[#101410] focus:outline-none focus:border-[#C2522D]"
                     />
                   </div>
 
                   <div>
-                    <label className="text-xs font-semibold text-[#74665B] block mb-1">
+                    <label className="text-xs font-semibold text-[#5E5E61] block mb-1">
                       Số điện thoại *
                     </label>
                     <input
@@ -355,13 +355,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       placeholder="0987654321"
-                      className="w-full bg-[#F4ECDF] border border-[#DCCDB6] rounded-xl px-3 py-2 text-xs text-[#241A14] focus:outline-none focus:border-[#D9542B]"
+                      className="w-full bg-[#F5F8EF] border border-[#E2E8D8] rounded-xl px-3 py-2 text-xs text-[#101410] focus:outline-none focus:border-[#C2522D]"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-xs font-semibold text-[#74665B] block mb-1">
+                  <label className="text-xs font-semibold text-[#5E5E61] block mb-1">
                     Địa chỉ chi tiết (Số nhà, đường, phường, quận) *
                   </label>
                   <input
@@ -370,12 +370,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     value={addressLine}
                     onChange={(e) => setAddressLine(e.target.value)}
                     placeholder="123 Đường Nam Kỳ Khởi Nghĩa, Quận 3, TP. Hồ Chí Minh"
-                    className="w-full bg-[#F4ECDF] border border-[#DCCDB6] rounded-xl px-3 py-2 text-xs text-[#241A14] focus:outline-none focus:border-[#D9542B]"
+                    className="w-full bg-[#F5F8EF] border border-[#E2E8D8] rounded-xl px-3 py-2 text-xs text-[#101410] focus:outline-none focus:border-[#C2522D]"
                   />
                 </div>
 
                 <div>
-                  <label className="text-xs font-semibold text-[#74665B] block mb-1">
+                  <label className="text-xs font-semibold text-[#5E5E61] block mb-1">
                     Ghi chú cho tiệm (tùy chọn)
                   </label>
                   <input
@@ -383,14 +383,14 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     value={note}
                     onChange={(e) => setNote(e.target.value)}
                     placeholder="Giao giờ hành chính, gọi trước khi đến..."
-                    className="w-full bg-[#F4ECDF] border border-[#DCCDB6] rounded-xl px-3 py-2 text-xs text-[#241A14] focus:outline-none focus:border-[#D9542B]"
+                    className="w-full bg-[#F5F8EF] border border-[#E2E8D8] rounded-xl px-3 py-2 text-xs text-[#101410] focus:outline-none focus:border-[#C2522D]"
                   />
                 </div>
               </div>
 
               {/* 2. Phương thức thanh toán */}
-              <div className="bg-[#FFFBF4] p-5 rounded-2xl border border-[#DCCDB6] space-y-4 shadow-vintage-sm">
-                <h4 className="font-serif text-sm font-bold text-[#241A14]">
+              <div className="bg-[#FFFFFF] p-5 rounded-2xl border border-[#E2E8D8] space-y-4 shadow-vintage-sm">
+                <h4 className="text-sm font-bold text-[#101410]">
                   2. Chọn phương thức thanh toán
                 </h4>
 
@@ -400,11 +400,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     onClick={() => setPaymentMethod('card')}
                     className={`p-3 rounded-xl border text-center transition-all flex flex-col items-center justify-center gap-1.5 ${
                       paymentMethod === 'card'
-                        ? 'bg-[#EADFCC] border-[#D9542B] text-[#241A14] shadow-xs font-bold'
-                        : 'border-[#DCCDB6] bg-[#F4ECDF] text-[#74665B] hover:text-[#241A14]'
+                        ? 'bg-[#DAE7C7] border-[#C2522D] text-[#101410] shadow-xs font-bold'
+                        : 'border-[#E2E8D8] bg-[#F5F8EF] text-[#5E5E61] hover:text-[#101410]'
                     }`}
                   >
-                    <CreditCard className="w-5 h-5 text-[#D9542B]" />
+                    <CreditCard className="w-5 h-5 text-[#C2522D]" />
                     <span className="text-xs">Visa / Master</span>
                   </button>
 
@@ -413,11 +413,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     onClick={() => setPaymentMethod('napas')}
                     className={`p-3 rounded-xl border text-center transition-all flex flex-col items-center justify-center gap-1.5 ${
                       paymentMethod === 'napas'
-                        ? 'bg-[#EADFCC] border-[#D9542B] text-[#241A14] shadow-xs font-bold'
-                        : 'border-[#DCCDB6] bg-[#F4ECDF] text-[#74665B] hover:text-[#241A14]'
+                        ? 'bg-[#DAE7C7] border-[#C2522D] text-[#101410] shadow-xs font-bold'
+                        : 'border-[#E2E8D8] bg-[#F5F8EF] text-[#5E5E61] hover:text-[#101410]'
                     }`}
                   >
-                    <Building2 className="w-5 h-5 text-[#5E7048]" />
+                    <Building2 className="w-5 h-5 text-[#08482D]" />
                     <span className="text-xs">Thẻ ATM NAPAS</span>
                   </button>
 
@@ -426,8 +426,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     onClick={() => setPaymentMethod('cod')}
                     className={`p-3 rounded-xl border text-center transition-all flex flex-col items-center justify-center gap-1.5 ${
                       paymentMethod === 'cod'
-                        ? 'bg-[#EADFCC] border-[#D9542B] text-[#241A14] shadow-xs font-bold'
-                        : 'border-[#DCCDB6] bg-[#F4ECDF] text-[#74665B] hover:text-[#241A14]'
+                        ? 'bg-[#DAE7C7] border-[#C2522D] text-[#101410] shadow-xs font-bold'
+                        : 'border-[#E2E8D8] bg-[#F5F8EF] text-[#5E5E61] hover:text-[#101410]'
                     }`}
                   >
                     <Truck className="w-5 h-5 text-[#E3B23C]" />
@@ -445,7 +445,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                           isCardFlipped ? 'rotate-y-180' : ''
                         }`}
                         style={{
-                          background: 'linear-gradient(135deg, #241A14 0%, #4D382B 60%, #D9542B 100%)',
+                          background: 'linear-gradient(135deg, #101410 0%, #4D382B 60%, #C2522D 100%)',
                           transformStyle: 'preserve-3d',
                           transform: isCardFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)'
                         }}
@@ -454,7 +454,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                         {!isCardFlipped ? (
                           <div className="h-full flex flex-col justify-between">
                             <div className="flex items-center justify-between">
-                              <span className="font-serif italic font-bold tracking-wider text-sm opacity-90">
+                              <span className="italic font-bold tracking-wider text-sm opacity-90">
                                 Đồ Cũ Còn Thương
                               </span>
                               <span className="font-mono font-bold text-xs uppercase bg-white/20 px-2 py-0.5 rounded">
@@ -485,7 +485,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                             <div className="w-full h-8 bg-black/80 -mx-5 mt-2" />
                             <div className="flex items-center justify-end pr-4">
                               <span className="text-[9px] mr-2 text-white/70">CVV:</span>
-                              <div className="bg-white text-[#241A14] font-mono font-bold px-3 py-1 rounded text-xs">
+                              <div className="bg-white text-[#101410] font-mono font-bold px-3 py-1 rounded text-xs">
                                 {cardCvv || '•••'}
                               </div>
                             </div>
@@ -502,14 +502,14 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       <button
                         type="button"
                         onClick={() => fillTestCard('success')}
-                        className="text-[11px] font-mono px-2.5 py-1 bg-[#EADFCC] hover:bg-[#DCCDB6] text-[#241A14] rounded-lg transition-colors"
+                        className="text-[11px] font-mono px-2.5 py-1 bg-[#DAE7C7] hover:bg-[#E2E8D8] text-[#101410] rounded-lg transition-colors"
                       >
                         ⚡ Điền thẻ thành công (4111)
                       </button>
                       <button
                         type="button"
                         onClick={() => fillTestCard('decline')}
-                        className="text-[11px] font-mono px-2.5 py-1 bg-[#EADFCC] hover:bg-[#DCCDB6] text-[#B33F33] rounded-lg transition-colors"
+                        className="text-[11px] font-mono px-2.5 py-1 bg-[#DAE7C7] hover:bg-[#E2E8D8] text-[#B33F33] rounded-lg transition-colors"
                       >
                         ✕ Thẻ từ chối (4000)
                       </button>
@@ -518,7 +518,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     {/* Card inputs */}
                     <div className="space-y-3">
                       <div>
-                        <label className="text-xs font-semibold text-[#74665B] block mb-1">
+                        <label className="text-xs font-semibold text-[#5E5E61] block mb-1">
                           Số thẻ quốc tế (16 số) *
                         </label>
                         <input
@@ -527,12 +527,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                           value={cardNumber}
                           onChange={(e) => setCardNumber(e.target.value)}
                           placeholder="4111 1111 1111 1111"
-                          className="w-full bg-[#F4ECDF] border border-[#DCCDB6] rounded-xl px-3 py-2 text-xs font-mono text-[#241A14] focus:outline-none focus:border-[#D9542B]"
+                          className="w-full bg-[#F5F8EF] border border-[#E2E8D8] rounded-xl px-3 py-2 text-xs font-mono text-[#101410] focus:outline-none focus:border-[#C2522D]"
                         />
                       </div>
 
                       <div>
-                        <label className="text-xs font-semibold text-[#74665B] block mb-1">
+                        <label className="text-xs font-semibold text-[#5E5E61] block mb-1">
                           Tên chủ thẻ (không dấu) *
                         </label>
                         <input
@@ -541,13 +541,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                           value={cardHolder}
                           onChange={(e) => setCardHolder(e.target.value.toUpperCase())}
                           placeholder="NGUYEN VAN A"
-                          className="w-full bg-[#F4ECDF] border border-[#DCCDB6] rounded-xl px-3 py-2 text-xs font-mono text-[#241A14] focus:outline-none focus:border-[#D9542B]"
+                          className="w-full bg-[#F5F8EF] border border-[#E2E8D8] rounded-xl px-3 py-2 text-xs font-mono text-[#101410] focus:outline-none focus:border-[#C2522D]"
                         />
                       </div>
 
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className="text-xs font-semibold text-[#74665B] block mb-1">
+                          <label className="text-xs font-semibold text-[#5E5E61] block mb-1">
                             Hạn thẻ (MM/YY) *
                           </label>
                           <input
@@ -557,12 +557,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                             value={cardExpiry}
                             onChange={(e) => setCardExpiry(e.target.value)}
                             placeholder="12/28"
-                            className="w-full bg-[#F4ECDF] border border-[#DCCDB6] rounded-xl px-3 py-2 text-xs font-mono text-[#241A14] focus:outline-none focus:border-[#D9542B]"
+                            className="w-full bg-[#F5F8EF] border border-[#E2E8D8] rounded-xl px-3 py-2 text-xs font-mono text-[#101410] focus:outline-none focus:border-[#C2522D]"
                           />
                         </div>
 
                         <div>
-                          <label className="text-xs font-semibold text-[#74665B] block mb-1">
+                          <label className="text-xs font-semibold text-[#5E5E61] block mb-1">
                             Mã CVV (3 số) *
                           </label>
                           <input
@@ -574,7 +574,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                             onBlur={() => setIsCardFlipped(false)}
                             onChange={(e) => setCardCvv(e.target.value)}
                             placeholder="123"
-                            className="w-full bg-[#F4ECDF] border border-[#DCCDB6] rounded-xl px-3 py-2 text-xs font-mono text-[#241A14] focus:outline-none focus:border-[#D9542B]"
+                            className="w-full bg-[#F5F8EF] border border-[#E2E8D8] rounded-xl px-3 py-2 text-xs font-mono text-[#101410] focus:outline-none focus:border-[#C2522D]"
                           />
                         </div>
                       </div>
@@ -585,13 +585,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 {paymentMethod === 'napas' && (
                   <div className="space-y-3 pt-2">
                     <div>
-                      <label className="text-xs font-semibold text-[#74665B] block mb-1">
+                      <label className="text-xs font-semibold text-[#5E5E61] block mb-1">
                         Ngân hàng phát hành
                       </label>
                       <select
                         value={napasBank}
                         onChange={(e) => setNapasBank(e.target.value)}
-                        className="w-full bg-[#F4ECDF] border border-[#DCCDB6] rounded-xl px-3 py-2 text-xs text-[#241A14] focus:outline-none focus:border-[#D9542B]"
+                        className="w-full bg-[#F5F8EF] border border-[#E2E8D8] rounded-xl px-3 py-2 text-xs text-[#101410] focus:outline-none focus:border-[#C2522D]"
                       >
                         <option value="Vietcombank">Vietcombank</option>
                         <option value="Techcombank">Techcombank</option>
@@ -603,7 +603,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     </div>
 
                     <div>
-                      <label className="text-xs font-semibold text-[#74665B] block mb-1">
+                      <label className="text-xs font-semibold text-[#5E5E61] block mb-1">
                         Số thẻ ATM nội địa *
                       </label>
                       <input
@@ -612,15 +612,15 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                         value={napasCardNumber}
                         onChange={(e) => setNapasCardNumber(e.target.value)}
                         placeholder="9704 1234 5678 9012"
-                        className="w-full bg-[#F4ECDF] border border-[#DCCDB6] rounded-xl px-3 py-2 text-xs font-mono text-[#241A14] focus:outline-none focus:border-[#D9542B]"
+                        className="w-full bg-[#F5F8EF] border border-[#E2E8D8] rounded-xl px-3 py-2 text-xs font-mono text-[#101410] focus:outline-none focus:border-[#C2522D]"
                       />
                     </div>
                   </div>
                 )}
 
                 {paymentMethod === 'cod' && (
-                  <div className="p-3 bg-[#EADFCC]/50 border border-[#DCCDB6] rounded-xl text-xs text-[#74665B] leading-relaxed">
-                    Bạn sẽ thanh toán tiền mặt cho nhân viên giao hàng khi nhận kiện hàng. Vui lòng chuẩn bị đúng số tiền <strong className="text-[#241A14]">{formatVND(orderTotal)}</strong>.
+                  <div className="p-3 bg-[#DAE7C7]/50 border border-[#E2E8D8] rounded-xl text-xs text-[#5E5E61] leading-relaxed">
+                    Bạn sẽ thanh toán tiền mặt cho nhân viên giao hàng khi nhận kiện hàng. Vui lòng chuẩn bị đúng số tiền <strong className="text-[#101410]">{formatVND(orderTotal)}</strong>.
                   </div>
                 )}
               </div>
@@ -628,29 +628,29 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
             {/* Cột phải: Tóm tắt đơn hàng */}
             <div className="md:col-span-5 flex flex-col justify-between">
-              <div className="bg-[#FFFBF4] p-5 rounded-2xl border border-[#DCCDB6] space-y-4 shadow-vintage-sm">
-                <h4 className="font-serif text-sm font-bold text-[#241A14]">
+              <div className="bg-[#FFFFFF] p-5 rounded-2xl border border-[#E2E8D8] space-y-4 shadow-vintage-sm">
+                <h4 className="text-sm font-bold text-[#101410]">
                   Kiện hàng của bạn ({currentItems.length} món)
                 </h4>
 
-                <div className="max-h-64 overflow-y-auto divide-y divide-[#DCCDB6]/50 pr-1">
+                <div className="max-h-64 overflow-y-auto divide-y divide-[#E2E8D8]/50 pr-1">
                   {currentItems.map((item, idx) => (
                     <div key={idx} className="py-2.5 flex items-center gap-3">
                       <img
                         src={item.image_url}
                         alt={item.name}
                         referrerPolicy="no-referrer"
-                        className="w-12 h-12 rounded-lg object-cover bg-[#EADFCC] shrink-0"
+                        className="w-12 h-12 rounded-lg object-cover bg-[#DAE7C7] shrink-0"
                       />
                       <div className="flex-1 min-w-0">
-                        <h5 className="font-serif text-xs font-bold text-[#241A14] truncate">
+                        <h5 className="text-xs font-bold text-[#101410] truncate">
                           {item.name}
                         </h5>
-                        <p className="text-[11px] text-[#74665B]">
+                        <p className="text-[11px] text-[#5E5E61]">
                           Số lượng: {item.quantity} · Độ mới: {item.condition_pct}%
                         </p>
                       </div>
-                      <span className="font-mono text-xs font-bold text-[#241A14] shrink-0">
+                      <span className="font-mono text-xs font-bold text-[#101410] shrink-0">
                         {formatVND(item.price * item.quantity)}
                       </span>
                     </div>
@@ -658,8 +658,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 </div>
 
                 {/* Mã giảm giá */}
-                <div className="border-t border-[#DCCDB6] pt-3 space-y-2">
-                  <label className="block text-[11px] font-bold text-[#241A14] uppercase tracking-wider font-serif">
+                <div className="border-t border-[#E2E8D8] pt-3 space-y-2">
+                  <label className="block text-[11px] font-bold text-[#101410] uppercase tracking-wider">
                     Mã giảm giá
                   </label>
                   {!appliedCoupon ? (
@@ -673,32 +673,32 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                             setCouponError('');
                           }}
                           placeholder="VD: DOCU10, FREESHIP"
-                          className="flex-1 px-3 py-2 bg-white border border-[#DCCDB6] rounded-xl text-xs font-mono uppercase text-[#241A14] focus:outline-none focus:ring-1 focus:ring-[#D9542B]"
+                          className="flex-1 px-3 py-2 bg-white border border-[#E2E8D8] rounded-xl text-xs font-mono uppercase text-[#101410] focus:outline-none focus:ring-1 focus:ring-[#C2522D]"
                         />
                         <button
                           type="button"
                           onClick={() => handleApplyCoupon()}
                           disabled={isValidatingCoupon || !couponInput.trim()}
-                          className="px-4 py-2 bg-[#241A14] text-[#FFFBF4] rounded-xl text-xs font-bold hover:bg-[#D9542B] transition-colors disabled:opacity-50"
+                          className="px-4 py-2 bg-[#101410] text-[#FFFFFF] rounded-xl text-xs font-bold hover:bg-[#C2522D] transition-colors disabled:opacity-50"
                         >
                           {isValidatingCoupon ? 'Kiểm tra...' : 'Áp dụng'}
                         </button>
                       </div>
 
                       {/* Quick seeds */}
-                      <div className="flex items-center gap-1.5 text-[10px] text-[#74665B]">
+                      <div className="flex items-center gap-1.5 text-[10px] text-[#5E5E61]">
                         <span>Gợi ý:</span>
                         <button
                           type="button"
                           onClick={() => handleApplyCoupon('DOCU10')}
-                          className="font-mono px-2 py-0.5 rounded bg-[#F4ECDF] border border-[#DCCDB6] hover:border-[#D9542B] font-bold text-[#D9542B]"
+                          className="font-mono px-2 py-0.5 rounded bg-[#F5F8EF] border border-[#E2E8D8] hover:border-[#C2522D] font-bold text-[#C2522D]"
                         >
                           DOCU10 (-10%)
                         </button>
                         <button
                           type="button"
                           onClick={() => handleApplyCoupon('FREESHIP')}
-                          className="font-mono px-2 py-0.5 rounded bg-[#F4ECDF] border border-[#DCCDB6] hover:border-[#5E7048] font-bold text-[#5E7048]"
+                          className="font-mono px-2 py-0.5 rounded bg-[#F5F8EF] border border-[#E2E8D8] hover:border-[#08482D] font-bold text-[#08482D]"
                         >
                           FREESHIP
                         </button>
@@ -711,12 +711,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       )}
                     </div>
                   ) : (
-                    <div className="p-2.5 bg-[#5E7048]/10 rounded-xl border border-[#5E7048]/40 flex items-center justify-between text-xs">
+                    <div className="p-2.5 bg-[#08482D]/10 rounded-xl border border-[#08482D]/40 flex items-center justify-between text-xs">
                       <div>
-                        <div className="font-mono font-bold text-[#5E7048] flex items-center gap-1">
+                        <div className="font-mono font-bold text-[#08482D] flex items-center gap-1">
                           ✓ Đã áp dụng: {appliedCoupon.code}
                         </div>
-                        <div className="text-[11px] text-[#74665B]">
+                        <div className="text-[11px] text-[#5E5E61]">
                           {appliedCoupon.description}
                         </div>
                       </div>
@@ -732,30 +732,30 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 </div>
 
                 {/* Chi phí */}
-                <div className="border-t border-[#DCCDB6] pt-3 space-y-2 text-xs">
-                  <div className="flex justify-between text-[#74665B]">
+                <div className="border-t border-[#E2E8D8] pt-3 space-y-2 text-xs">
+                  <div className="flex justify-between text-[#5E5E61]">
                     <span>Tạm tính hàng</span>
-                    <span className="font-mono text-[#241A14]">{formatVND(orderSubtotal)}</span>
+                    <span className="font-mono text-[#101410]">{formatVND(orderSubtotal)}</span>
                   </div>
-                  <div className="flex justify-between text-[#74665B]">
+                  <div className="flex justify-between text-[#5E5E61]">
                     <span>Phí vận chuyển</span>
-                    <span className="font-mono text-[#241A14]">
+                    <span className="font-mono text-[#101410]">
                       {orderShippingFee === 0 ? (
-                        <span className="text-[#5E7048] font-semibold">Miễn phí (Đơn &gt; 1 triệu)</span>
+                        <span className="text-[#08482D] font-semibold">Miễn phí (Đơn &gt; 1 triệu)</span>
                       ) : (
                         formatVND(orderShippingFee)
                       )}
                     </span>
                   </div>
                   {discountAmount > 0 && (
-                    <div className="flex justify-between text-[#5E7048] font-semibold">
+                    <div className="flex justify-between text-[#08482D] font-semibold">
                       <span>Giảm giá ({appliedCoupon?.code})</span>
                       <span className="font-mono">-{formatVND(discountAmount)}</span>
                     </div>
                   )}
-                  <div className="border-t border-[#DCCDB6] pt-2 flex justify-between items-baseline font-bold">
-                    <span className="font-serif text-sm text-[#241A14]">Tổng cộng</span>
-                    <span className="font-mono text-lg text-[#D9542B]">{formatVND(orderTotal)}</span>
+                  <div className="border-t border-[#E2E8D8] pt-2 flex justify-between items-baseline font-bold">
+                    <span className="text-sm text-[#101410]">Tổng cộng</span>
+                    <span className="font-mono text-lg text-[#C2522D]">{formatVND(orderTotal)}</span>
                   </div>
                 </div>
               </div>
@@ -782,19 +782,19 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       {/* 6-Box Auto-Advancing OTP Modal */}
       {showOtpModal && (
         <div className="fixed inset-0 z-60 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-[#FFFBF4] border border-[#DCCDB6] rounded-3xl w-full max-w-sm p-6 shadow-vintage-lg space-y-5 text-center">
-            <div className="w-12 h-12 mx-auto rounded-2xl bg-[#D9542B]/10 text-[#D9542B] flex items-center justify-center">
+          <div className="bg-[#FFFFFF] border border-[#E2E8D8] rounded-3xl w-full max-w-sm p-6 shadow-vintage-lg space-y-5 text-center">
+            <div className="w-12 h-12 mx-auto rounded-2xl bg-[#C2522D]/10 text-[#C2522D] flex items-center justify-center">
               <Lock className="w-6 h-6" />
             </div>
 
             <div>
-              <h3 className="font-serif text-lg font-bold text-[#241A14]">
+              <h3 className="text-lg font-bold text-[#101410]">
                 Xác thực giao dịch (OTP)
               </h3>
-              <p className="text-xs text-[#74665B] mt-1">
+              <p className="text-xs text-[#5E5E61] mt-1">
                 Nhập mã xác thực 6 số gửi đến điện thoại đăng ký
               </p>
-              <div className="mt-2 inline-block px-3 py-1 bg-[#EADFCC] text-[#241A14] text-xs font-mono font-bold rounded-lg">
+              <div className="mt-2 inline-block px-3 py-1 bg-[#DAE7C7] text-[#101410] text-xs font-mono font-bold rounded-lg">
                 Mã OTP thử nghiệm: 123456
               </div>
             </div>
@@ -811,7 +811,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   value={val}
                   onChange={(e) => handleOtpBoxChange(idx, e.target.value)}
                   onKeyDown={(e) => handleOtpKeyDown(idx, e)}
-                  className="w-10 h-12 text-center font-mono text-lg font-bold bg-[#F4ECDF] border-2 border-[#DCCDB6] rounded-xl text-[#241A14] focus:outline-none focus:border-[#D9542B] focus:ring-1 focus:ring-[#D9542B] transition-all"
+                  className="w-10 h-12 text-center font-mono text-lg font-bold bg-[#F5F8EF] border-2 border-[#E2E8D8] rounded-xl text-[#101410] focus:outline-none focus:border-[#C2522D] focus:ring-1 focus:ring-[#C2522D] transition-all"
                 />
               ))}
             </div>

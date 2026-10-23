@@ -137,6 +137,9 @@ export interface Order {
   cancel_reason?: string;
   coupon_code?: string;
   discount_amount?: number;
+  current_location?: string;
+  shipper_name?: string;
+  shipper_phone?: string;
   created_at: string;
   updated_at: string;
   items?: OrderItem[];

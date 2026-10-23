@@ -121,25 +121,25 @@ export function ShippingLabelModal({ order, isOpen, onClose }: ShippingLabelModa
         }
       `}</style>
 
-      <div className="relative w-full max-w-xl bg-white rounded-3xl border border-[#DCCDB6] shadow-2xl overflow-hidden print:max-w-none print:w-auto print:border-none print:shadow-none">
+      <div className="relative w-full max-w-xl bg-white rounded-3xl border border-[#E2E8D8] shadow-2xl overflow-hidden print:max-w-none print:w-auto print:border-none print:shadow-none">
         {/* Modal Top Bar (Screen only) */}
-        <div className="no-print flex items-center justify-between px-6 py-4 bg-[#F4ECDF] border-b border-[#DCCDB6]">
+        <div className="no-print flex items-center justify-between px-6 py-4 bg-[#F5F8EF] border-b border-[#E2E8D8]">
           <div className="flex items-center gap-2">
-            <Package className="w-5 h-5 text-[#D9542B]" />
-            <h3 className="font-serif text-lg font-bold text-[#241A14]">
+            <Package className="w-5 h-5 text-[#C2522D]" />
+            <h3 className="text-lg font-bold text-[#101410]">
               Phiếu Giao Hàng Chuẩn A6
             </h3>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={handlePrint}
-              className="px-4 py-2 bg-[#D9542B] text-white text-xs font-bold rounded-xl flex items-center gap-1.5 hover:bg-[#B33F33] transition-colors shadow-sm"
+              className="px-4 py-2 bg-[#C2522D] text-white text-xs font-bold rounded-xl flex items-center gap-1.5 hover:bg-[#B33F33] transition-colors shadow-sm"
             >
               <Printer className="w-4 h-4" /> In phiếu (A6)
             </button>
             <button
               onClick={onClose}
-              className="p-2 rounded-xl text-[#74665B] hover:bg-[#EADFCC] transition-colors"
+              className="p-2 rounded-xl text-[#5E5E61] hover:bg-[#DAE7C7] transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
