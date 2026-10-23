@@ -5,6 +5,7 @@ import { formatVND, validateLuhn } from '../utils/format';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { Button } from './Button';
 
 interface CheckoutModalProps {
   isOpen: boolean;
@@ -761,17 +762,17 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
               {/* Submit Button */}
               <div className="mt-6">
-                <button
+                <Button
                   type="submit"
-                  disabled={isSubmitting}
-                  className="w-full py-3.5 bg-[#D9542B] hover:bg-[#B33F33] text-white font-semibold text-sm rounded-2xl shadow-vintage transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-98"
+                  variant="primary"
+                  size="lg"
+                  loading={isSubmitting}
+                  className="w-full text-sm font-semibold"
                 >
-                  <Lock className="w-4 h-4" />
-                  {isSubmitting ? 'Đang khởi tạo đơn...' : (
-                    paymentMethod === 'cod' ? 'Xác nhận đặt hàng COD' : 'Xác thực OTP & Thanh toán'
-                  )}
-                  <ArrowRight className="w-4 h-4" />
-                </button>
+                  <Lock className="w-4 h-4 mr-1.5" />
+                  {paymentMethod === 'cod' ? 'Xác nhận đặt hàng COD' : 'Xác thực OTP & Thanh toán'}
+                  <ArrowRight className="w-4 h-4 ml-1.5" />
+                </Button>
               </div>
             </div>
           </form>
@@ -822,20 +823,24 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             )}
 
             <div className="flex gap-2 pt-2">
-              <button
+              <Button
                 type="button"
+                variant="secondary"
+                size="md"
                 onClick={() => setShowOtpModal(false)}
-                className="flex-1 py-2.5 rounded-xl border border-[#DCCDB6] text-xs font-medium text-[#74665B] hover:bg-[#EADFCC]"
+                className="flex-1 text-xs"
               >
                 Hủy
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="primary"
+                size="md"
                 onClick={handleVerifyOtpAndPay}
-                className="flex-1 py-2.5 rounded-xl bg-[#D9542B] hover:bg-[#B33F33] text-white text-xs font-semibold shadow-xs"
+                className="flex-1 text-xs"
               >
                 Xác nhận
-              </button>
+              </Button>
             </div>
           </div>
         </div>

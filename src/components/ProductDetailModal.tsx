@@ -3,6 +3,7 @@ import { X, ShoppingBag, ShieldCheck, Truck, Heart, ArrowRight, Check, Star } fr
 import { Product, Review, ReviewsResponse } from '../types';
 import { formatVND } from '../utils/format';
 import { api } from '../services/api';
+import { Button } from './Button';
 
 interface ProductDetailModalProps {
   product: Product | null;
@@ -318,29 +319,27 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             )}
 
             <div className="grid grid-cols-2 gap-3">
-              <button
+              <Button
+                variant={justAdded ? "soft" : "secondary"}
+                size="md"
                 onClick={handleAdd}
                 disabled={isSoldOut}
-                className={`py-3 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
-                  isSoldOut
-                    ? 'border-[#DCCDB6] bg-[#EADFCC] text-[#74665B] cursor-not-allowed opacity-50'
-                    : justAdded
-                    ? 'bg-[#5E7048] text-white border-[#5E7048]'
-                    : 'border-[#241A14] text-[#241A14] bg-[#FFFBF4] hover:bg-[#EADFCC]'
-                }`}
+                className="w-full text-xs font-bold"
               >
-                {justAdded ? <Check className="w-4 h-4" /> : <ShoppingBag className="w-4 h-4" />}
+                {justAdded ? <Check className="w-4 h-4 mr-1 text-[#08482D]" /> : <ShoppingBag className="w-4 h-4 mr-1 text-[#08482D]" />}
                 <span>{justAdded ? 'Đã thêm' : 'Thêm vào giỏ'}</span>
-              </button>
+              </Button>
 
-              <button
+              <Button
+                variant="primary"
+                size="md"
                 onClick={() => onBuyNow(product, quantity)}
                 disabled={isSoldOut}
-                className="py-3 px-3 rounded-xl bg-[#D9542B] hover:bg-[#B33F33] text-white text-xs font-bold transition-all shadow-vintage-sm flex items-center justify-center gap-1.5 disabled:opacity-50"
+                className="w-full text-xs font-bold"
               >
                 <span>Mua ngay</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
+                <ArrowRight className="w-3.5 h-3.5 ml-1" />
+              </Button>
             </div>
           </div>
         </div>

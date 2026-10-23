@@ -8,6 +8,7 @@ import { NotificationBell } from './NotificationBell';
 import { Product } from '../types';
 import { api } from '../services/api';
 import { formatVND } from '../utils/format';
+import { Button } from './Button';
 
 interface HeaderProps {
   currentView: 'home' | 'orders' | 'seller' | 'account' | '404';
@@ -96,23 +97,23 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="sticky top-0 z-40 bg-[#F4ECDF]/92 backdrop-blur-md border-b border-[#DCCDB6] transition-all">
+    <header className="sticky top-0 z-40 bg-[#F5F8EF]/95 backdrop-blur-md border-b border-[#E2E8D8] transition-all">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-4 sm:gap-8">
-        {/* Zone 1: Brand Wordmark with ♻ and Fraunces typography */}
+        {/* Zone 1: Brand Wordmark with ♻ and leaf logo */}
         <div className="flex items-center gap-3 shrink-0">
           <button
             onClick={() => onNavigate('home')}
             className="flex items-center gap-2.5 text-left group focus-visible:outline-none"
           >
-            <div className="w-10 h-10 rounded-2xl bg-[#D9542B] text-white flex items-center justify-center font-serif text-lg font-bold shadow-vintage-sm transition-transform duration-200 group-hover:scale-105">
+            <div className="w-10 h-10 rounded-2xl bg-[#08482D] text-white flex items-center justify-center font-bold text-lg shadow-sm transition-transform duration-200 group-hover:scale-105">
               ♻
             </div>
             <div>
-              <span className="font-serif text-xl sm:text-2xl font-bold tracking-tight text-[#241A14] block leading-none">
+              <span className="text-xl sm:text-2xl font-bold tracking-tight text-[#101410] block leading-none">
                 Đồ Cũ Còn Thương
               </span>
-              <span className="text-[11px] text-[#74665B] font-medium tracking-wide uppercase mt-1 block">
-                Tiệm second-hand có câu chuyện
+              <span className="text-[11px] text-[#5E5E61] font-medium tracking-wide mt-1 block">
+                Tiệm đồ cũ còn thương, chờ người thương mới
               </span>
             </div>
           </button>
@@ -128,46 +129,46 @@ export const Header: React.FC<HeaderProps> = ({
                 onChange={(e) => onSearchChange(e.target.value)}
                 onKeyDown={handleSearchKeyPress}
                 onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
-                placeholder="Tìm áo da vintage, máy ảnh film, đồng hồ cơ..."
-                className="w-full bg-[#FFFBF4] border border-[#DCCDB6] rounded-full pl-9 pr-8 py-2 text-xs text-[#241A14] placeholder-[#74665B]/70 shadow-vintage-sm focus:outline-none focus:border-[#D9542B] focus:ring-1 focus:ring-[#D9542B] transition-all"
+                placeholder="Tìm áo da, máy ảnh film, đồng hồ vintage..."
+                className="w-full bg-[#FFFFFF] border border-[#E2E8D8] rounded-full pl-9 pr-8 py-2 text-xs text-[#101410] placeholder-[#5E5E61]/70 shadow-2xs focus:outline-none focus:border-[#08482D] focus:ring-1 focus:ring-[#08482D] transition-all"
               />
-              <Search className="w-4 h-4 text-[#74665B] absolute left-3 top-2.5 pointer-events-none" />
+              <Search className="w-4 h-4 text-[#5E5E61] absolute left-3 top-2.5 pointer-events-none" />
               {isSearching && (
-                <div className="w-3.5 h-3.5 border-2 border-[#D9542B] border-t-transparent rounded-full animate-spin absolute right-3 top-2.5" />
+                <div className="w-3.5 h-3.5 border-2 border-[#08482D] border-t-transparent rounded-full animate-spin absolute right-3 top-2.5" />
               )}
 
               {/* Autocomplete Dropdown Popover */}
               {showSuggestions && suggestions.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-[#FFFBF4] border border-[#DCCDB6] rounded-2xl shadow-vintage-md overflow-hidden z-50 animate-in fade-in slide-in-from-top-1">
-                  <div className="p-2 border-b border-[#DCCDB6]/50 bg-[#F4ECDF]/50 flex items-center justify-between text-[11px] text-[#74665B] font-medium">
+                <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-[#E2E8D8] rounded-2xl shadow-lg overflow-hidden z-50 animate-in fade-in slide-in-from-top-1">
+                  <div className="p-2 border-b border-[#E2E8D8] bg-[#F5F8EF] flex items-center justify-between text-[11px] text-[#5E5E61] font-medium">
                     <span className="flex items-center gap-1">
-                      <Sparkles className="w-3 h-3 text-[#D9542B]" />
+                      <Sparkles className="w-3 h-3 text-[#08482D]" />
                       Gợi ý tìm kiếm ({suggestions.length})
                     </span>
                     <span>Bấm để xem chi tiết</span>
                   </div>
-                  <div className="divide-y divide-[#DCCDB6]/30 max-h-72 overflow-y-auto">
+                  <div className="divide-y divide-[#E2E8D8]/50 max-h-72 overflow-y-auto">
                     {suggestions.map((p) => (
                       <button
                         key={p.id}
                         type="button"
                         onClick={() => handleSelectSuggestion(p)}
-                        className="w-full p-2.5 flex items-center gap-3 text-left hover:bg-[#F4ECDF] transition-colors group"
+                        className="w-full p-2.5 flex items-center gap-3 text-left hover:bg-[#F5F8EF] transition-colors group"
                       >
                         <img
                           src={p.image_url}
                           alt={p.name}
-                          className="w-10 h-10 rounded-xl object-cover border border-[#DCCDB6] shrink-0"
+                          className="w-10 h-10 rounded-xl object-cover border border-[#E2E8D8] shrink-0"
                         />
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-[#241A14] group-hover:text-[#D9542B] truncate">
+                          <p className="text-xs font-semibold text-[#101410] group-hover:text-[#08482D] truncate">
                             {p.name}
                           </p>
                           <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-[10px] font-mono font-bold text-[#D9542B]">
+                            <span className="text-[10px] font-mono font-bold text-[#C2522D]">
                               {formatVND(p.price)}
                             </span>
-                            <span className="text-[10px] text-[#74665B] bg-[#EADFCC] px-1.5 py-0.2 rounded-sm font-mono">
+                            <span className="text-[10px] text-[#08482D] bg-[#DAE7C7] px-1.5 py-0.2 rounded-sm font-mono">
                               Mới {p.condition_pct}%
                             </span>
                           </div>
@@ -183,15 +184,15 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Zone 3: Primary Actions, Cart, Notification & User Menu */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-          {/* Quick Demo Switcher (Instant 1-click test between buyer & seller) */}
-          <div className="hidden xl:flex items-center gap-1 bg-[#EADFCC] p-1 rounded-xl text-xs font-medium text-[#74665B] border border-[#DCCDB6]">
-            <span className="px-2 text-[11px] font-mono text-[#74665B]">Demo:</span>
+          {/* Quick Demo Switcher */}
+          <div className="hidden xl:flex items-center gap-1 bg-[#DAE7C7]/50 p-1 rounded-xl text-xs font-medium text-[#5E5E61] border border-[#E2E8D8]">
+            <span className="px-2 text-[11px] font-mono text-[#5E5E61]">Demo:</span>
             <button
               onClick={() => quickLogin('buyer')}
               className={`px-2.5 py-1 rounded-lg transition-colors whitespace-nowrap ${
                 user?.role === 'buyer'
-                  ? 'bg-[#FFFBF4] text-[#241A14] shadow-xs font-semibold'
-                  : 'hover:text-[#241A14]'
+                  ? 'bg-white text-[#101410] shadow-xs font-semibold'
+                  : 'hover:text-[#101410]'
               }`}
               title="Khách mua: 0987654321 / nguoidung"
             >
@@ -201,8 +202,8 @@ export const Header: React.FC<HeaderProps> = ({
               onClick={() => quickLogin('seller')}
               className={`px-2.5 py-1 rounded-lg transition-colors whitespace-nowrap ${
                 user?.role === 'seller'
-                  ? 'bg-[#FFFBF4] text-[#241A14] shadow-xs font-semibold'
-                  : 'hover:text-[#241A14]'
+                  ? 'bg-white text-[#101410] shadow-xs font-semibold'
+                  : 'hover:text-[#101410]'
               }`}
               title="Người bán: admin / admin"
             >
@@ -211,13 +212,13 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           {/* Navigation Tab Shortcuts */}
-          <nav className="hidden sm:flex items-center gap-1 text-xs font-medium text-[#74665B]">
+          <nav className="hidden sm:flex items-center gap-1 text-xs font-medium text-[#5E5E61]">
             <button
               onClick={() => onNavigate('home')}
               className={`px-3 py-2 rounded-xl transition-colors whitespace-nowrap ${
                 currentView === 'home'
-                  ? 'bg-[#EADFCC] text-[#241A14] font-semibold'
-                  : 'hover:bg-[#EADFCC]/50 text-[#74665B]'
+                  ? 'bg-[#DAE7C7] text-[#08482D] font-bold'
+                  : 'hover:bg-[#DAE7C7]/40 text-[#5E5E61]'
               }`}
             >
               Cửa hàng
@@ -229,8 +230,8 @@ export const Header: React.FC<HeaderProps> = ({
                   onClick={() => onNavigate('orders')}
                   className={`px-3 py-2 rounded-xl transition-colors whitespace-nowrap flex items-center gap-1.5 ${
                     currentView === 'orders'
-                      ? 'bg-[#EADFCC] text-[#241A14] font-semibold'
-                      : 'hover:bg-[#EADFCC]/50 text-[#74665B]'
+                      ? 'bg-[#DAE7C7] text-[#08482D] font-bold'
+                      : 'hover:bg-[#DAE7C7]/40 text-[#5E5E61]'
                   }`}
                 >
                   <Package className="w-3.5 h-3.5" />
@@ -241,8 +242,8 @@ export const Header: React.FC<HeaderProps> = ({
                   onClick={() => onNavigate('account')}
                   className={`px-3 py-2 rounded-xl transition-colors whitespace-nowrap flex items-center gap-1.5 ${
                     currentView === 'account'
-                      ? 'bg-[#EADFCC] text-[#241A14] font-semibold'
-                      : 'hover:bg-[#EADFCC]/50 text-[#74665B]'
+                      ? 'bg-[#DAE7C7] text-[#08482D] font-bold'
+                      : 'hover:bg-[#DAE7C7]/40 text-[#5E5E61]'
                   }`}
                 >
                   <UserIcon className="w-3.5 h-3.5" />
@@ -256,8 +257,8 @@ export const Header: React.FC<HeaderProps> = ({
                 onClick={() => onNavigate('seller')}
                 className={`px-3 py-2 rounded-xl transition-colors whitespace-nowrap flex items-center gap-1.5 ${
                   currentView === 'seller'
-                    ? 'bg-[#D9542B] text-white font-semibold shadow-xs'
-                    : 'hover:bg-[#EADFCC]/50 text-[#74665B]'
+                    ? 'bg-[#08482D] text-white font-semibold shadow-xs'
+                    : 'hover:bg-[#DAE7C7]/40 text-[#5E5E61]'
                 }`}
               >
                 <Store className="w-3.5 h-3.5" />
@@ -275,12 +276,12 @@ export const Header: React.FC<HeaderProps> = ({
           {(!user || user.role === 'buyer') && (
             <button
               onClick={onOpenCart}
-              className="relative p-2.5 rounded-xl text-[#241A14] hover:bg-[#EADFCC] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D9542B]"
+              className="relative p-2.5 rounded-xl text-[#101410] hover:bg-[#DAE7C7]/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#08482D]"
               aria-label="Giỏ hàng"
             >
-              <ShoppingBag className="w-5 h-5 text-[#241A14]" />
+              <ShoppingBag className="w-5 h-5 text-[#08482D]" />
               {cartCount > 0 && (
-                <span className="absolute top-1.5 right-1.5 min-w-[18px] h-[18px] px-1 bg-[#D9542B] text-white text-[10px] font-bold font-mono rounded-full flex items-center justify-center shadow-xs">
+                <span className="absolute top-1.5 right-1.5 min-w-[18px] h-[18px] px-1 bg-[#C2522D] text-white text-[10px] font-bold font-mono rounded-full flex items-center justify-center shadow-xs">
                   {cartCount}
                 </span>
               )}
@@ -298,17 +299,17 @@ export const Header: React.FC<HeaderProps> = ({
                   }}
                   className="hidden sm:flex flex-col text-right hover:opacity-80 transition-opacity"
                 >
-                  <span className="text-xs font-semibold text-[#241A14] leading-tight">
+                  <span className="text-xs font-semibold text-[#101410] leading-tight">
                     {user.full_name}
                   </span>
-                  <span className="text-[10px] text-[#74665B] font-mono">
+                  <span className="text-[10px] text-[#5E5E61] font-mono">
                     {user.role === 'seller' ? 'Người bán (admin)' : 'Khách mua'}
                   </span>
                 </button>
 
                 <button
                   onClick={logout}
-                  className="p-2.5 rounded-xl text-[#74665B] hover:text-[#B33F33] hover:bg-[#EADFCC] transition-colors"
+                  className="p-2.5 rounded-xl text-[#5E5E61] hover:text-[#B3362F] hover:bg-[#F6DDDB] transition-colors"
                   title="Đăng xuất"
                 >
                   <LogOut className="w-4 h-4" />
@@ -317,18 +318,22 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           ) : (
             <div className="flex items-center gap-1 sm:gap-2">
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => onOpenAuth('buyer')}
-                className="px-3.5 py-2 rounded-xl text-xs font-medium text-[#241A14] bg-[#FFFBF4] border border-[#DCCDB6] hover:bg-[#EADFCC] transition-colors shadow-vintage-sm whitespace-nowrap"
+                className="text-xs"
               >
                 Đăng nhập
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
                 onClick={() => onOpenAuth('seller')}
-                className="hidden sm:inline-flex px-3 py-2 rounded-xl text-xs font-medium text-[#74665B] hover:text-[#241A14] transition-colors whitespace-nowrap"
+                className="hidden sm:inline-flex text-xs"
               >
                 Kênh Người bán
-              </button>
+              </Button>
             </div>
           )}
 

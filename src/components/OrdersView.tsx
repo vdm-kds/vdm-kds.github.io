@@ -8,6 +8,7 @@ import { api } from '../services/api';
 import { formatVND, formatDate } from '../utils/format';
 import { useToast } from '../context/ToastContext';
 import { ReviewModal } from './ReviewModal';
+import { Button } from './Button';
 
 interface OrdersViewProps {
   onBackToShop: () => void;
@@ -175,31 +176,33 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
       {/* Top Breadcrumb & Title */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#DCCDB6] pb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E2E8D8] pb-5">
         <div>
           <button
             onClick={onBackToShop}
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#74665B] hover:text-[#D9542B] transition-colors mb-2"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#5E5E61] hover:text-[#08482D] transition-colors mb-2"
           >
             <ArrowLeft className="w-4 h-4" />
             Quay lại cửa hàng
           </button>
-          <h1 className="font-serif text-2xl sm:text-3xl font-bold text-[#241A14]">
+          <h1 className="text-2xl sm:text-3xl font-bold text-[#101410]">
             Hành trình Đơn mua của bạn
           </h1>
-          <p className="text-xs text-[#74665B] mt-0.5">
+          <p className="text-xs text-[#5E5E61] mt-0.5">
             Cập nhật lộ trình theo thời gian thực mỗi 10 giây từ đơn vị vận chuyển
           </p>
         </div>
 
-        <button
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={() => fetchOrders(false)}
           disabled={loading || isRefreshing}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#FFFBF4] border border-[#DCCDB6] text-xs font-semibold text-[#241A14] hover:bg-[#EADFCC] transition-colors shadow-vintage-sm self-start sm:self-auto"
+          className="self-start sm:self-auto"
         >
-          <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${isRefreshing ? 'animate-spin' : ''}`} />
           Làm mới
-        </button>
+        </Button>
       </div>
 
       {/* Tabs Filter Bar */}
@@ -211,10 +214,10 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
               setActiveTab(tab.id);
               setSelectedOrder(null);
             }}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+            className={`px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
               activeTab === tab.id
-                ? 'bg-[#241A14] text-white shadow-vintage-sm'
-                : 'bg-[#FFFBF4] border border-[#DCCDB6] text-[#74665B] hover:text-[#241A14] hover:bg-[#EADFCC]'
+                ? 'bg-[#08482D] text-white shadow-xs'
+                : 'bg-white border border-[#E2E8D8] text-[#5E5E61] hover:text-[#08482D] hover:bg-[#DAE7C7]/40'
             }`}
           >
             {tab.label}

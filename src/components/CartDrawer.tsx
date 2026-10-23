@@ -2,6 +2,7 @@ import React from 'react';
 import { X, Trash2, ShoppingBag, ArrowRight, Truck } from 'lucide-react';
 import { CartItem } from '../types';
 import { formatVND } from '../utils/format';
+import { Button } from './Button';
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -39,21 +40,21 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
       <div className="absolute inset-0" onClick={onClose} />
 
       <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
-        <div className="w-screen max-w-md bg-[#FFFBF4] border-l border-[#DCCDB6] shadow-vintage-lg flex flex-col justify-between">
+        <div className="w-screen max-w-md bg-white border-l border-[#E2E8D8] shadow-2xl flex flex-col justify-between">
           {/* Drawer Header */}
-          <div className="p-6 border-b border-[#DCCDB6] flex items-center justify-between bg-[#FFFBF4]">
+          <div className="p-6 border-b border-[#E2E8D8] flex items-center justify-between bg-[#F5F8EF]">
             <div className="flex items-center gap-2.5">
-              <ShoppingBag className="w-5 h-5 text-[#D9542B]" />
-              <h3 className="font-serif text-xl font-bold text-[#241A14]">
+              <ShoppingBag className="w-5 h-5 text-[#08482D]" />
+              <h3 className="text-xl font-bold text-[#101410]">
                 Giỏ hàng của bạn
               </h3>
-              <span className="text-xs bg-[#EADFCC] text-[#241A14] font-mono font-bold px-2 py-0.5 rounded-full">
+              <span className="text-xs bg-[#DAE7C7] text-[#08482D] font-mono font-bold px-2 py-0.5 rounded-full">
                 {items.length} món
               </span>
             </div>
             <button
               onClick={onClose}
-              className="p-2 rounded-xl text-[#74665B] hover:text-[#241A14] hover:bg-[#EADFCC] transition-colors"
+              className="p-2 rounded-xl text-[#5E5E61] hover:text-[#101410] hover:bg-[#DAE7C7]/40 transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
@@ -160,41 +161,43 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
           {/* Drawer Footer & Checkout Action */}
           {items.length > 0 && (
-            <div className="p-6 bg-[#FFFBF4] border-t border-[#DCCDB6] space-y-4">
+            <div className="p-6 bg-white border-t border-[#E2E8D8] space-y-4">
               <div className="space-y-2 text-xs">
-                <div className="flex justify-between text-[#74665B]">
+                <div className="flex justify-between text-[#5E5E61]">
                   <span>Tạm tính ({items.length} món)</span>
-                  <span className="font-mono text-[#241A14] font-medium">{formatVND(subtotal)}</span>
+                  <span className="font-mono text-[#101410] font-medium">{formatVND(subtotal)}</span>
                 </div>
-                <div className="flex justify-between text-[#74665B]">
+                <div className="flex justify-between text-[#5E5E61]">
                   <span>Phí giao hàng</span>
-                  <span className="font-mono text-[#241A14]">
+                  <span className="font-mono text-[#101410]">
                     {shippingFee === 0 ? (
-                      <span className="text-[#5E7048] font-semibold">Miễn phí</span>
+                      <span className="text-[#08482D] font-semibold">Miễn phí</span>
                     ) : (
                       formatVND(shippingFee)
                     )}
                   </span>
                 </div>
-                <div className="border-t border-[#DCCDB6] pt-2 flex justify-between items-baseline font-bold text-sm">
-                  <span className="font-serif text-base text-[#241A14]">Tổng cộng</span>
-                  <span className="font-mono text-lg text-[#D9542B]">{formatVND(total)}</span>
+                <div className="border-t border-[#E2E8D8] pt-2 flex justify-between items-baseline font-bold text-sm">
+                  <span className="text-base text-[#101410]">Tổng cộng</span>
+                  <span className="font-mono text-lg text-[#C2522D]">{formatVND(total)}</span>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <button
+                <Button
+                  variant="primary"
+                  size="lg"
                   onClick={onProceedToCheckout}
-                  className="w-full py-3.5 bg-[#D9542B] hover:bg-[#B33F33] text-white rounded-2xl text-xs font-bold transition-all shadow-vintage flex items-center justify-center gap-2 active:scale-98"
+                  className="w-full text-xs font-bold"
                 >
                   <span>Tiến hành Đặt hàng</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
+                  <ArrowRight className="w-4 h-4 ml-1.5" />
+                </Button>
 
-                <div className="flex items-center justify-between text-[11px] text-[#74665B] px-1">
+                <div className="flex items-center justify-between text-[11px] text-[#5E5E61] px-1">
                   <button
                     onClick={onClearCart}
-                    className="hover:text-[#B33F33] transition-colors"
+                    className="hover:text-[#B3362F] transition-colors"
                   >
                     Xóa sạch giỏ hàng
                   </button>

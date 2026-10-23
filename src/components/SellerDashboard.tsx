@@ -379,13 +379,13 @@ export const SellerDashboard: React.FC = () => {
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex flex-wrap bg-[#EADFCC] p-1.5 rounded-2xl text-xs font-bold border border-[#DCCDB6] gap-1">
+        <div className="flex flex-wrap bg-[#DAE7C7]/50 p-1.5 rounded-full text-xs font-bold border border-[#E2E8D8] gap-1">
           <button
             onClick={() => setActiveTab('dashboard')}
-            className={`px-4 py-2 rounded-xl transition-all ${
+            className={`px-4 py-2 rounded-full transition-all ${
               activeTab === 'dashboard'
-                ? 'bg-[#241A14] text-white shadow-xs'
-                : 'text-[#74665B] hover:text-[#241A14]'
+                ? 'bg-[#08482D] text-white shadow-xs'
+                : 'text-[#5E5E61] hover:text-[#101410]'
             }`}
           >
             Tổng quan (KPI)
@@ -393,17 +393,17 @@ export const SellerDashboard: React.FC = () => {
 
           <button
             onClick={() => setActiveTab('shipping')}
-            className={`px-4 py-2 rounded-xl transition-all flex items-center gap-1.5 ${
+            className={`px-4 py-2 rounded-full transition-all flex items-center gap-1.5 ${
               activeTab === 'shipping'
-                ? 'bg-[#D9542B] text-white shadow-xs'
-                : 'text-[#74665B] hover:text-[#241A14]'
+                ? 'bg-[#08482D] text-white shadow-xs'
+                : 'text-[#5E5E61] hover:text-[#101410]'
             }`}
           >
             <Truck className="w-3.5 h-3.5" />
             <span>Vận chuyển (Kanban)</span>
             {stats && (stats.status_counts.confirmed > 0 || stats.status_counts.shipping > 0) && (
               <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
-                activeTab === 'shipping' ? 'bg-white text-[#D9542B]' : 'bg-[#D9542B] text-white'
+                activeTab === 'shipping' ? 'bg-[#DAE7C7] text-[#08482D]' : 'bg-[#08482D] text-white'
               }`}>
                 {(stats.status_counts.confirmed || 0) + (stats.status_counts.shipping || 0)}
               </span>
@@ -412,10 +412,10 @@ export const SellerDashboard: React.FC = () => {
 
           <button
             onClick={() => setActiveTab('orders')}
-            className={`px-4 py-2 rounded-xl transition-all ${
+            className={`px-4 py-2 rounded-full transition-all ${
               activeTab === 'orders'
-                ? 'bg-[#241A14] text-white shadow-xs'
-                : 'text-[#74665B] hover:text-[#241A14]'
+                ? 'bg-[#08482D] text-white shadow-xs'
+                : 'text-[#5E5E61] hover:text-[#101410]'
             }`}
           >
             Quản lý Đơn hàng
@@ -423,10 +423,10 @@ export const SellerDashboard: React.FC = () => {
 
           <button
             onClick={() => setActiveTab('products')}
-            className={`px-4 py-2 rounded-xl transition-all ${
+            className={`px-4 py-2 rounded-full transition-all ${
               activeTab === 'products'
-                ? 'bg-[#241A14] text-white shadow-xs'
-                : 'text-[#74665B] hover:text-[#241A14]'
+                ? 'bg-[#08482D] text-white shadow-xs'
+                : 'text-[#5E5E61] hover:text-[#101410]'
             }`}
           >
             Quản lý Kho sản phẩm
@@ -434,10 +434,10 @@ export const SellerDashboard: React.FC = () => {
 
           <button
             onClick={() => setActiveTab('coupons')}
-            className={`px-4 py-2 rounded-xl transition-all flex items-center gap-1.5 ${
+            className={`px-4 py-2 rounded-full transition-all flex items-center gap-1.5 ${
               activeTab === 'coupons'
-                ? 'bg-[#241A14] text-white shadow-xs'
-                : 'text-[#74665B] hover:text-[#241A14]'
+                ? 'bg-[#08482D] text-white shadow-xs'
+                : 'text-[#5E5E61] hover:text-[#101410]'
             }`}
           >
             <Tag className="w-3.5 h-3.5" />
