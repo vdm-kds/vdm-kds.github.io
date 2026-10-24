@@ -12,6 +12,9 @@ import reviewsRoutes from './server/routes/reviews.js';
 import couponsRoutes from './server/routes/coupons.js';
 import accountRoutes from './server/routes/account.js';
 import demoRoutes from './server/routes/demo.js';
+import offersRoutes from './server/routes/offers.js';
+import chatRoutes from './server/routes/chat.js';
+import returnsRoutes from './server/routes/returns.js';
 import { seedDatabase } from './server/seed.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -35,6 +38,9 @@ app.use('/api/reviews', reviewsRoutes);
 app.use('/api/coupons', couponsRoutes);
 app.use('/api/account', accountRoutes);
 app.use('/api/demo', demoRoutes);
+app.use('/api/offers', offersRoutes);
+app.use('/api/chat', chatRoutes);
+app.use('/api/returns', returnsRoutes);
 
 // Endpoint kiểm tra sức khỏe
 app.get('/api/health', (req, res) => {

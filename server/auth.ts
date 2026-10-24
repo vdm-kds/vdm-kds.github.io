@@ -62,5 +62,9 @@ export function requireRole(role: 'buyer' | 'seller') {
   };
 }
 
+export const requireAuth = authenticateToken;
+export type AuthRequest = AuthenticatedRequest;
+
+
 export const requireBuyer = [authenticateToken, requireRole('buyer')];
 export const requireSeller = [authenticateToken, requireRole('seller')];

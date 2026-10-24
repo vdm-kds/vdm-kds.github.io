@@ -125,16 +125,39 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       </button>
                     </div>
 
-                    <div className="text-[11px] text-[#5E5E61] mt-0.5">
-                      Độ mới: {item.condition_pct}% · Tồn: {item.stock}
+                    <div className="flex items-center gap-2 text-[11px] text-[#5E5E61] mt-0.5">
+                      <span>Độ mới: {item.condition_pct}%</span>
+                      <span>·</span>
+                      <span>Tồn: {item.stock}</span>
+                      {Boolean(item.is_negotiated) && (
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 text-[10px] font-semibold border border-amber-200">
+                          Giá đã thương lượng
+                        </span>
+                      )}
                     </div>
+
+                    {item.stock <= 0 && (
+                      <div className="mt-2 p-2 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 flex items-center justify-between">
+                        <span>Món này vừa có chủ mới 😢</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onRemoveItem(item.id);
+                            onClose();
+                          }}
+                          className="text-[11px] font-bold text-red-800 underline hover:no-underline"
+                        >
+                          Tìm món khác
+                        </button>
+                      </div>
+                    )}
 
                     <div className="flex items-center justify-between mt-3">
                       {/* Quantity Stepper */}
                       <div className="flex items-center border border-[#E2E8D8] rounded-lg bg-[#FFFFFF] p-0.5 font-mono text-xs">
                         <button
                           onClick={() => onUpdateQty(item.id, item.quantity - 1)}
-                          disabled={item.quantity <= 1}
+                          disabled={item.quantity <= 1 || item.stock <= 0}
                           className="w-6 h-6 flex items-center justify-center hover:bg-[#DAE7C7] rounded disabled:opacity-30"
                         >
                           -
@@ -142,7 +165,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                         <span className="w-6 text-center font-bold">{item.quantity}</span>
                         <button
                           onClick={() => onUpdateQty(item.id, item.quantity + 1)}
-                          disabled={item.quantity >= item.stock}
+                          disabled={item.quantity >= item.stock || item.stock <= 0}
                           className="w-6 h-6 flex items-center justify-center hover:bg-[#DAE7C7] rounded disabled:opacity-30"
                         >
                           +

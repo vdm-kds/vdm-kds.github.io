@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { 
   Store, Package, ShoppingBag, DollarSign, TrendingUp, AlertTriangle, 
   Plus, Edit2, Trash2, CheckCircle2, XCircle, Truck, Send, Clock, 
-  MapPin, RefreshCw, X, ChevronRight, Eye, Printer, Download, Tag, Percent, CheckSquare, Square
+  MapPin, RefreshCw, X, ChevronRight, Eye, Printer, Download, Tag, Percent, CheckSquare, Square,
+  MessageSquare, RotateCcw, Sparkles, ShieldAlert
 } from 'lucide-react';
-import { Product, Order, SellerStats, Coupon } from '../types';
+import { Product, Order, SellerStats, Coupon, Offer, ChatConversation, ChatMessage, ReturnRequest, ProductFlaw } from '../types';
 import { api } from '../services/api';
 import { formatVND, formatDate, getOrderStatusBadge, getPaymentStatusBadge } from '../utils/format';
 import { useToast } from '../context/ToastContext';
@@ -18,7 +19,7 @@ interface SellerDashboardProps {
 
 export const SellerDashboard: React.FC<SellerDashboardProps> = ({ onViewPreview }) => {
   const { showToast } = useToast();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'shipping' | 'orders' | 'products' | 'coupons'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'shipping' | 'orders' | 'products' | 'coupons' | 'offers' | 'chat' | 'returns'>('dashboard');
 
   // Dashboard Stats
   const [stats, setStats] = useState<SellerStats | null>(null);
@@ -36,7 +37,11 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({ onViewPreview 
     condition_pct: 90,
     condition_detail: '',
     stock: 1,
-    image_url: ''
+    image_url: '',
+    imagesText: '',
+    flawsText: '',
+    inspector_name: 'Nguyễn Văn Minh (KTV-04)',
+    inspection_date: new Date().toISOString().split('T')[0]
   });
 
   // Orders State
@@ -76,6 +81,29 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({ onViewPreview 
   const [cancelModalOrder, setCancelModalOrder] = useState<Order | null>(null);
   const [cancelReason, setCancelReason] = useState('Sản phẩm có lỗi kỹ thuật khi kiểm tra lại trước khi gửi');
 
+  // MARKETPLACE OFFERS (TRẢ GIÁ)
+  const [sellerOffers, setSellerOffers] = useState<Offer[]>([]);
+  const [loadingOffers, setLoadingOffers] = useState(false);
+  const [counterModalOffer, setCounterModalOffer] = useState<Offer | null>(null);
+  const [counterPriceInput, setCounterPriceInput] = useState<number>(0);
+  const [counterNoteInput, setCounterNoteInput] = useState<string>('');
+  const [rejectModalOffer, setRejectModalOffer] = useState<Offer | null>(null);
+  const [rejectReasonInput, setRejectReasonInput] = useState<string>('');
+
+  // MARKETPLACE CHAT (TIN NHẮN)
+  const [chatConversations, setChatConversations] = useState<ChatConversation[]>([]);
+  const [loadingChat, setLoadingChat] = useState(false);
+  const [activeConversation, setActiveConversation] = useState<ChatConversation | null>(null);
+  const [chatInputText, setChatInputText] = useState('');
+  const [sendingChatMsg, setSendingChatMsg] = useState(false);
+  const [chatWarning, setChatWarning] = useState<string | null>(null);
+
+  // MARKETPLACE RETURNS (TRẢ HÀNG / HOÀN TIỀN)
+  const [sellerReturns, setSellerReturns] = useState<ReturnRequest[]>([]);
+  const [loadingReturns, setLoadingReturns] = useState(false);
+  const [returnActionModal, setReturnActionModal] = useState<{ open: boolean; item?: ReturnRequest; targetStatus: string }>({ open: false, targetStatus: '' });
+  const [returnSellerNote, setReturnSellerNote] = useState('');
+
   const fetchStats = async () => {
     setLoadingStats(true);
     try {
@@ -85,6 +113,49 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({ onViewPreview 
       showToast(err.message || 'Lỗi tải thống kê', 'error');
     } finally {
       setLoadingStats(false);
+    }
+  };
+
+  const fetchOffers = async () => {
+    setLoadingOffers(true);
+    try {
+      const res = await api.getSellerOffers();
+      setSellerOffers(res.offers || []);
+    } catch (err: any) {
+      console.error('Fetch offers error:', err);
+    } finally {
+      setLoadingOffers(false);
+    }
+  };
+
+  const fetchChat = async () => {
+    setLoadingChat(true);
+    try {
+      const res = await api.getChatConversations();
+      setChatConversations(res.conversations || []);
+      if (activeConversation) {
+        const refreshed = (res.conversations || []).find((c: any) => c.id === activeConversation.id);
+        if (refreshed) {
+          const detail = await api.getChatDetail(refreshed.id);
+          setActiveConversation(detail.conversation);
+        }
+      }
+    } catch (err: any) {
+      console.error('Fetch chat error:', err);
+    } finally {
+      setLoadingChat(false);
+    }
+  };
+
+  const fetchReturns = async () => {
+    setLoadingReturns(true);
+    try {
+      const res = await api.getSellerReturns();
+      setSellerReturns(res.return_requests || []);
+    } catch (err: any) {
+      console.error('Fetch returns error:', err);
+    } finally {
+      setLoadingReturns(false);
     }
   };
 
@@ -129,20 +200,32 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({ onViewPreview 
   };
 
   useEffect(() => {
+    fetchStats();
+    fetchOffers();
+    fetchChat();
+    fetchReturns();
+  }, []);
+
+  useEffect(() => {
     if (activeTab === 'dashboard') fetchStats();
     if (activeTab === 'products') fetchProducts();
     if (activeTab === 'orders') fetchOrders();
     if (activeTab === 'coupons') fetchCoupons();
+    if (activeTab === 'offers') fetchOffers();
+    if (activeTab === 'chat') fetchChat();
+    if (activeTab === 'returns') fetchReturns();
   }, [activeTab, orderStatusFilter]);
 
-  // Polling cho đơn hàng người bán mỗi 10 giây
+  // Polling cho đơn hàng, tin nhắn và trả giá mỗi 5-10 giây
   useEffect(() => {
     const timer = setInterval(() => {
       if (activeTab === 'dashboard') fetchStats();
       if (activeTab === 'orders') fetchOrders(true);
-    }, 10000);
+      if (activeTab === 'chat') fetchChat();
+      if (activeTab === 'offers') fetchOffers();
+    }, 5000);
     return () => clearInterval(timer);
-  }, [activeTab, orderStatusFilter, selectedOrder?.id]);
+  }, [activeTab, orderStatusFilter, selectedOrder?.id, activeConversation?.id]);
 
   // Bulk Orders Handlers
   const handleToggleOrderSelect = (id: number) => {
@@ -250,6 +333,17 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({ onViewPreview 
   // Xử lý Thêm / Sửa sản phẩm
   const handleOpenProductModal = (mode: 'add' | 'edit', item?: Product) => {
     if (mode === 'edit' && item) {
+      let imgs: string[] = [];
+      if (Array.isArray(item.images)) imgs = item.images;
+      else if (typeof item.images === 'string') {
+        try { imgs = JSON.parse(item.images); } catch(e) { imgs = [item.images]; }
+      }
+      let flawsArr: any[] = [];
+      if (Array.isArray(item.flaws)) flawsArr = item.flaws;
+      else if (typeof item.flaws === 'string') {
+        try { flawsArr = JSON.parse(item.flaws); } catch(e) { flawsArr = []; }
+      }
+
       setProdForm({
         name: item.name,
         category: item.category,
@@ -258,7 +352,11 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({ onViewPreview 
         condition_pct: item.condition_pct,
         condition_detail: item.condition_detail,
         stock: item.stock,
-        image_url: item.image_url
+        image_url: item.image_url,
+        imagesText: imgs.join('\n'),
+        flawsText: flawsArr.map(f => `${f.location || ''} | ${f.description} | ${f.photo_url || ''}`).join('\n'),
+        inspector_name: item.inspector_name || 'Nguyễn Văn Minh (KTV-04)',
+        inspection_date: item.inspection_date ? item.inspection_date.split('T')[0] : new Date().toISOString().split('T')[0]
       });
       setProductModal({ open: true, mode: 'edit', item });
     } else {
@@ -270,7 +368,11 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({ onViewPreview 
         condition_pct: 90,
         condition_detail: 'Đồ cũ còn dùng tốt, ngoại hình đẹp',
         stock: 1,
-        image_url: ''
+        image_url: '',
+        imagesText: '',
+        flawsText: '',
+        inspector_name: 'Nguyễn Văn Minh (KTV-04)',
+        inspection_date: new Date().toISOString().split('T')[0]
       });
       setProductModal({ open: true, mode: 'add' });
     }
@@ -279,11 +381,45 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({ onViewPreview 
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const parsedImages = prodForm.imagesText
+        .split('\n')
+        .map(s => s.trim())
+        .filter(Boolean);
+      
+      const parsedFlaws = prodForm.flawsText
+        .split('\n')
+        .map(s => s.trim())
+        .filter(Boolean)
+        .map(line => {
+          const parts = line.split('|').map(p => p.trim());
+          if (parts.length >= 3) {
+            return { location: parts[0], description: parts[1], photo_url: parts[2] };
+          } else if (parts.length === 2) {
+            return { location: parts[0], description: parts[1] };
+          }
+          return { description: parts[0] };
+        });
+
+      const payload = {
+        name: prodForm.name,
+        category: prodForm.category,
+        price: prodForm.price,
+        original_price: prodForm.original_price,
+        condition_pct: prodForm.condition_pct,
+        condition_detail: prodForm.condition_detail,
+        stock: prodForm.stock,
+        image_url: prodForm.image_url || (parsedImages[0] || ''),
+        images: parsedImages.length > 0 ? parsedImages : undefined,
+        flaws: parsedFlaws.length > 0 ? parsedFlaws : undefined,
+        inspector_name: prodForm.inspector_name,
+        inspection_date: prodForm.inspection_date
+      };
+
       if (productModal.mode === 'add') {
-        await api.createProduct(prodForm);
+        await api.createProduct(payload);
         showToast('Đã thêm sản phẩm mới vào kho', 'success');
       } else if (productModal.item) {
-        await api.updateProduct(productModal.item.id, prodForm);
+        await api.updateProduct(productModal.item.id, payload);
         showToast('Đã cập nhật thông tin sản phẩm', 'success');
       }
       setProductModal({ open: false, mode: 'add' });
@@ -301,6 +437,86 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({ onViewPreview 
       fetchProducts();
     } catch (err: any) {
       showToast(err.message || 'Lỗi xóa sản phẩm', 'error');
+    }
+  };
+
+  // MARKETPLACE HANDLERS: OFFERS / TRẢ GIÁ
+  const handleAcceptOffer = async (id: number) => {
+    try {
+      await api.acceptOffer(id);
+      showToast('Đã chấp nhận lời trả giá của khách hàng!', 'success');
+      await fetchOffers();
+    } catch (err: any) {
+      showToast(err.message || 'Lỗi chấp nhận lời trả giá', 'error');
+    }
+  };
+
+  const handleCounterOffer = async () => {
+    if (!counterModalOffer) return;
+    if (counterPriceInput <= counterModalOffer.offered_price || counterPriceInput >= counterModalOffer.original_price) {
+      showToast('Mức giá đề nghị lại phải cao hơn giá khách trả và thấp hơn giá niêm yết', 'error');
+      return;
+    }
+    try {
+      await api.counterOffer(counterModalOffer.id, counterPriceInput, counterNoteInput.trim() || undefined);
+      showToast('Đã gửi giá thương lượng lại cho khách hàng!', 'success');
+      setCounterModalOffer(null);
+      await fetchOffers();
+    } catch (err: any) {
+      showToast(err.message || 'Lỗi khi trả giá lại', 'error');
+    }
+  };
+
+  const handleRejectOffer = async () => {
+    if (!rejectModalOffer) return;
+    try {
+      await api.rejectOffer(rejectModalOffer.id, rejectReasonInput.trim() || undefined);
+      showToast('Đã từ chối lời trả giá', 'info');
+      setRejectModalOffer(null);
+      await fetchOffers();
+    } catch (err: any) {
+      showToast(err.message || 'Lỗi từ chối lời trả giá', 'error');
+    }
+  };
+
+  // MARKETPLACE HANDLERS: CHAT
+  const handleSendChatMessage = async (presetText?: string) => {
+    const text = (presetText || chatInputText).trim();
+    if (!text || !activeConversation || sendingChatMsg) return;
+
+    const phoneRegex = /(?:\+?84|0)(?:\s*[\.\-]?\s*\d){9,10}\b/;
+    const urlRegex = /(?:https?:\/\/|www\.)[^\s]+|[a-zA-Z0-9-]+\.(?:com|vn|net|org|io|me|info|biz)\b/i;
+
+    if (phoneRegex.test(text) || urlRegex.test(text)) {
+      setChatWarning('Vì an toàn, vui lòng giao dịch trên Đồ Cũ Còn Thương. Hệ thống không cho phép chia sẻ số điện thoại hoặc liên kết ngoài.');
+      return;
+    }
+    setChatWarning(null);
+
+    try {
+      setSendingChatMsg(true);
+      await api.sendChatMessage(activeConversation.id, text);
+      setChatInputText('');
+      const detail = await api.getChatDetail(activeConversation.id);
+      setActiveConversation(detail.conversation);
+      await fetchChat();
+    } catch (err: any) {
+      setChatWarning(err.message || 'Lỗi gửi tin nhắn');
+    } finally {
+      setSendingChatMsg(false);
+    }
+  };
+
+  // MARKETPLACE HANDLERS: RETURNS
+  const handleUpdateReturnStatus = async (id: number, status: string, note?: string) => {
+    try {
+      const res = await api.updateReturnStatus(id, { status, seller_note: note });
+      showToast(res.message || 'Đã cập nhật yêu cầu trả hàng!', 'success');
+      setReturnActionModal({ open: false, targetStatus: '' });
+      await fetchReturns();
+      await fetchStats();
+    } catch (err: any) {
+      showToast(err.message || 'Lỗi cập nhật yêu cầu trả hàng', 'error');
     }
   };
 
@@ -451,6 +667,57 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({ onViewPreview 
           </button>
 
           <button
+            onClick={() => setActiveTab('offers')}
+            className={`px-4 py-2 rounded-full transition-all flex items-center gap-1.5 ${
+              activeTab === 'offers'
+                ? 'bg-[#08482D] text-white shadow-xs'
+                : 'text-[#5E5E61] hover:text-[#101410]'
+            }`}
+          >
+            <Tag className="w-3.5 h-3.5" />
+            <span>Trả giá</span>
+            {sellerOffers.filter(o => o.status === 'pending').length > 0 && (
+              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-amber-500 text-white font-bold">
+                {sellerOffers.filter(o => o.status === 'pending').length}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => setActiveTab('chat')}
+            className={`px-4 py-2 rounded-full transition-all flex items-center gap-1.5 ${
+              activeTab === 'chat'
+                ? 'bg-[#08482D] text-white shadow-xs'
+                : 'text-[#5E5E61] hover:text-[#101410]'
+            }`}
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+            <span>Tin nhắn</span>
+            {chatConversations.reduce((acc, c) => acc + (c.seller_unread || 0), 0) > 0 && (
+              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-emerald-600 text-white font-bold animate-pulse">
+                {chatConversations.reduce((acc, c) => acc + (c.seller_unread || 0), 0)}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => setActiveTab('returns')}
+            className={`px-4 py-2 rounded-full transition-all flex items-center gap-1.5 ${
+              activeTab === 'returns'
+                ? 'bg-[#08482D] text-white shadow-xs'
+                : 'text-[#5E5E61] hover:text-[#101410]'
+            }`}
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Trả hàng</span>
+            {sellerReturns.filter(r => r.status === 'pending').length > 0 && (
+              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-red-500 text-white font-bold">
+                {sellerReturns.filter(r => r.status === 'pending').length}
+              </span>
+            )}
+          </button>
+
+          <button
             onClick={() => setActiveTab('coupons')}
             className={`px-4 py-2 rounded-full transition-all flex items-center gap-1.5 ${
               activeTab === 'coupons'
@@ -458,7 +725,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({ onViewPreview 
                 : 'text-[#5E5E61] hover:text-[#101410]'
             }`}
           >
-            <Tag className="w-3.5 h-3.5" />
+            <Percent className="w-3.5 h-3.5" />
             <span>Mã giảm giá</span>
           </button>
         </div>
@@ -1188,6 +1455,599 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({ onViewPreview 
         </div>
       )}
 
+      {/* TAB: TRẢ GIÁ (OFFERS) */}
+      {activeTab === 'offers' && (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-[#E2E8D8]">
+            <div>
+              <h2 className="text-xl font-bold text-[#101410] flex items-center gap-2">
+                <Tag className="w-5 h-5 text-[#08482D]" />
+                Quản lý Lời Trả Giá Từ Khách Hàng
+              </h2>
+              <p className="text-xs text-[#5E5E61] mt-0.5">
+                Xem xét và thương lượng mức giá trực tiếp với người mua (hiệu lực 24 giờ)
+              </p>
+            </div>
+            <Button variant="secondary" size="sm" onClick={fetchOffers}>
+              <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+              Làm mới
+            </Button>
+          </div>
+
+          {loadingOffers ? (
+            <div className="py-12 text-center text-xs text-[#5E5E61]">Đang tải danh sách lời trả giá...</div>
+          ) : sellerOffers.length === 0 ? (
+            <div className="bg-white rounded-3xl border border-[#E2E8D8] p-12 text-center">
+              <Tag className="w-12 h-12 mx-auto text-[#DAE7C7] mb-2" />
+              <h3 className="text-base font-bold text-[#101410] mb-1">Chưa có lời trả giá nào</h3>
+              <p className="text-xs text-[#5E5E61]">Khi khách hàng bấm "Trả giá", yêu cầu sẽ xuất hiện tại đây.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {sellerOffers.map(offer => {
+                const discountPct = offer.original_price > 0
+                  ? Math.round(((offer.original_price - offer.offered_price) / offer.original_price) * 100)
+                  : 0;
+
+                const isPending = offer.status === 'pending';
+                const isAccepted = offer.status === 'accepted';
+                const isCountered = offer.status === 'countered';
+                const isRejected = offer.status === 'rejected';
+                const isExpired = offer.status === 'expired';
+
+                return (
+                  <div key={offer.id} className="bg-white rounded-3xl border border-[#E2E8D8] p-5 shadow-xs space-y-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={offer.product_image}
+                          alt={offer.product_name}
+                          className="w-16 h-16 rounded-2xl object-cover bg-[#F5F8EF] border border-[#DAE7C7] shrink-0"
+                        />
+                        <div className="min-w-0">
+                          <h4 className="font-bold text-sm text-[#101410] truncate">{offer.product_name}</h4>
+                          <p className="text-xs text-[#5E5E61] mt-0.5">Khách: <strong>{offer.buyer_name || 'Khách hàng'}</strong> ({offer.buyer_phone})</p>
+                          <div className="flex items-center gap-2 mt-1 text-xs">
+                            <span className="text-[#5E5E61]">Giá gốc:</span>
+                            <span className="line-through font-mono text-[#5E5E61]">{formatVND(offer.original_price)}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full shrink-0 ${
+                        isAccepted ? 'bg-emerald-100 text-emerald-800' :
+                        isCountered ? 'bg-blue-100 text-blue-800' :
+                        isPending ? 'bg-amber-100 text-amber-900 font-bold' :
+                        isExpired ? 'bg-gray-100 text-gray-700' : 'bg-red-100 text-red-800'
+                      }`}>
+                        {isAccepted ? 'Đã chấp nhận' :
+                         isCountered ? 'Shop đã trả giá lại' :
+                         isPending ? 'Chờ bạn phản hồi' :
+                         isExpired ? 'Đã hết hạn' : 'Đã từ chối'}
+                      </span>
+                    </div>
+
+                    <div className="p-3.5 rounded-2xl bg-[#F5F8EF] border border-[#DAE7C7]/60 text-xs space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[#5E5E61]">Khách đề xuất mua với:</span>
+                        <div className="flex items-baseline gap-2">
+                          <span className="font-mono font-bold text-base text-[#08482D]">{formatVND(offer.offered_price)}</span>
+                          <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-100 px-1.5 py-0.2 rounded">
+                            Giảm {discountPct}%
+                          </span>
+                        </div>
+                      </div>
+
+                      {isCountered && offer.counter_price && (
+                        <div className="flex justify-between items-center text-blue-900 pt-1.5 border-t border-[#DAE7C7]/60">
+                          <span className="font-medium">Mức giá bạn đã đề nghị lại:</span>
+                          <span className="font-mono font-bold text-sm text-blue-700">{formatVND(offer.counter_price)}</span>
+                        </div>
+                      )}
+
+                      {offer.message && (
+                        <p className="text-[11px] text-[#5E5E61] italic pt-1 border-t border-[#DAE7C7]/40">
+                          <strong>Lời nhắn từ khách:</strong> "{offer.message}"
+                        </p>
+                      )}
+
+                      {offer.seller_note && (
+                        <p className="text-[11px] text-blue-800 pt-1 border-t border-blue-200">
+                          <strong>Ghi chú của shop:</strong> {offer.seller_note}
+                        </p>
+                      )}
+
+                      <div className="flex items-center gap-1.5 text-[10px] text-[#5E5E61] pt-1">
+                        <Clock className="w-3.5 h-3.5 text-amber-700" />
+                        <span>Hết hạn lúc: {new Date(offer.expires_at).toLocaleString('vi-VN')}</span>
+                      </div>
+                    </div>
+
+                    {/* Action Buttons for Pending Offers */}
+                    {isPending && (
+                      <div className="flex items-center gap-2 pt-1">
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          className="flex-1"
+                          onClick={() => handleAcceptOffer(offer.id)}
+                        >
+                          Chấp nhận
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="flex-1"
+                          onClick={() => {
+                            setCounterModalOffer(offer);
+                            setCounterPriceInput(Math.round((offer.offered_price + offer.original_price) / 2));
+                            setCounterNoteInput('');
+                          }}
+                        >
+                          Trả giá lại
+                        </Button>
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          onClick={() => {
+                            setRejectModalOffer(offer);
+                            setRejectReasonInput('');
+                          }}
+                        >
+                          Từ chối
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB: TIN NHẮN (CHAT) */}
+      {activeTab === 'chat' && (
+        <div className="bg-white rounded-3xl border border-[#E2E8D8] shadow-xs overflow-hidden h-[680px] flex flex-col md:flex-row">
+          {/* Left: Conversation List */}
+          <div className="md:w-5/12 border-b md:border-b-0 md:border-r border-[#E2E8D8] flex flex-col h-full bg-[#FBFDF8]">
+            <div className="p-4 border-b border-[#E2E8D8] bg-white flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-sm text-[#101410] flex items-center gap-2">
+                  <MessageSquare className="w-4 h-4 text-[#08482D]" />
+                  Hộp thư tư vấn khách hàng
+                </h3>
+                <p className="text-[11px] text-[#5E5E61]">Tự động cập nhật mỗi 5 giây</p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={fetchChat}>
+                <RefreshCw className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto divide-y divide-[#E2E8D8]">
+              {loadingChat && chatConversations.length === 0 ? (
+                <div className="p-6 text-center text-xs text-[#5E5E61]">Đang tải cuộc trò chuyện...</div>
+              ) : chatConversations.length === 0 ? (
+                <div className="p-8 text-center text-xs text-[#5E5E61]">Chưa có khách hàng nhắn tin</div>
+              ) : (
+                chatConversations.map(conv => {
+                  const isSelected = activeConversation?.id === conv.id;
+                  const hasUnread = (conv.seller_unread || 0) > 0;
+
+                  return (
+                    <div
+                      key={conv.id}
+                      onClick={async () => {
+                        const detail = await api.getChatDetail(conv.id);
+                        setActiveConversation(detail.conversation);
+                        fetchChat();
+                      }}
+                      className={`p-3.5 cursor-pointer transition-colors flex items-start gap-3 ${
+                        isSelected ? 'bg-[#DAE7C7]/40' : hasUnread ? 'bg-[#F5F8EF]' : 'hover:bg-white'
+                      }`}
+                    >
+                      <div className="w-10 h-10 rounded-full bg-[#08482D] text-white flex items-center justify-center font-bold text-xs shrink-0">
+                        {(conv.buyer_name || 'KH')[0].toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-1">
+                          <h4 className="font-bold text-xs text-[#101410] truncate">
+                            {conv.buyer_name || 'Khách hàng'}
+                          </h4>
+                          <span className="text-[10px] text-[#5E5E61] shrink-0 font-mono">
+                            {conv.last_message_at ? new Date(conv.last_message_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : ''}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-[#08482D] font-medium truncate mt-0.5">
+                          {conv.product_name ? `SP: ${conv.product_name}` : conv.order_code ? `Đơn #${conv.order_code}` : ''}
+                        </p>
+                        <p className="text-xs text-[#5E5E61] truncate mt-0.5">
+                          {conv.last_message || 'Bắt đầu cuộc trò chuyện'}
+                        </p>
+                      </div>
+                      {hasUnread && (
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 shrink-0 self-center" />
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          {/* Right: Active Chat Window */}
+          <div className="md:w-7/12 flex flex-col h-full bg-white">
+            {activeConversation ? (
+              <>
+                {/* Active Header */}
+                <div className="p-4 border-b border-[#E2E8D8] bg-[#F5F8EF] flex items-center justify-between">
+                  <div>
+                    <h3 className="font-bold text-sm text-[#101410]">
+                      {activeConversation.buyer_name || 'Khách hàng'} ({activeConversation.buyer_phone || ''})
+                    </h3>
+                    <p className="text-[11px] text-[#5E5E61]">
+                      {activeConversation.product_name ? `Hỏi về: ${activeConversation.product_name} (${formatVND(activeConversation.product_price || 0)})` :
+                       activeConversation.order_code ? `Hỗ trợ đơn hàng: #${activeConversation.order_code}` : 'Tư vấn trực tiếp'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Messages pane */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#FBFDF8]">
+                  {(activeConversation.messages || []).map(msg => {
+                    const isSeller = msg.sender_role === 'seller';
+                    return (
+                      <div key={msg.id} className={`flex flex-col ${isSeller ? 'items-end' : 'items-start'}`}>
+                        <div className={`max-w-[80%] px-4 py-2.5 text-xs rounded-2xl shadow-xs break-words ${
+                          isSeller
+                            ? 'bg-[#08482D] text-white rounded-tr-xs'
+                            : 'bg-white text-[#101410] border border-[#DAE7C7] rounded-tl-xs'
+                        }`}>
+                          {msg.content}
+                        </div>
+                        <span className="text-[10px] text-[#5E5E61] mt-0.5 px-1 font-mono">
+                          {new Date(msg.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Quick Reply Templates */}
+                <div className="p-2.5 bg-[#F5F8EF] border-t border-[#E2E8D8] flex gap-2 overflow-x-auto no-scrollbar">
+                  {[
+                    'Dạ sản phẩm vẫn còn ạ',
+                    'Shop gửi thêm ảnh thật ngay ạ',
+                    'Dạ shop giao trong 2–4 ngày ạ'
+                  ].map((preset, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => handleSendChatMessage(preset)}
+                      className="px-3 py-1.5 rounded-full text-xs bg-white border border-[#DAE7C7] text-[#08482D] hover:bg-[#DAE7C7]/30 transition-colors shrink-0 flex items-center gap-1"
+                    >
+                      <Sparkles className="w-3 h-3 text-amber-500" />
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Warning Alert */}
+                {chatWarning && (
+                  <div className="p-2.5 bg-red-50 border-t border-red-200 text-xs text-red-700 flex items-start gap-2">
+                    <ShieldAlert className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                    <span>{chatWarning}</span>
+                  </div>
+                )}
+
+                {/* Input box */}
+                <div className="p-3 bg-white border-t border-[#E2E8D8] flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={chatInputText}
+                    onChange={(e) => {
+                      setChatInputText(e.target.value);
+                      if (chatWarning) setChatWarning(null);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendChatMessage();
+                      }
+                    }}
+                    placeholder="Nhập câu trả lời gửi khách..."
+                    className="flex-1 px-3.5 py-2.5 text-xs bg-[#F5F8EF] border border-[#DAE7C7] rounded-xl focus:outline-none focus:border-[#08482D]"
+                  />
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => handleSendChatMessage()}
+                    disabled={!chatInputText.trim() || sendingChatMsg}
+                  >
+                    <Send className="w-4 h-4" />
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center text-center p-6 text-[#5E5E61]">
+                <MessageSquare className="w-12 h-12 text-[#DAE7C7] mb-2" />
+                <p className="text-sm font-bold text-[#101410]">Chọn một cuộc hội thoại bên trái để bắt đầu chat</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* TAB: TRẢ HÀNG / HOÀN TIỀN (RETURNS) */}
+      {activeTab === 'returns' && (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-[#E2E8D8]">
+            <div>
+              <h2 className="text-xl font-bold text-[#101410] flex items-center gap-2">
+                <RotateCcw className="w-5 h-5 text-amber-700" />
+                Quản lý Yêu Cầu Đổi Trả & Hoàn Tiền (Bảo chứng 3 ngày)
+              </h2>
+              <p className="text-xs text-[#5E5E61] mt-0.5">
+                Quy trình: Duyệt yêu cầu → Nhận hàng hoàn → Hoàn tiền & khôi phục tồn kho tự động
+              </p>
+            </div>
+            <Button variant="secondary" size="sm" onClick={fetchReturns}>
+              <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+              Làm mới
+            </Button>
+          </div>
+
+          {loadingReturns ? (
+            <div className="py-12 text-center text-xs text-[#5E5E61]">Đang tải danh sách yêu cầu...</div>
+          ) : sellerReturns.length === 0 ? (
+            <div className="bg-white rounded-3xl border border-[#E2E8D8] p-12 text-center">
+              <RotateCcw className="w-12 h-12 mx-auto text-[#DAE7C7] mb-2" />
+              <h3 className="text-base font-bold text-[#101410] mb-1">Chưa có yêu cầu trả hàng nào</h3>
+              <p className="text-xs text-[#5E5E61]">Mọi đơn hàng đều đang trong trạng thái hoàn tất suôn sẻ.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {sellerReturns.map(item => {
+                const proofImages: string[] = Array.isArray(item.images)
+                  ? item.images
+                  : typeof item.images === 'string'
+                  ? JSON.parse(item.images || '[]')
+                  : [];
+
+                return (
+                  <div key={item.id} className="bg-white rounded-3xl border border-[#E2E8D8] p-5 shadow-xs space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#E2E8D8] pb-3">
+                      <div>
+                        <span className="font-mono font-bold text-sm text-[#08482D]">
+                          Đơn hàng #{item.order_code}
+                        </span>
+                        <span className="text-xs text-[#5E5E61] ml-2">
+                          Khách: <strong>{item.buyer_name}</strong> ({item.buyer_phone})
+                        </span>
+                      </div>
+
+                      <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
+                        item.status === 'refunded' ? 'bg-emerald-100 text-emerald-800' :
+                        item.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                        item.status === 'approved' ? 'bg-blue-100 text-blue-800' :
+                        item.status === 'shipping_back' ? 'bg-purple-100 text-purple-800' :
+                        item.status === 'received' ? 'bg-amber-100 text-amber-900' :
+                        'bg-amber-100 text-amber-900 font-bold'
+                      }`}>
+                        {item.status === 'pending' ? 'Chờ shop xét duyệt' :
+                         item.status === 'approved' ? 'Đã duyệt - chờ gửi lại' :
+                         item.status === 'shipping_back' ? 'Đang chuyển trả hàng' :
+                         item.status === 'received' ? 'Đã nhận kiện hàng về kho' :
+                         item.status === 'refunded' ? 'Đã hoàn tiền thành công' : 'Đã từ chối'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                      <div className="p-3 bg-[#F5F8EF] rounded-2xl border border-[#DAE7C7]/60 space-y-1.5">
+                        <p className="text-[#101410]"><strong>Lý do yêu cầu:</strong> {item.reason}</p>
+                        <p className="text-[#5E5E61]"><strong>Mô tả chi tiết:</strong> {item.description}</p>
+                        <p className="font-mono text-[#08482D] font-bold">
+                          <strong>Số tiền hoàn trả:</strong> {formatVND(item.refund_amount)}
+                        </p>
+                        <p className="text-[#5E5E61]">
+                          <strong>Phương thức hoàn:</strong> {item.refund_method === 'card' ? 'Hoàn về thẻ thanh toán (mô phỏng)' : 'Chuyển khoản ngân hàng (mô phỏng)'}
+                        </p>
+                      </div>
+
+                      {/* Proof photos */}
+                      <div>
+                        <span className="font-semibold text-[#101410] block mb-2">Ảnh chụp bằng chứng của khách:</span>
+                        {proofImages.length > 0 ? (
+                          <div className="flex gap-2 overflow-x-auto pb-1">
+                            {proofImages.map((url, i) => (
+                              <img
+                                key={i}
+                                src={url}
+                                alt={`proof-${i}`}
+                                className="w-16 h-16 rounded-xl object-cover border border-[#DAE7C7] shrink-0"
+                              />
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-[#5E5E61] italic">Không đính kèm ảnh</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {item.seller_note && (
+                      <p className="text-xs text-blue-900 p-2.5 bg-blue-50 rounded-xl border border-blue-200">
+                        <strong>Ghi chú từ shop:</strong> {item.seller_note}
+                      </p>
+                    )}
+
+                    {/* Step Actions for Seller */}
+                    <div className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-[#E2E8D8]">
+                      {item.status === 'pending' && (
+                        <>
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={() => handleUpdateReturnStatus(item.id, 'approved', 'Shop đồng ý nhận lại kiện hàng. Vui lòng đóng gói và bàn giao cho bưu tá.')}
+                          >
+                            Duyệt chấp nhận trả hàng
+                          </Button>
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            onClick={() => {
+                              const reason = prompt('Nhập lý do từ chối yêu cầu trả hàng:');
+                              if (reason) {
+                                handleUpdateReturnStatus(item.id, 'rejected', reason);
+                              }
+                            }}
+                          >
+                            Từ chối yêu cầu
+                          </Button>
+                        </>
+                      )}
+
+                      {item.status === 'approved' && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => handleUpdateReturnStatus(item.id, 'shipping_back', 'Đơn vị vận chuyển đang trên đường lấy kiện hoàn.')}
+                        >
+                          Xác nhận bắt đầu gửi trả hàng
+                        </Button>
+                      )}
+
+                      {item.status === 'shipping_back' && (
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={() => handleUpdateReturnStatus(item.id, 'received', 'Kho đã nhận lại kiện hàng và kiểm tra hoàn tất.')}
+                        >
+                          Xác nhận đã nhận hàng về kho
+                        </Button>
+                      )}
+
+                      {item.status === 'received' && (
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={() => handleUpdateReturnStatus(item.id, 'refunded', 'Đã xử lý hoàn tiền 100% cho người mua.')}
+                        >
+                          Xác nhận hoàn tiền & khôi phục tồn kho
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* MODAL: TRẢ GIÁ LẠI (COUNTER OFFER) */}
+      {counterModalOffer && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white rounded-3xl border border-[#DAE7C7] shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-[#E2E8D8]">
+              <h3 className="font-bold text-base text-[#101410] flex items-center gap-2">
+                <Tag className="w-5 h-5 text-[#08482D]" />
+                Đề nghị mức giá mới cho khách
+              </h3>
+              <button onClick={() => setCounterModalOffer(null)} className="text-[#5E5E61] hover:text-[#101410]">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3 bg-[#F5F8EF] rounded-xl text-xs space-y-1">
+              <p>Sản phẩm: <strong>{counterModalOffer.product_name}</strong></p>
+              <p>Giá niêm yết: <strong className="font-mono">{formatVND(counterModalOffer.original_price)}</strong></p>
+              <p>Khách đang trả: <strong className="font-mono text-[#08482D]">{formatVND(counterModalOffer.offered_price)}</strong></p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-[#101410] mb-1">
+                Mức giá bạn muốn thương lượng lại (VNĐ) *
+              </label>
+              <input
+                type="number"
+                value={counterPriceInput}
+                onChange={e => setCounterPriceInput(Number(e.target.value))}
+                min={counterModalOffer.offered_price + 1000}
+                max={counterModalOffer.original_price - 1000}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-[#DAE7C7] bg-[#F5F8EF] font-mono font-bold text-[#08482D] text-sm focus:outline-none"
+              />
+              <span className="text-[10px] text-[#5E5E61] mt-1 block">
+                Phải nằm giữa {formatVND(counterModalOffer.offered_price)} và {formatVND(counterModalOffer.original_price)}
+              </span>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-[#101410] mb-1">
+                Lời nhắn gửi khách hàng (không bắt buộc)
+              </label>
+              <textarea
+                value={counterNoteInput}
+                onChange={e => setCounterNoteInput(e.target.value)}
+                rows={2}
+                placeholder="VD: Món này độ mới rất cao shop bớt tối đa mức này cho bạn nhé..."
+                className="w-full px-3 py-2 text-xs border border-[#DAE7C7] rounded-xl"
+              />
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <Button variant="secondary" className="flex-1" onClick={() => setCounterModalOffer(null)}>
+                Hủy
+              </Button>
+              <Button variant="primary" className="flex-1" onClick={handleCounterOffer}>
+                Gửi giá mới
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: TỪ CHỐI TRẢ GIÁ (REJECT OFFER) */}
+      {rejectModalOffer && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white rounded-3xl border border-[#DAE7C7] shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-[#E2E8D8]">
+              <h3 className="font-bold text-base text-[#101410] flex items-center gap-2">
+                <XCircle className="w-5 h-5 text-red-600" />
+                Từ chối lời trả giá
+              </h3>
+              <button onClick={() => setRejectModalOffer(null)} className="text-[#5E5E61] hover:text-[#101410]">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-[#5E5E61]">
+              Bạn có chắc chắn muốn từ chối mức giá <strong>{formatVND(rejectModalOffer.offered_price)}</strong> của khách hàng <strong>{rejectModalOffer.buyer_name}</strong>?
+            </p>
+
+            <div>
+              <label className="block text-xs font-semibold text-[#101410] mb-1">
+                Lý do từ chối (không bắt buộc)
+              </label>
+              <textarea
+                value={rejectReasonInput}
+                onChange={e => setRejectReasonInput(e.target.value)}
+                rows={2}
+                placeholder="VD: Món đồ này đã bán đúng giá vốn rồi ạ..."
+                className="w-full px-3 py-2 text-xs border border-[#DAE7C7] rounded-xl"
+              />
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <Button variant="secondary" className="flex-1" onClick={() => setRejectModalOffer(null)}>
+                Quay lại
+              </Button>
+              <Button variant="danger" className="flex-1" onClick={handleRejectOffer}>
+                Xác nhận từ chối
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MODAL: TẠO MÃ GIẢM GIÁ */}
       {couponModalOpen && (
         <div className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-4">
@@ -1395,14 +2255,61 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({ onViewPreview 
               </div>
 
               <div>
-                <label className="font-semibold text-[#524B46] block mb-1">URL ảnh minh họa</label>
+                <label className="font-semibold text-[#524B46] block mb-1">URL ảnh chính (Đại diện)</label>
                 <input
                   type="text"
                   value={prodForm.image_url}
                   onChange={e => setProdForm({ ...prodForm, image_url: e.target.value })}
-                  placeholder="Để trống sẽ tự sinh ảnh SVG đẹp"
+                  placeholder="Để trống sẽ tự dùng ảnh đầu tiên trong bộ sưu tập hoặc sinh ảnh SVG"
                   className="w-full px-3 py-2 rounded-xl border border-[#D8CEBE] bg-[#FAF7F2]"
                 />
+              </div>
+
+              <div>
+                <label className="font-semibold text-[#524B46] block mb-1">
+                  Bộ sưu tập ảnh chụp thực tế (Mỗi URL ảnh trên một dòng, tối đa 5 ảnh)
+                </label>
+                <textarea
+                  rows={2}
+                  value={prodForm.imagesText}
+                  onChange={e => setProdForm({ ...prodForm, imagesText: e.target.value })}
+                  placeholder="https://images.unsplash.com/photo-1...&#10;https://images.unsplash.com/photo-2..."
+                  className="w-full px-3 py-2 rounded-xl border border-[#D8CEBE] bg-[#FAF7F2] font-mono text-[11px]"
+                />
+              </div>
+
+              <div>
+                <label className="font-semibold text-[#524B46] block mb-1">
+                  Khuyết điểm thật minh bạch (Mỗi dòng một khuyết điểm: Vị trí | Mô tả | URL ảnh)
+                </label>
+                <textarea
+                  rows={2}
+                  value={prodForm.flawsText}
+                  onChange={e => setProdForm({ ...prodForm, flawsText: e.target.value })}
+                  placeholder="Góc phải | Trầy xước nhẹ viền cạnh | https://images.unsplash.com/...&#10;Mặt đáy | Xước dăm không ảnh hưởng hoạt động |"
+                  className="w-full px-3 py-2 rounded-xl border border-[#D8CEBE] bg-[#FAF7F2] text-[11px]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-semibold text-[#524B46] block mb-1">Chuyên viên kiểm định</label>
+                  <input
+                    type="text"
+                    value={prodForm.inspector_name}
+                    onChange={e => setProdForm({ ...prodForm, inspector_name: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-[#D8CEBE] bg-[#FAF7F2]"
+                  />
+                </div>
+                <div>
+                  <label className="font-semibold text-[#524B46] block mb-1">Ngày kiểm định</label>
+                  <input
+                    type="date"
+                    value={prodForm.inspection_date}
+                    onChange={e => setProdForm({ ...prodForm, inspection_date: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-[#D8CEBE] bg-[#FAF7F2]"
+                  />
+                </div>
               </div>
 
               <div className="pt-3 border-t border-[#E6DFD5] flex justify-end gap-3">

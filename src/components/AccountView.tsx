@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { User, MapPin, KeyRound, Heart, Bell, Plus, Trash2, Edit2, CheckCircle2, ShieldCheck, ShoppingCart, ArrowLeft } from 'lucide-react';
+import { User, MapPin, KeyRound, Heart, Bell, Plus, Trash2, Edit2, CheckCircle2, ShieldCheck, ShoppingCart, ArrowLeft, Tag, Clock, Check, XCircle } from 'lucide-react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { Product, Address, AppNotification } from '../types';
+import { Product, Address, AppNotification, Offer } from '../types';
 import { formatVND } from '../utils/format';
 
 interface AccountViewProps {
@@ -12,7 +12,7 @@ interface AccountViewProps {
   onAddToCart: (product: Product) => void;
 }
 
-type TabType = 'profile' | 'addresses' | 'password' | 'wishlist' | 'notifications';
+type TabType = 'profile' | 'addresses' | 'password' | 'wishlist' | 'notifications' | 'offers';
 
 export function AccountView({ onBackToHome, onSelectProduct, onAddToCart }: AccountViewProps) {
   const { user, refreshCartCount } = useAuth();
@@ -49,6 +49,10 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart }: Acco
   // Notifications State
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
+
+  // Offers State
+  const [offers, setOffers] = useState<Offer[]>([]);
+  const [loadingOffers, setLoadingOffers] = useState(false);
 
   // Fetch initial data
   useEffect(() => {
@@ -97,10 +101,54 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart }: Acco
     }
   };
 
+  // Load offers
+  const loadOffers = async () => {
+    setLoadingOffers(true);
+    try {
+      const res = await api.getOffers();
+      setOffers(res.offers);
+    } catch (err: any) {
+      showToast(err.message || 'Lỗi tải lời trả giá', 'error');
+    } finally {
+      setLoadingOffers(false);
+    }
+  };
+
+  const handleBuyNegotiated = async (offer: Offer) => {
+    try {
+      await api.addToCart(offer.product_id, 1, offer.id);
+      refreshCartCount();
+      showToast(`Đã thêm vào giỏ hàng với giá thương lượng: ${formatVND(offer.counter_price || offer.offered_price)}!`, 'success');
+    } catch (err: any) {
+      showToast(err.message || 'Lỗi thêm vào giỏ hàng', 'error');
+    }
+  };
+
+  const handleAcceptCounter = async (offerId: number) => {
+    try {
+      await api.buyerAcceptCounter(offerId);
+      showToast('Đã đồng ý giá thương lượng từ shop!', 'success');
+      loadOffers();
+    } catch (err: any) {
+      showToast(err.message || 'Lỗi chấp nhận giá đề nghị', 'error');
+    }
+  };
+
+  const handleRejectCounter = async (offerId: number) => {
+    try {
+      await api.buyerRejectCounter(offerId);
+      showToast('Đã từ chối giá thương lượng', 'info');
+      loadOffers();
+    } catch (err: any) {
+      showToast(err.message || 'Lỗi từ chối giá đề nghị', 'error');
+    }
+  };
+
   useEffect(() => {
     if (activeTab === 'addresses') loadAddresses();
     if (activeTab === 'wishlist') loadWishlist();
     if (activeTab === 'notifications') loadNotifications();
+    if (activeTab === 'offers') loadOffers();
   }, [activeTab]);
 
   // Update profile
@@ -321,6 +369,17 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart }: Acco
               }`}
             >
               <Heart className="w-4 h-4" /> Sản phẩm yêu thích
+            </button>
+
+            <button
+              onClick={() => setActiveTab('offers')}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all text-left ${
+                activeTab === 'offers'
+                  ? 'bg-[#08482D] text-white shadow-sm'
+                  : 'text-[#5E5E61] hover:bg-[#F5F8EF] hover:text-[#101410]'
+              }`}
+            >
+              <Tag className="w-4 h-4" /> Lời trả giá của tôi
             </button>
 
             <button
@@ -710,6 +769,143 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart }: Acco
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 6: OFFERS / LỜI TRẢ GIÁ */}
+          {activeTab === 'offers' && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-xl font-bold text-[#101410] flex items-center gap-2">
+                  <Tag className="w-5 h-5 text-[#08482D]" />
+                  Lời Trả Giá Của Tôi
+                </h3>
+                <p className="text-xs text-[#5E5E61] mt-1">
+                  Theo dõi trạng thái thương lượng giá trực tiếp với các shop bán hàng
+                </p>
+              </div>
+
+              {loadingOffers ? (
+                <div className="py-8 text-center text-xs text-[#5E5E61]">Đang tải lời trả giá...</div>
+              ) : offers.length === 0 ? (
+                <div className="text-center py-10 bg-[#F5F8EF]/40 rounded-2xl border border-dashed border-[#E2E8D8]">
+                  <Tag className="w-8 h-8 text-[#5E5E61] mx-auto mb-2 opacity-50" />
+                  <p className="text-xs text-[#5E5E61]">Bạn chưa gửi lời trả giá nào</p>
+                  <p className="text-[11px] text-[#5E5E61]/70 mt-1">
+                    Bấm nút "Trả giá" trong trang chi tiết món đồ để đề xuất mức giá mong muốn!
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {offers.map(item => {
+                    const isAccepted = item.status === 'accepted';
+                    const isCountered = item.status === 'countered';
+                    const isPending = item.status === 'pending';
+                    const isRejected = item.status === 'rejected';
+                    const isExpired = item.status === 'expired';
+
+                    return (
+                      <div
+                        key={item.id}
+                        className="p-4 rounded-2xl border border-[#E2E8D8] bg-white shadow-xs space-y-3"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={item.product_image}
+                              alt={item.product_name}
+                              className="w-14 h-14 rounded-xl object-cover bg-[#F5F8EF] border border-[#DAE7C7] shrink-0"
+                            />
+                            <div>
+                              <h4 className="font-bold text-sm text-[#101410]">{item.product_name}</h4>
+                              <div className="flex items-center gap-2 text-xs mt-0.5">
+                                <span className="text-[#5E5E61]">Giá gốc:</span>
+                                <span className="line-through text-[#5E5E61] font-mono">{formatVND(item.original_price)}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Status Badge */}
+                          <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${
+                            isAccepted ? 'bg-emerald-100 text-emerald-800' :
+                            isCountered ? 'bg-blue-100 text-blue-800' :
+                            isPending ? 'bg-amber-100 text-amber-900' :
+                            isExpired ? 'bg-gray-100 text-gray-700' :
+                            'bg-red-100 text-red-800'
+                          }`}>
+                            {isAccepted ? 'Đã chấp nhận' :
+                             isCountered ? 'Shop trả giá lại' :
+                             isPending ? 'Đang chờ phản hồi' :
+                             isExpired ? 'Đã hết hạn' : 'Đã từ chối'}
+                          </span>
+                        </div>
+
+                        {/* Offer Details */}
+                        <div className="p-3 rounded-xl bg-[#F5F8EF] text-xs space-y-1.5 border border-[#DAE7C7]/60">
+                          <div className="flex justify-between items-center">
+                            <span className="text-[#5E5E61]">Mức giá bạn đề xuất:</span>
+                            <span className="font-mono font-bold text-[#08482D] text-sm">{formatVND(item.offered_price)}</span>
+                          </div>
+
+                          {isCountered && item.counter_price && (
+                            <div className="flex justify-between items-center text-blue-900 pt-1 border-t border-[#DAE7C7]/60">
+                              <span className="font-semibold">Mức giá shop đề nghị lại:</span>
+                              <span className="font-mono font-bold text-base text-blue-700">{formatVND(item.counter_price)}</span>
+                            </div>
+                          )}
+
+                          {item.message && (
+                            <p className="text-[11px] text-[#5E5E61] italic">
+                              "{item.message}"
+                            </p>
+                          )}
+
+                          {item.seller_note && (
+                            <p className="text-[11px] text-blue-800 pt-1 border-t border-blue-200">
+                              <strong>Phản hồi từ shop:</strong> {item.seller_note}
+                            </p>
+                          )}
+
+                          <div className="flex items-center gap-1.5 text-[10px] text-[#5E5E61] pt-1">
+                            <Clock className="w-3.5 h-3.5 text-amber-700" />
+                            <span>Hiệu lực đến: {new Date(item.expires_at).toLocaleString('vi-VN')}</span>
+                          </div>
+                        </div>
+
+                        {/* Actions */}
+                        {isAccepted && (
+                          <div className="pt-1 flex justify-end">
+                            <button
+                              onClick={() => handleBuyNegotiated(item)}
+                              className="px-4 py-2 bg-[#08482D] hover:bg-[#073d26] text-white rounded-xl text-xs font-bold transition-colors shadow-xs flex items-center gap-1.5"
+                            >
+                              <ShoppingCart className="w-4 h-4" />
+                              Mua với giá {formatVND(item.offered_price)}
+                            </button>
+                          </div>
+                        )}
+
+                        {isCountered && item.counter_price && (
+                          <div className="pt-1 flex justify-end gap-2">
+                            <button
+                              onClick={() => handleRejectCounter(item.id)}
+                              className="px-3.5 py-1.5 rounded-xl border border-red-300 text-red-700 text-xs font-semibold hover:bg-red-50 transition-colors"
+                            >
+                              Từ chối
+                            </button>
+                            <button
+                              onClick={() => handleAcceptCounter(item.id)}
+                              className="px-4 py-1.5 bg-[#08482D] text-white rounded-xl text-xs font-bold hover:bg-[#073d26] transition-colors shadow-xs"
+                            >
+                              Đồng ý giá {formatVND(item.counter_price)}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

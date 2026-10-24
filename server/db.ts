@@ -236,23 +236,120 @@ function initSchema(db: Database) {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS offers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      buyer_id INTEGER NOT NULL,
+      product_id INTEGER NOT NULL,
+      original_price INTEGER NOT NULL,
+      offered_price INTEGER NOT NULL,
+      counter_price INTEGER,
+      message TEXT,
+      seller_note TEXT,
+      status TEXT NOT NULL CHECK(status IN ('pending', 'accepted', 'rejected', 'countered', 'expired')),
+      expires_at DATETIME NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (buyer_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS chat_conversations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      buyer_id INTEGER NOT NULL,
+      product_id INTEGER,
+      order_id INTEGER,
+      last_message TEXT,
+      last_message_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      buyer_unread INTEGER DEFAULT 0,
+      seller_unread INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (buyer_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS chat_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      conversation_id INTEGER NOT NULL,
+      sender_role TEXT NOT NULL CHECK(sender_role IN ('buyer', 'seller')),
+      sender_id INTEGER NOT NULL,
+      content TEXT NOT NULL,
+      is_read INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (conversation_id) REFERENCES chat_conversations(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS return_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      order_id INTEGER NOT NULL,
+      buyer_id INTEGER NOT NULL,
+      product_id INTEGER NOT NULL,
+      reason TEXT NOT NULL,
+      description TEXT NOT NULL,
+      images TEXT,
+      status TEXT NOT NULL CHECK(status IN ('pending', 'approved', 'rejected', 'shipping_back', 'received', 'refunded')),
+      seller_note TEXT,
+      refund_amount INTEGER NOT NULL,
+      refund_method TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+      FOREIGN KEY (buyer_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS product_views (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      product_id INTEGER NOT NULL,
+      viewer_id TEXT NOT NULL,
+      view_date TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(product_id, viewer_id, view_date),
+      FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS user_recent_views (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      product_id INTEGER NOT NULL,
+      viewed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(user_id, product_id),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+    );
   `);
 
-  // Migrate columns for existing orders table if needed
-  try {
-    const columns = db.exec("PRAGMA table_info(orders)");
-    if (columns.length > 0) {
-      const colNames = columns[0].values.map((v: any) => v[1]);
-      if (!colNames.includes('coupon_code')) {
-        db.run('ALTER TABLE orders ADD COLUMN coupon_code TEXT');
+  // Helper safely adding columns to tables
+  const safeAddColumn = (table: string, column: string, type: string) => {
+    try {
+      const info = db.exec(`PRAGMA table_info(${table})`);
+      if (info.length > 0) {
+        const colNames = info[0].values.map((v: any) => v[1]);
+        if (!colNames.includes(column)) {
+          db.run(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+        }
       }
-      if (!colNames.includes('discount_amount')) {
-        db.run('ALTER TABLE orders ADD COLUMN discount_amount INTEGER DEFAULT 0');
-      }
+    } catch (e) {
+      console.warn(`Migration warning on ${table}.${column}:`, e);
     }
-  } catch (e) {
-    console.warn('Migration warning:', e);
-  }
+  };
+
+  // Safe migrations
+  safeAddColumn('orders', 'coupon_code', 'TEXT');
+  safeAddColumn('orders', 'discount_amount', 'INTEGER DEFAULT 0');
+
+  safeAddColumn('products', 'images', 'TEXT');
+  safeAddColumn('products', 'flaws', 'TEXT');
+  safeAddColumn('products', 'inspection_date', 'TEXT');
+  safeAddColumn('products', 'inspector_name', 'TEXT');
+  safeAddColumn('products', 'inspection_checklist', 'TEXT');
+
+  safeAddColumn('cart_items', 'is_negotiated', 'INTEGER DEFAULT 0');
+  safeAddColumn('cart_items', 'negotiated_price', 'INTEGER');
+  safeAddColumn('cart_items', 'offer_id', 'INTEGER');
+
+  safeAddColumn('order_items', 'is_negotiated', 'INTEGER DEFAULT 0');
+  safeAddColumn('order_items', 'negotiated_price', 'INTEGER');
+  safeAddColumn('order_items', 'offer_id', 'INTEGER');
 }
 
 export function createNotification(userId: number, orderId: number | null, type: string, title: string, message: string): void {

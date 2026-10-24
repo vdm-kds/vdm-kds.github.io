@@ -920,6 +920,7 @@ function MainShopApp() {
         onBuyNow={(prod, qty) => handleBuyNow(prod, qty)}
         disabledBuy={isPreview}
         onDisabledBuyClick={() => showToast('Bạn đang xem cửa hàng dưới góc nhìn của khách — chức năng mua hàng bị vô hiệu hóa', 'info')}
+        onSelectProduct={(p) => setDetailProduct(p)}
       />
 
       {/* Cart Drawer */}

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Package, Truck, Clock, RefreshCw, XCircle, CheckCircle2, ChevronRight, 
-  AlertCircle, ShieldCheck, X, Copy, Check, ArrowLeft, MapPin, Star 
+  AlertCircle, ShieldCheck, X, Copy, Check, ArrowLeft, MapPin, Star,
+  FileText, MessageSquare, RotateCcw, Tag
 } from 'lucide-react';
 import { Order, OrderStatus } from '../types';
 import { api } from '../services/api';
@@ -9,6 +10,9 @@ import { formatVND, formatDate } from '../utils/format';
 import { useToast } from '../context/ToastContext';
 import { ReviewModal } from './ReviewModal';
 import { Button } from './Button';
+import { ChatDrawer } from './ChatDrawer';
+import { ReturnRequestModal } from './ReturnRequestModal';
+import { InvoiceModal } from './InvoiceModal';
 
 interface OrdersViewProps {
   onBackToShop: () => void;
@@ -41,6 +45,11 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
   const [cancelReason, setCancelReason] = useState('Đổi ý không muốn mua nữa');
   const [customCancelReason, setCustomCancelReason] = useState('');
   const [isCancelling, setIsCancelling] = useState(false);
+
+  // New Market Features states: Return request modal, Invoice modal, Chat drawer
+  const [showReturnModal, setShowReturnModal] = useState(false);
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [showChatDrawer, setShowChatDrawer] = useState(false);
 
   // Fetch reviewed items for currently selected order
   const fetchReviewedItems = async (orderId: number) => {
@@ -550,6 +559,12 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                             <span>x{item.quantity}</span>
                             <span>·</span>
                             <span className="font-mono text-[#C2522D]">Độ mới {item.condition_pct}%</span>
+                            {Boolean(item.is_negotiated) && (
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 text-[10px] font-semibold border border-amber-200">
+                                <Tag className="w-2.5 h-2.5" />
+                                Giá đã thương lượng
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -610,18 +625,89 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
               </div>
             </div>
 
-            {/* Actions for buyer: Complete Order (if delivered) / Cancel Order (if pending/confirmed) */}
-            <div className="flex flex-wrap items-center gap-3 pt-2">
+            {/* Return Request Timeline Card (if existing) */}
+            {selectedOrder.return_request && (
+              <div className="bg-[#FFFFFF] border border-amber-300 rounded-2xl p-5 shadow-vintage-sm space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <RotateCcw className="w-4 h-4 text-amber-700" />
+                    <h4 className="text-sm font-bold text-[#101410]">Yêu cầu trả hàng & hoàn tiền</h4>
+                  </div>
+                  <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${
+                    selectedOrder.return_request.status === 'refunded' ? 'bg-emerald-100 text-emerald-800' :
+                    selectedOrder.return_request.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                    selectedOrder.return_request.status === 'approved' ? 'bg-blue-100 text-blue-800' :
+                    'bg-amber-100 text-amber-900'
+                  }`}>
+                    {selectedOrder.return_request.status === 'pending' ? 'Chờ shop duyệt' :
+                     selectedOrder.return_request.status === 'approved' ? 'Shop đã đồng ý nhận lại' :
+                     selectedOrder.return_request.status === 'shipping_back' ? 'Đang chuyển trả hàng' :
+                     selectedOrder.return_request.status === 'received' ? 'Shop đã nhận kiện hoàn' :
+                     selectedOrder.return_request.status === 'refunded' ? 'Đã hoàn tiền thành công' : 'Đã từ chối'}
+                  </span>
+                </div>
+
+                <div className="p-3 bg-[#FBF1D9]/60 rounded-xl text-xs space-y-1.5 border border-amber-200/60">
+                  <p className="text-[#101410]"><strong>Lý do:</strong> {selectedOrder.return_request.reason}</p>
+                  <p className="text-[#5E5E61]"><strong>Mô tả:</strong> {selectedOrder.return_request.description}</p>
+                  <p className="text-[#08482D] font-mono font-bold">
+                    <strong>Số tiền hoàn:</strong> {formatVND(selectedOrder.return_request.refund_amount || selectedOrder.total)}
+                  </p>
+                  {selectedOrder.return_request.seller_note && (
+                    <p className="text-blue-800 italic pt-1 border-t border-amber-200">
+                      <strong>Phản hồi từ shop:</strong> {selectedOrder.return_request.seller_note}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Actions for buyer */}
+            <div className="flex flex-wrap items-center gap-2.5 pt-2">
+              {/* Delivery confirmation */}
               {selectedOrder.status === 'delivered' && (
                 <button
                   onClick={() => handleCompleteOrder(selectedOrder.id)}
-                  className="flex-1 py-3 px-4 bg-[#08482D] hover:bg-[#4D5E3B] text-white rounded-xl text-xs font-bold transition-all shadow-vintage-sm flex items-center justify-center gap-2"
+                  className="flex-1 py-2.5 px-4 bg-[#08482D] hover:bg-[#4D5E3B] text-white rounded-xl text-xs font-bold transition-all shadow-vintage-sm flex items-center justify-center gap-2"
                 >
                   <CheckCircle2 className="w-4 h-4" />
                   Đã nhận được hàng
                 </button>
               )}
 
+              {/* Chat with shop button */}
+              <button
+                type="button"
+                onClick={() => setShowChatDrawer(true)}
+                className="py-2.5 px-3.5 bg-white border border-[#DAE7C7] hover:bg-[#F5F8EF] text-[#08482D] rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs"
+              >
+                <MessageSquare className="w-4 h-4 text-[#08482D]" />
+                Chat với shop
+              </button>
+
+              {/* Invoice button */}
+              <button
+                type="button"
+                onClick={() => setShowInvoiceModal(true)}
+                className="py-2.5 px-3.5 bg-white border border-[#DAE7C7] hover:bg-[#F5F8EF] text-[#101410] rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs"
+              >
+                <FileText className="w-4 h-4 text-[#5E5E61]" />
+                Xem hóa đơn
+              </button>
+
+              {/* Return button if within 3 days & delivered/completed & no existing request */}
+              {(selectedOrder.status === 'delivered' || selectedOrder.status === 'completed') && !selectedOrder.return_request && (
+                <button
+                  type="button"
+                  onClick={() => setShowReturnModal(true)}
+                  className="py-2.5 px-3.5 bg-amber-50 border border-amber-300 text-amber-900 hover:bg-amber-100 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                >
+                  <RotateCcw className="w-4 h-4 text-amber-700" />
+                  Yêu cầu trả hàng
+                </button>
+              )}
+
+              {/* Cancel button if pending/confirmed */}
               {(selectedOrder.status === 'pending' || selectedOrder.status === 'confirmed') && (
                 <button
                   onClick={() => setCancelModalOrder(selectedOrder)}
@@ -714,6 +800,36 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
             fetchReviewedItems(selectedOrder.id);
             fetchOrders(true);
           }}
+        />
+      )}
+
+      {/* Return Request Modal */}
+      {showReturnModal && selectedOrder && (
+        <ReturnRequestModal
+          order={selectedOrder}
+          onClose={() => setShowReturnModal(false)}
+          onSuccess={() => {
+            showToast('Đã gửi yêu cầu trả hàng thành công!', 'success');
+            fetchOrders(true);
+          }}
+        />
+      )}
+
+      {/* Invoice Modal */}
+      {showInvoiceModal && selectedOrder && (
+        <InvoiceModal
+          order={selectedOrder}
+          onClose={() => setShowInvoiceModal(false)}
+        />
+      )}
+
+      {/* Chat Drawer */}
+      {showChatDrawer && selectedOrder && (
+        <ChatDrawer
+          isOpen={showChatDrawer}
+          onClose={() => setShowChatDrawer(false)}
+          order={selectedOrder}
+          currentRole="buyer"
         />
       )}
     </div>

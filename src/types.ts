@@ -18,6 +18,14 @@ export interface Address {
   is_default: number;
 }
 
+export interface ProductFlaw {
+  id?: number | string;
+  description: string;
+  photo_url?: string;
+  image_url?: string;
+  location?: string;
+}
+
 export interface Product {
   id: number;
   name: string;
@@ -28,6 +36,14 @@ export interface Product {
   condition_detail: string;
   stock: number;
   image_url: string;
+  images?: string[];
+  flaws?: ProductFlaw[];
+  inspection_date?: string;
+  inspector_name?: string;
+  inspection_checklist?: string[];
+  in_cart_count?: number;
+  views_today?: number;
+  similar_products?: Product[];
   rating_avg?: number;
   review_count?: number;
   created_at?: string;
@@ -73,10 +89,15 @@ export interface CartItem {
   category: string;
   price: number;
   original_price: number;
+  original_item_price?: number;
   condition_pct: number;
   condition_detail: string;
   stock: number;
   image_url: string;
+  is_negotiated?: boolean | number;
+  negotiated_price?: number;
+  offer_id?: number;
+  is_sold_out?: boolean;
 }
 
 export type OrderStatus = 'pending' | 'confirmed' | 'shipping' | 'delivered' | 'completed' | 'cancelled';
@@ -88,10 +109,14 @@ export interface OrderItem {
   order_id: number;
   product_id: number;
   product_name: string;
+  category?: string;
   price: number;
   quantity: number;
   condition_pct: number;
   image_url: string;
+  is_negotiated?: boolean | number;
+  negotiated_price?: number;
+  offer_id?: number;
 }
 
 export interface ShipmentEvent {
@@ -112,6 +137,29 @@ export interface OrderStatusLog {
   actor_name: string;
   note?: string;
   created_at: string;
+}
+
+export type ReturnStatus = 'pending' | 'approved' | 'rejected' | 'shipping_back' | 'received' | 'refunded';
+
+export interface ReturnRequest {
+  id: number;
+  order_id: number;
+  order_code?: string;
+  buyer_id: number;
+  buyer_name?: string;
+  buyer_phone?: string;
+  product_id: number;
+  product_name?: string;
+  product_image?: string;
+  reason: string;
+  description: string;
+  images?: string[] | string;
+  status: ReturnStatus;
+  seller_note?: string;
+  refund_amount: number;
+  refund_method: string;
+  created_at: string;
+  updated_at?: string;
 }
 
 export interface Order {
@@ -145,6 +193,62 @@ export interface Order {
   items?: OrderItem[];
   shipment_events?: ShipmentEvent[];
   status_logs?: OrderStatusLog[];
+  return_request?: ReturnRequest | null;
+}
+
+export type OfferStatus = 'pending' | 'accepted' | 'rejected' | 'countered' | 'expired';
+
+export interface Offer {
+  id: number;
+  buyer_id: number;
+  buyer_name?: string;
+  buyer_phone?: string;
+  product_id: number;
+  product_name?: string;
+  product_image?: string;
+  product_stock?: number;
+  product_category?: string;
+  original_price: number;
+  offered_price: number;
+  counter_price?: number;
+  message?: string;
+  seller_note?: string;
+  status: OfferStatus;
+  expires_at: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface ChatMessage {
+  id: number;
+  conversation_id: number;
+  sender_role: 'buyer' | 'seller';
+  sender_id: number;
+  content: string;
+  is_read: number;
+  created_at: string;
+}
+
+export interface ChatConversation {
+  id: number;
+  buyer_id: number;
+  buyer_name?: string;
+  buyer_phone?: string;
+  product_id?: number;
+  product_name?: string;
+  product_image?: string;
+  product_price?: number;
+  product_condition_pct?: number;
+  order_id?: number;
+  order_code?: string;
+  order_status?: string;
+  order_total?: number;
+  last_message?: string;
+  last_message_at?: string;
+  buyer_unread?: number;
+  seller_unread?: number;
+  created_at: string;
+  messages?: ChatMessage[];
 }
 
 export interface SellerStats {
@@ -165,4 +269,3 @@ export interface AppNotification {
   is_read: number;
   created_at: string;
 }
-

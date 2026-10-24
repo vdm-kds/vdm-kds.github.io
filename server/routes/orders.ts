@@ -49,12 +49,14 @@ router.get('/', requireBuyer, (req: AuthenticatedRequest, res: Response) => {
 
     const orders = queryAll(sql, params);
 
-    // Kèm danh sách sản phẩm cho mỗi đơn hàng
+    // Kèm danh sách sản phẩm và thông tin yêu cầu trả hàng cho mỗi đơn hàng
     const ordersWithItems = orders.map(order => {
       const items = queryAll('SELECT * FROM order_items WHERE order_id = ?', [order.id]);
+      const return_request = queryOne('SELECT * FROM return_requests WHERE order_id = ?', [order.id]);
       return {
         ...order,
-        items
+        items,
+        return_request: return_request || null
       };
     });
 
@@ -79,13 +81,15 @@ router.get('/:id', requireBuyer, (req: AuthenticatedRequest, res: Response) => {
     const items = queryAll('SELECT * FROM order_items WHERE order_id = ?', [order.id]);
     const shipment_events = queryAll('SELECT * FROM shipment_events WHERE order_id = ? ORDER BY id ASC', [order.id]);
     const status_logs = queryAll('SELECT * FROM order_status_logs WHERE order_id = ? ORDER BY id ASC', [order.id]);
+    const return_request = queryOne('SELECT * FROM return_requests WHERE order_id = ?', [order.id]);
 
     return res.json({
       order: {
         ...order,
         items,
         shipment_events,
-        status_logs
+        status_logs,
+        return_request: return_request || null
       }
     });
   } catch (error: any) {
@@ -121,6 +125,9 @@ router.post('/', requireBuyer, (req: AuthenticatedRequest, res: Response) => {
       condition_pct: number;
       image_url: string;
       stock: number;
+      is_negotiated: number;
+      negotiated_price: number | null;
+      offer_id: number | null;
     }> = [];
 
     if (direct_items && Array.isArray(direct_items) && direct_items.length > 0) {
@@ -129,20 +136,42 @@ router.post('/', requireBuyer, (req: AuthenticatedRequest, res: Response) => {
         if (!prod) {
           return res.status(400).json({ message: `Sản phẩm #${item.product_id} không tồn tại` });
         }
+
+        let isNegotiated = 0;
+        let finalPrice = prod.price;
+        let offerId = null;
+
+        // Check if buyer has a valid accepted offer
+        if (item.offer_id) {
+          const offer = queryOne(`
+            SELECT * FROM offers
+            WHERE id = ? AND buyer_id = ? AND product_id = ? AND status = 'accepted' AND datetime('now') <= datetime(expires_at)
+          `, [item.offer_id, buyerId, prod.id]);
+          if (offer) {
+            isNegotiated = 1;
+            finalPrice = offer.offered_price;
+            offerId = offer.id;
+          }
+        }
+
         itemsToBuy.push({
           product_id: prod.id,
           quantity: Number(item.quantity) || 1,
           name: prod.name,
-          price: prod.price,
+          price: finalPrice,
           condition_pct: prod.condition_pct,
           image_url: prod.image_url,
-          stock: prod.stock
+          stock: prod.stock,
+          is_negotiated: isNegotiated,
+          negotiated_price: isNegotiated ? finalPrice : null,
+          offer_id: offerId
         });
       }
     } else {
       // Lấy từ giỏ hàng
       const cartItems = queryAll(`
-        SELECT c.id as cart_id, c.quantity, p.id as product_id, p.name, p.price, p.condition_pct, p.image_url, p.stock
+        SELECT c.id as cart_id, c.quantity, c.is_negotiated, c.negotiated_price, c.offer_id, 
+               p.id as product_id, p.name, p.price, p.condition_pct, p.image_url, p.stock
         FROM cart_items c
         JOIN products p ON c.product_id = p.id
         WHERE c.user_id = ?
@@ -152,15 +181,36 @@ router.post('/', requireBuyer, (req: AuthenticatedRequest, res: Response) => {
         return res.status(400).json({ message: 'Giỏ hàng của bạn đang trống' });
       }
 
-      itemsToBuy = cartItems.map(c => ({
-        product_id: c.product_id,
-        quantity: c.quantity,
-        name: c.name,
-        price: c.price,
-        condition_pct: c.condition_pct,
-        image_url: c.image_url,
-        stock: c.stock
-      }));
+      itemsToBuy = cartItems.map(c => {
+        let isNegotiated = 0;
+        let finalPrice = c.price;
+        let offerId = null;
+
+        if (c.is_negotiated && c.offer_id) {
+          const offer = queryOne(`
+            SELECT * FROM offers
+            WHERE id = ? AND buyer_id = ? AND product_id = ? AND status = 'accepted' AND datetime('now') <= datetime(expires_at)
+          `, [c.offer_id, buyerId, c.product_id]);
+          if (offer) {
+            isNegotiated = 1;
+            finalPrice = offer.offered_price;
+            offerId = offer.id;
+          }
+        }
+
+        return {
+          product_id: c.product_id,
+          quantity: c.quantity,
+          name: c.name,
+          price: finalPrice,
+          condition_pct: c.condition_pct,
+          image_url: c.image_url,
+          stock: c.stock,
+          is_negotiated: isNegotiated,
+          negotiated_price: isNegotiated ? finalPrice : null,
+          offer_id: offerId
+        };
+      });
     }
 
     // 1. Kiểm tra tồn kho tất cả sản phẩm
@@ -252,9 +302,23 @@ router.post('/', requireBuyer, (req: AuthenticatedRequest, res: Response) => {
     // 4. Tạo chi tiết đơn hàng & trừ tồn kho
     for (const item of itemsToBuy) {
       run(`
-        INSERT INTO order_items (order_id, product_id, product_name, price, quantity, condition_pct, image_url)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `, [orderId, item.product_id, item.name, item.price, item.quantity, item.condition_pct, item.image_url]);
+        INSERT INTO order_items (
+          order_id, product_id, product_name, price, quantity, condition_pct, image_url,
+          is_negotiated, negotiated_price, offer_id
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        orderId, 
+        item.product_id, 
+        item.name, 
+        item.price, 
+        item.quantity, 
+        item.condition_pct, 
+        item.image_url,
+        item.is_negotiated,
+        item.negotiated_price,
+        item.offer_id
+      ]);
 
       // Trừ tồn kho
       run('UPDATE products SET stock = stock - ? WHERE id = ?', [item.quantity, item.product_id]);

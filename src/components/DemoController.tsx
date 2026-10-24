@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
-import { Settings2, UserCheck, Shield, RotateCcw, X, Check, AlertTriangle, Eye, UserX } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Settings2, UserCheck, Shield, RotateCcw, X, Check, AlertTriangle, Eye, UserX, FastForward, Truck } from 'lucide-react';
 import { api, setStoredToken } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { Order } from '../types';
+import { formatVND } from '../utils/format';
 
 interface DemoControllerProps {
   onRoleSwitched?: (role: 'buyer' | 'seller' | 'guest') => void;
@@ -16,6 +18,66 @@ export function DemoController({ onRoleSwitched, onDataReset }: DemoControllerPr
   const [switching, setSwitching] = useState(false);
   const { user, logout, refreshUser } = useAuth();
   const { showToast } = useToast();
+
+  // Fast-forward shipment states
+  const [eligibleOrders, setEligibleOrders] = useState<Order[]>([]);
+  const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
+  const [fastForwarding, setFastForwarding] = useState(false);
+  const [currentStep, setCurrentStep] = useState(0);
+
+  const fetchEligibleOrders = async () => {
+    try {
+      const res = await api.getEligibleShipmentOrders();
+      setEligibleOrders(res.orders || []);
+      if (res.orders && res.orders.length > 0 && !selectedOrderId) {
+        setSelectedOrderId(res.orders[0].id);
+      }
+    } catch {
+      // quiet fail
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchEligibleOrders();
+    }
+  }, [isOpen]);
+
+  const handleFastForward = async () => {
+    if (!selectedOrderId || fastForwarding) return;
+
+    setFastForwarding(true);
+    setCurrentStep(1);
+
+    const stepNames = [
+      'Bàn giao cho ĐVVC',
+      'Đến kho phân loại',
+      'Đang giao hàng',
+      'Giao hàng thành công'
+    ];
+
+    try {
+      for (let s = 1; s <= 4; s++) {
+        setCurrentStep(s);
+        const res = await api.advanceShipmentStep(selectedOrderId, s);
+        showToast(`Bước ${s}/4: ${stepNames[s-1]}`, 'info');
+        
+        if (s < 4) {
+          // 3 second delay
+          await new Promise(r => setTimeout(r, 3000));
+        }
+      }
+
+      showToast('Đã tua nhanh vận chuyển 4 bước thành công! Đơn hàng đã ở trạng thái ĐÃ GIAO.', 'success');
+      await fetchEligibleOrders();
+      if (onDataReset) onDataReset();
+    } catch (err: any) {
+      showToast(err.message || 'Lỗi khi tua nhanh vận chuyển', 'error');
+    } finally {
+      setFastForwarding(false);
+      setCurrentStep(0);
+    }
+  };
 
   const handleSwitchBuyer = async () => {
     setSwitching(true);
@@ -237,6 +299,52 @@ export function DemoController({ onRoleSwitched, onDataReset }: DemoControllerPr
                   <Check className="w-4 h-4 text-[#08482D]" />
                 )}
               </button>
+            </div>
+
+            {/* FAST-FORWARD SHIPMENT (TUA NHANH VẬN CHUYỂN) */}
+            <div className="pt-2 border-t border-[#E2E8D8] space-y-2">
+              <label className="text-[11px] font-bold text-[#08482D] uppercase tracking-wider flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <FastForward className="w-3.5 h-3.5" />
+                  Tua nhanh vận chuyển (Demo)
+                </span>
+                {fastForwarding && (
+                  <span className="text-[10px] text-amber-700 font-mono animate-pulse font-bold">
+                    Đang tua: {currentStep}/4
+                  </span>
+                )}
+              </label>
+
+              {eligibleOrders.length === 0 ? (
+                <p className="text-[11px] text-[#5E5E61] italic">
+                  Không có đơn hàng nào ở trạng thái Chờ duyệt / Chờ lấy / Đang giao để tua.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  <select
+                    value={selectedOrderId || ''}
+                    onChange={(e) => setSelectedOrderId(Number(e.target.value))}
+                    disabled={fastForwarding}
+                    className="w-full px-3 py-2 text-xs bg-[#F5F8EF] border border-[#DAE7C7] rounded-xl focus:outline-none"
+                  >
+                    {eligibleOrders.map(o => (
+                      <option key={o.id} value={o.id}>
+                        #{o.code} ({o.status === 'pending' ? 'Chờ duyệt' : o.status === 'confirmed' ? 'Chờ lấy' : 'Đang giao'} - {formatVND(o.total)})
+                      </option>
+                    ))}
+                  </select>
+
+                  <button
+                    type="button"
+                    onClick={handleFastForward}
+                    disabled={fastForwarding || !selectedOrderId}
+                    className="w-full py-2.5 px-3 rounded-2xl bg-[#08482D] hover:bg-[#073d26] text-white text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-xs disabled:opacity-50"
+                  >
+                    <Truck className={`w-4 h-4 ${fastForwarding ? 'animate-bounce' : ''}`} />
+                    {fastForwarding ? `Đang tua: ${currentStep}/4...` : 'Tua nhanh 4 bước vận chuyển (3s)'}
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Reset Database Section */}

@@ -96,10 +96,10 @@ export const api = {
   getCart: () =>
     request<{ items: CartItem[]; subtotal: number; shipping_fee: number; total: number; item_count: number }>('/cart'),
 
-  addToCart: (productId: number, quantity: number = 1) =>
+  addToCart: (productId: number, quantity: number = 1, offerId?: number) =>
     request<{ message: string }>('/cart', {
       method: 'POST',
-      body: JSON.stringify({ product_id: productId, quantity })
+      body: JSON.stringify({ product_id: productId, quantity, offer_id: offerId })
     }),
 
   updateCartQty: (cartId: number, quantity: number) =>
@@ -135,7 +135,7 @@ export const api = {
     payment_method: 'card' | 'napas' | 'cod';
     card_last4?: string;
     card_type?: string;
-    direct_items?: Array<{ product_id: number; quantity: number }>;
+    direct_items?: Array<{ product_id: number; quantity: number; offer_id?: number }>;
     coupon_code?: string;
   }) =>
     request<{ message: string; order: Order }>('/orders', {
@@ -327,5 +327,100 @@ export const api = {
   markAllNotificationsRead: () =>
     request<{ message: string }>('/notifications/read-all', {
       method: 'PUT'
+    }),
+
+  // Product View Log
+  recordProductView: (productId: number) =>
+    request<{ success: boolean }>(`/products/${productId}/view`, {
+      method: 'POST'
+    }).catch(() => ({ success: false })),
+
+  // Offers / Bargaining
+  getOffers: () =>
+    request<{ offers: any[] }>('/offers/my'),
+
+  getSellerOffers: () =>
+    request<{ offers: any[] }>('/offers/seller'),
+
+  createOffer: (payload: { product_id: number; offered_price: number; message?: string }) =>
+    request<{ message: string; offer: any }>('/offers', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }),
+
+  acceptOffer: (id: number) =>
+    request<{ message: string; offer: any }>(`/offers/${id}/accept`, {
+      method: 'POST'
+    }),
+
+  counterOffer: (id: number, counter_price: number, seller_note?: string) =>
+    request<{ message: string; offer: any }>(`/offers/${id}/counter`, {
+      method: 'POST',
+      body: JSON.stringify({ counter_price, seller_note })
+    }),
+
+  rejectOffer: (id: number, seller_note?: string) =>
+    request<{ message: string; offer: any }>(`/offers/${id}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ seller_note })
+    }),
+
+  buyerAcceptCounter: (id: number) =>
+    request<{ message: string; offer: any }>(`/offers/${id}/buyer-accept`, {
+      method: 'POST'
+    }),
+
+  buyerRejectCounter: (id: number) =>
+    request<{ message: string; offer: any }>(`/offers/${id}/buyer-reject`, {
+      method: 'POST'
+    }),
+
+  // Chat
+  getChatConversations: () =>
+    request<{ conversations: any[]; unread_total: number }>('/chat/conversations'),
+
+  startChat: (payload: { product_id?: number; order_id?: number; initial_message?: string }) =>
+    request<{ conversation: any; is_new: boolean }>('/chat/start', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }),
+
+  getChatDetail: (id: number) =>
+    request<{ conversation: any }>(`/chat/${id}`),
+
+  sendChatMessage: (id: number, content: string) =>
+    request<{ message: any }>(`/chat/${id}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ content })
+    }),
+
+  // Returns / Refunds
+  getMyReturns: () =>
+    request<{ return_requests: any[] }>('/returns/my'),
+
+  getSellerReturns: () =>
+    request<{ return_requests: any[] }>('/returns/seller'),
+
+  createReturn: (payload: { order_id: number; product_id?: number; reason: string; description: string; images?: string[] }) =>
+    request<{ message: string; return_request: any }>('/returns', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }),
+
+  updateReturnStatus: (id: number, payload: { status: string; seller_note?: string }) =>
+    request<{ message: string; return_request: any }>(`/returns/${id}/status`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }),
+
+  // Demo Shipment Fast-forward
+  getEligibleShipmentOrders: () =>
+    request<{ orders: Order[] }>('/demo/eligible-orders'),
+
+  advanceShipmentStep: (order_id: number, step?: number) =>
+    request<{ message: string; order: Order; completed_step: number; is_finished: boolean }>('/demo/advance-shipment-step', {
+      method: 'POST',
+      body: JSON.stringify({ order_id, step })
     })
 };
+
