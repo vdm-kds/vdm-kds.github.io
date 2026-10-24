@@ -333,15 +333,36 @@ function initSchema(db: Database) {
     }
   };
 
-  // Safe migrations
   safeAddColumn('orders', 'coupon_code', 'TEXT');
   safeAddColumn('orders', 'discount_amount', 'INTEGER DEFAULT 0');
+  safeAddColumn('orders', 'seller_id', 'INTEGER DEFAULT 1');
 
   safeAddColumn('products', 'images', 'TEXT');
   safeAddColumn('products', 'flaws', 'TEXT');
   safeAddColumn('products', 'inspection_date', 'TEXT');
   safeAddColumn('products', 'inspector_name', 'TEXT');
   safeAddColumn('products', 'inspection_checklist', 'TEXT');
+  safeAddColumn('products', 'seller_id', 'INTEGER DEFAULT 1');
+
+  safeAddColumn('coupons', 'seller_id', 'INTEGER DEFAULT 1');
+
+  safeAddColumn('users', 'is_owner', 'INTEGER DEFAULT 0');
+  safeAddColumn('users', 'failed_login_attempts', 'INTEGER DEFAULT 0');
+  safeAddColumn('users', 'lockout_until', 'DATETIME');
+
+  safeAddColumn('reviews', 'images', 'TEXT');
+  safeAddColumn('reviews', 'video_url', 'TEXT');
+  safeAddColumn('reviews', 'video_duration', 'REAL');
+  safeAddColumn('reviews', 'video_poster', 'TEXT');
+  safeAddColumn('reviews', 'is_anonymous', 'INTEGER DEFAULT 0');
+  safeAddColumn('reviews', 'helpful_count', 'INTEGER DEFAULT 0');
+  safeAddColumn('reviews', 'helpful_user_ids', 'TEXT DEFAULT "[]"');
+  safeAddColumn('reviews', 'seller_reply', 'TEXT');
+  safeAddColumn('reviews', 'seller_reply_at', 'DATETIME');
+  safeAddColumn('reviews', 'is_hidden', 'INTEGER DEFAULT 0');
+  safeAddColumn('reviews', 'report_reason', 'TEXT');
+  safeAddColumn('reviews', 'updated_at', 'DATETIME');
+  safeAddColumn('reviews', 'edit_count', 'INTEGER DEFAULT 0');
 
   safeAddColumn('cart_items', 'is_negotiated', 'INTEGER DEFAULT 0');
   safeAddColumn('cart_items', 'negotiated_price', 'INTEGER');
@@ -350,6 +371,16 @@ function initSchema(db: Database) {
   safeAddColumn('order_items', 'is_negotiated', 'INTEGER DEFAULT 0');
   safeAddColumn('order_items', 'negotiated_price', 'INTEGER');
   safeAddColumn('order_items', 'offer_id', 'INTEGER');
+
+  // Auto-migrate demo accounts to exact SHA-256 hashes and set is_owner = 1
+  try {
+    const ADMIN_HASH = '6191a72694365846e663b40df7cb85bb190ec7097e0ce49d8bb2aacbd3c37778';
+    const BUYER_HASH = '9122c7069e60a1a744d681c1e5f60786a216e9105a2e2060d5a8ebe3d974fee7';
+    db.run("UPDATE users SET password_hash = ?, is_owner = 1, failed_login_attempts = 0, lockout_until = NULL WHERE username = 'admin'", [ADMIN_HASH]);
+    db.run("UPDATE users SET password_hash = ?, is_owner = 1, failed_login_attempts = 0, lockout_until = NULL WHERE username = '0987654321' OR phone = '0987654321'", [BUYER_HASH]);
+  } catch (err) {
+    console.warn('Auto demo accounts hash migration warning:', err);
+  }
 }
 
 export function createNotification(userId: number, orderId: number | null, type: string, title: string, message: string): void {

@@ -187,33 +187,6 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Zone 3: Primary Actions, Cart, Notification & User Menu */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-          {/* Quick Demo Switcher */}
-          <div className="hidden xl:flex items-center gap-1 bg-[#DAE7C7]/50 p-1 rounded-xl text-xs font-medium text-[#5E5E61] border border-[#E2E8D8]">
-            <span className="px-2 text-[11px] font-mono text-[#5E5E61]">Demo:</span>
-            <button
-              onClick={() => quickLogin('buyer')}
-              className={`px-2.5 py-1 rounded-lg transition-colors whitespace-nowrap ${
-                user?.role === 'buyer'
-                  ? 'bg-white text-[#101410] shadow-xs font-semibold'
-                  : 'hover:text-[#101410]'
-              }`}
-              title="Khách mua: 0987654321 / nguoidung"
-            >
-              Khách mua
-            </button>
-            <button
-              onClick={() => quickLogin('seller')}
-              className={`px-2.5 py-1 rounded-lg transition-colors whitespace-nowrap ${
-                user?.role === 'seller'
-                  ? 'bg-white text-[#101410] shadow-xs font-semibold'
-                  : 'hover:text-[#101410]'
-              }`}
-              title="Người bán: admin / admin"
-            >
-              Người bán
-            </button>
-          </div>
-
           {/* Navigation Tab Shortcuts */}
           <nav className="hidden sm:flex items-center gap-1 text-xs font-medium text-[#5E5E61]">
             <button
@@ -306,7 +279,7 @@ export const Header: React.FC<HeaderProps> = ({
                     {user.full_name}
                   </span>
                   <span className="text-[10px] text-[#5E5E61] font-mono">
-                    {user.role === 'seller' ? 'Người bán (admin)' : 'Khách mua'}
+                    {user.role === 'seller' ? 'Người bán' : 'Khách mua'}
                   </span>
                 </button>
 
@@ -407,24 +380,20 @@ export const Header: React.FC<HeaderProps> = ({
                 Kênh người bán
               </button>
             )}
-          </div>
-
-          <div className="pt-3 border-t border-[#E2E8D8] flex items-center justify-between text-xs">
-            <span className="text-[#5E5E61]">Chuyển nhanh tài khoản:</span>
-            <div className="flex gap-2">
-              <button
-                onClick={() => { quickLogin('buyer'); setMobileMenuOpen(false); }}
-                className="px-2.5 py-1 rounded bg-[#DAE7C7] text-[#08482D] font-medium"
-              >
-                Khách
-              </button>
-              <button
-                onClick={() => { quickLogin('seller'); setMobileMenuOpen(false); }}
-                className="px-2.5 py-1 rounded bg-[#DAE7C7] text-[#08482D] font-medium"
-              >
-                Người bán
-              </button>
-            </div>
+            {user && (
+              <div className="pt-2 border-t border-[#E2E8D8]">
+                <button
+                  onClick={() => {
+                    logout();
+                    setMobileMenuOpen(false);
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-red-600 hover:bg-red-50 flex items-center gap-2"
+                >
+                  <LogOut className="w-4 h-4 text-red-600" />
+                  <span>Đăng xuất ({user.full_name})</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

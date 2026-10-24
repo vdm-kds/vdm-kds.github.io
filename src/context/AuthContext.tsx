@@ -102,12 +102,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     showToast('Đã đăng xuất tài khoản', 'info');
   };
 
-  // Helper đăng nhập 1 click để tiện kiểm thử demo theo đúng yêu cầu đề bài
   const quickLogin = async (targetRole: 'buyer' | 'seller') => {
-    if (targetRole === 'seller') {
-      await login('admin', 'admin', 'seller');
-    } else {
-      await login('0987654321', 'nguoidung', 'buyer');
+    try {
+      if (targetRole === 'seller') {
+        const res = await api.switchSeller();
+        setStoredToken(res.token);
+      } else {
+        const res = await api.switchBuyer();
+        setStoredToken(res.token);
+      }
+      await refreshUser();
+    } catch (err: any) {
+      showToast(err.message || 'Lỗi chuyển đổi tài khoản', 'error');
     }
   };
 

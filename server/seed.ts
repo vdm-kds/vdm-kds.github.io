@@ -219,21 +219,21 @@ export async function seedDatabase(force: boolean = false) {
       }
     }
 
-    // Hash passwords
-    const adminHash = bcrypt.hashSync('admin', 10);
-    const buyerHash = bcrypt.hashSync('nguoidung', 10);
+    // Demo Accounts exact SHA-256 hashes
+    const ADMIN_HASH = '6191a72694365846e663b40df7cb85bb190ec7097e0ce49d8bb2aacbd3c37778';
+    const BUYER_HASH = '9122c7069e60a1a744d681c1e5f60786a216e9105a2e2060d5a8ebe3d974fee7';
 
-    // 1. Seed Seller
+    // 1. Seed Seller (Owner)
     const sellerRes = run(`
-      INSERT INTO users (role, username, phone, password_hash, full_name)
-      VALUES ('seller', 'admin', '0901234567', ?, 'Chủ Tiệm Còn Thương')
-    `, [adminHash]);
+      INSERT INTO users (role, username, phone, password_hash, full_name, is_owner)
+      VALUES ('seller', 'admin', '0901234567', ?, 'Chủ Tiệm Còn Thương', 1)
+    `, [ADMIN_HASH]);
 
-    // 2. Seed Buyer
+    // 2. Seed Buyer (Owner)
     const buyerRes = run(`
-      INSERT INTO users (role, username, phone, password_hash, full_name)
-      VALUES ('buyer', '0987654321', '0987654321', ?, 'Nguyễn Văn A')
-    `, [buyerHash]);
+      INSERT INTO users (role, username, phone, password_hash, full_name, is_owner)
+      VALUES ('buyer', '0987654321', '0987654321', ?, 'Nguyễn Văn A', 1)
+    `, [BUYER_HASH]);
 
     const buyerId = buyerRes.lastInsertRowid;
 

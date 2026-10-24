@@ -61,6 +61,13 @@ function MainShopApp() {
   }>({ open: false, role: 'buyer' });
   const [policyType, setPolicyType] = useState<'returns' | 'shipping' | 'guide' | 'about' | 'contact' | null>(null);
 
+  // Presentation Mode state
+  const [presentationMode, setPresentationMode] = useState<boolean>(false);
+
+  useEffect(() => {
+    api.getPresentationMode().then(res => setPresentationMode(!!res.presentation_mode)).catch(() => {});
+  }, []);
+
   // Pending action for guest after login
   const [pendingCartAction, setPendingCartAction] = useState<{ product: Product; quantity: number } | null>(null);
 
@@ -218,6 +225,11 @@ function MainShopApp() {
       return;
     }
 
+    if (presentationMode && !user?.is_owner) {
+      showToast('Cửa hàng đang tạm dừng nhận đơn trong buổi thuyết trình. Bạn vẫn có thể xem sản phẩm nhé!', 'info');
+      return;
+    }
+
     if (!user) {
       // Guest: save pending action, open buyer modal with prompt
       setPendingCartAction({ product, quantity });
@@ -250,6 +262,11 @@ function MainShopApp() {
   const handleBuyNow = (product: Product, quantity: number = 1) => {
     if (currentView === 'preview') {
       showToast('Bạn đang ở chế độ xem trước — chức năng mua hàng bị vô hiệu hóa', 'info');
+      return;
+    }
+
+    if (presentationMode && !user?.is_owner) {
+      showToast('Cửa hàng đang tạm dừng nhận đơn trong buổi thuyết trình. Bạn vẫn có thể xem sản phẩm nhé!', 'info');
       return;
     }
 
@@ -426,6 +443,15 @@ function MainShopApp() {
         </div>
       )}
 
+      {/* Top Banner when Presentation Mode is Active */}
+      {presentationMode && (
+        <div className="sticky top-0 z-50 bg-[#08482D] text-white px-4 sm:px-6 py-2.5 flex items-center justify-between text-xs sm:text-sm font-semibold shadow-md">
+          <div className="flex items-center gap-2 max-w-7xl mx-auto">
+            <span>📢 Cửa hàng đang tạm dừng nhận đơn trong buổi thuyết trình. Bạn vẫn có thể xem sản phẩm nhé!</span>
+          </div>
+        </div>
+      )}
+
       {/* HEADER:
           - Shown on Buyer home view, orders, seller, account, preview, and 404
           - On Guest home view, HeroLanding has its own top navbar, so we don't duplicate Header there */}
@@ -452,7 +478,20 @@ function MainShopApp() {
       {/* Main View Router */}
       <main className="flex-1">
         {currentView === 'seller' ? (
-          <SellerDashboard onViewPreview={() => setCurrentView('preview')} />
+          <SellerDashboard
+            onViewPreview={() => setCurrentView('preview')}
+            currentUser={user}
+            onLogout={() => {
+              logout();
+              setCurrentView('home');
+              window.history.pushState({}, '', '/');
+            }}
+            onSwitchToBuyer={() => {
+              logout();
+              setCurrentView('home');
+              setAuthModal({ open: true, role: 'buyer', initialIsRegister: false });
+            }}
+          />
         ) : currentView === 'orders' ? (
           <OrdersView
             onBackToShop={() => setCurrentView('home')}
@@ -886,14 +925,12 @@ function MainShopApp() {
           <div>
             © 2026 Đồ Cũ Còn Thương. Nền tảng thương mại điện tử đồ cũ bền vững phong cách studio xanh bạc hà.
           </div>
-          <div className="font-mono text-[11px]">
-            Demo 1-1: admin / admin · 0987654321 / nguoidung
-          </div>
         </div>
       </footer>
 
       {/* Floating Demo Controller Button at Bottom-Left */}
       <DemoController
+        onPresentationModeChange={setPresentationMode}
         onRoleSwitched={(role) => {
           if (role === 'buyer') setCurrentView('home');
           if (role === 'seller') setCurrentView('seller');

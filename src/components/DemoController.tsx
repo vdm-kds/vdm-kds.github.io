@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings2, UserCheck, Shield, RotateCcw, X, Check, AlertTriangle, Eye, UserX, FastForward, Truck } from 'lucide-react';
+import { Settings2, UserCheck, Shield, RotateCcw, X, Check, AlertTriangle, Eye, FastForward, Truck, Presentation } from 'lucide-react';
 import { api, setStoredToken } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -9,21 +9,62 @@ import { formatVND } from '../utils/format';
 interface DemoControllerProps {
   onRoleSwitched?: (role: 'buyer' | 'seller' | 'guest') => void;
   onDataReset?: () => void;
+  onPresentationModeChange?: (enabled: boolean) => void;
 }
 
-export function DemoController({ onRoleSwitched, onDataReset }: DemoControllerProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [showConfirmReset, setShowConfirmReset] = useState(false);
-  const [resetting, setResetting] = useState(false);
-  const [switching, setSwitching] = useState(false);
+export function DemoController({ onRoleSwitched, onDataReset, onPresentationModeChange }: DemoControllerProps) {
   const { user, logout, refreshUser } = useAuth();
   const { showToast } = useToast();
+
+  const [isOpen, setIsOpen] = useState(false);
+  const [resetConfirmStep, setResetConfirmStep] = useState<0 | 1 | 2>(0);
+  const [resetting, setResetting] = useState(false);
+  const [switching, setSwitching] = useState(false);
+
+  // Presentation Mode state
+  const [presentationMode, setPresentationMode] = useState<boolean>(false);
+  const [loadingPresentationMode, setLoadingPresentationMode] = useState<boolean>(false);
 
   // Fast-forward shipment states
   const [eligibleOrders, setEligibleOrders] = useState<Order[]>([]);
   const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
   const [fastForwarding, setFastForwarding] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
+
+  // Only owners (is_owner === true) can view or use DemoController
+  if (!user || !user.is_owner) {
+    return null;
+  }
+
+  const fetchPresentationMode = async () => {
+    try {
+      const res = await api.getPresentationMode();
+      setPresentationMode(!!res.presentation_mode);
+      if (onPresentationModeChange) onPresentationModeChange(!!res.presentation_mode);
+    } catch {
+      // quiet fail
+    }
+  };
+
+  const handleTogglePresentationMode = async () => {
+    setLoadingPresentationMode(true);
+    try {
+      const target = !presentationMode;
+      const res = await api.setPresentationMode(target);
+      setPresentationMode(res.presentation_mode);
+      if (onPresentationModeChange) onPresentationModeChange(res.presentation_mode);
+      showToast(
+        res.presentation_mode 
+          ? 'Đã BẬT Chế độ thuyết trình: Chỉ tài khoản chủ được đặt hàng/chat/trả giá' 
+          : 'Đã TẮT Chế độ thuyết trình', 
+        'info'
+      );
+    } catch (err: any) {
+      showToast(err.message || 'Lỗi cập nhật chế độ thuyết trình', 'error');
+    } finally {
+      setLoadingPresentationMode(false);
+    }
+  };
 
   const fetchEligibleOrders = async () => {
     try {
@@ -38,8 +79,13 @@ export function DemoController({ onRoleSwitched, onDataReset }: DemoControllerPr
   };
 
   useEffect(() => {
+    fetchPresentationMode();
+  }, []);
+
+  useEffect(() => {
     if (isOpen) {
       fetchEligibleOrders();
+      fetchPresentationMode();
     }
   }, [isOpen]);
 
@@ -59,16 +105,15 @@ export function DemoController({ onRoleSwitched, onDataReset }: DemoControllerPr
     try {
       for (let s = 1; s <= 4; s++) {
         setCurrentStep(s);
-        const res = await api.advanceShipmentStep(selectedOrderId, s);
-        showToast(`Bước ${s}/4: ${stepNames[s-1]}`, 'info');
+        await api.advanceShipmentStep(selectedOrderId, s);
+        showToast(`Bước ${s}/4: ${stepNames[s - 1]}`, 'info');
         
         if (s < 4) {
-          // 3 second delay
           await new Promise(r => setTimeout(r, 3000));
         }
       }
 
-      showToast('Đã tua nhanh vận chuyển 4 bước thành công! Đơn hàng đã ở trạng thái ĐÃ GIAO.', 'success');
+      showToast('Đã tua nhanh vận chuyển 4 bước thành công! Đơn hàng đã chuyển sang ĐÃ GIAO.', 'success');
       await fetchEligibleOrders();
       if (onDataReset) onDataReset();
     } catch (err: any) {
@@ -85,7 +130,7 @@ export function DemoController({ onRoleSwitched, onDataReset }: DemoControllerPr
       const res = await api.switchBuyer();
       setStoredToken(res.token);
       await refreshUser();
-      showToast('Đã chuyển sang vai Khách Mua (Nguyễn Văn A)', 'success');
+      showToast('Đã chuyển sang vai Khách Mua Chủ Tiệm', 'success');
       setIsOpen(false);
       if (onRoleSwitched) onRoleSwitched('buyer');
     } catch (err: any) {
@@ -101,7 +146,7 @@ export function DemoController({ onRoleSwitched, onDataReset }: DemoControllerPr
       const res = await api.switchSeller();
       setStoredToken(res.token);
       await refreshUser();
-      showToast('Đã chuyển sang vai Chủ Tiệm (admin)', 'success');
+      showToast('Đã chuyển sang vai Chủ Tiệm Quản Trị', 'success');
       setIsOpen(false);
       if (onRoleSwitched) onRoleSwitched('seller');
     } catch (err: any) {
@@ -123,7 +168,7 @@ export function DemoController({ onRoleSwitched, onDataReset }: DemoControllerPr
     try {
       const res = await api.resetDemo();
       showToast(res.message, 'success');
-      setShowConfirmReset(false);
+      setResetConfirmStep(0);
       setIsOpen(false);
       if (onDataReset) {
         onDataReset();
@@ -144,7 +189,7 @@ export function DemoController({ onRoleSwitched, onDataReset }: DemoControllerPr
         <button
           onClick={() => setIsOpen(true)}
           className="group relative flex items-center gap-2.5 px-4 py-2.5 bg-[#08482D] text-white rounded-full shadow-2xl border-2 border-[#DAE7C7] hover:bg-[#063A24] transition-all duration-300 hover:scale-105 active:scale-95"
-          title="Bảng điều khiển Demo 1-1"
+          title="Bảng điều khiển dành cho chủ tiệm"
         >
           <div className="relative">
             <Settings2 className="w-5 h-5 text-[#DAE7C7] group-hover:text-white transition-colors" />
@@ -153,15 +198,17 @@ export function DemoController({ onRoleSwitched, onDataReset }: DemoControllerPr
           <span className="text-xs font-bold tracking-wide">
             Điều Khiển Demo
           </span>
-          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-white/15 uppercase">
-            1-1
-          </span>
+          {presentationMode && (
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-amber-500 text-white font-bold uppercase">
+              Thuyết trình
+            </span>
+          )}
         </button>
       )}
 
       {/* Floating Popup Card */}
       {isOpen && (
-        <div className="w-80 sm:w-96 bg-white rounded-3xl border border-[#E2E8D8] shadow-2xl overflow-hidden animate-fade-in text-[#101410]">
+        <div className="w-80 sm:w-96 bg-white rounded-3xl border border-[#DAE7C7] shadow-2xl overflow-hidden animate-fade-in text-[#101410]">
           {/* Card Header */}
           <div className="p-4 bg-[#F5F8EF] border-b border-[#E2E8D8] flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -173,14 +220,14 @@ export function DemoController({ onRoleSwitched, onDataReset }: DemoControllerPr
                   Bảng Điều Khiển Demo
                 </h4>
                 <p className="text-[10px] text-[#5E5E61]">
-                  Chuyển nhanh vai trò & reset cơ sở dữ liệu
+                  Dành riêng cho tài khoản chủ tiệm
                 </p>
               </div>
             </div>
             <button
               onClick={() => {
                 setIsOpen(false);
-                setShowConfirmReset(false);
+                setResetConfirmStep(0);
               }}
               className="p-1.5 rounded-full hover:bg-[#DAE7C7]/40 text-[#5E5E61] transition-colors"
             >
@@ -188,35 +235,60 @@ export function DemoController({ onRoleSwitched, onDataReset }: DemoControllerPr
             </button>
           </div>
 
-          <div className="p-4 space-y-4 text-xs">
+          <div className="p-4 space-y-4 text-xs max-h-[80vh] overflow-y-auto">
             {/* Current Active Account Status */}
-            <div className="p-3 bg-[#F5F8EF] rounded-2xl border border-[#E2E8D8] flex items-center justify-between">
+            <div className="p-3 bg-[#F5F8EF] rounded-2xl border border-[#DAE7C7] flex items-center justify-between">
               <div>
                 <span className="text-[10px] font-mono uppercase tracking-wider text-[#5E5E61]">
-                  Đang đăng nhập:
+                  Tài khoản đang đăng nhập:
                 </span>
                 <div className="font-bold text-sm text-[#101410]">
-                  {user ? user.full_name : 'Khách vãng lai (Chưa đăng nhập)'}
+                  {user ? user.full_name : 'Khách vãng lai'}
                 </div>
               </div>
               <span className={`px-2.5 py-1 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider ${
                 user?.role === 'seller' 
                   ? 'bg-[#08482D] text-white' 
-                  : user?.role === 'buyer' 
-                  ? 'bg-[#DAE7C7] text-[#08482D]'
-                  : 'bg-stone-200 text-stone-700'
+                  : 'bg-[#DAE7C7] text-[#08482D]'
               }`}>
-                {user?.role === 'seller' ? 'Chủ Tiệm (Seller)' : user?.role === 'buyer' ? 'Khách Mua (Buyer)' : 'Khách'}
+                {user?.role === 'seller' ? 'Chủ Tiệm (Seller)' : 'Khách Mua (Buyer)'}
               </span>
+            </div>
+
+            {/* PRESENTATION MODE TOGGLE */}
+            <div className="p-3.5 bg-gradient-to-r from-[#F5F8EF] to-white rounded-2xl border border-[#DAE7C7] space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Presentation className="w-4 h-4 text-[#08482D]" />
+                  <span className="font-bold text-xs text-[#101410]">Chế độ thuyết trình</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleTogglePresentationMode}
+                  disabled={loadingPresentationMode}
+                  className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${
+                    presentationMode ? 'bg-[#08482D]' : 'bg-stone-300'
+                  }`}
+                >
+                  <div
+                    className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
+                      presentationMode ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+              <p className="text-[11px] text-[#5E5E61] leading-relaxed">
+                Khi bật, chỉ tài khoản chủ được đặt hàng, chat, trả giá và đánh giá. Người dùng khác chỉ xem được sản phẩm.
+              </p>
             </div>
 
             {/* Role Switcher Actions */}
             <div className="space-y-2">
               <label className="text-[11px] font-bold text-[#5E5E61] uppercase tracking-wider block">
-                Chuyển nhanh vai trò (Mô hình 1-1)
+                Chuyển nhanh vai trò
               </label>
 
-              {/* 1. Vào vai Khách mua */}
+              {/* 1. Vào vai Khách mua chủ */}
               <button
                 onClick={handleSwitchBuyer}
                 disabled={switching}
@@ -234,8 +306,8 @@ export function DemoController({ onRoleSwitched, onDataReset }: DemoControllerPr
                     <div className="font-bold text-xs text-[#101410]">
                       Vào vai Khách hàng (Buyer)
                     </div>
-                    <div className="text-[10px] font-mono text-[#5E5E61]">
-                      SĐT: 0987654321 · MK: nguoidung
+                    <div className="text-[10px] text-[#5E5E61]">
+                      Tài khoản khách mua chủ tiệm
                     </div>
                   </div>
                 </div>
@@ -244,7 +316,7 @@ export function DemoController({ onRoleSwitched, onDataReset }: DemoControllerPr
                 )}
               </button>
 
-              {/* 2. Vào vai Người bán */}
+              {/* 2. Vào vai Người bán chủ */}
               <button
                 onClick={handleSwitchSeller}
                 disabled={switching}
@@ -262,8 +334,8 @@ export function DemoController({ onRoleSwitched, onDataReset }: DemoControllerPr
                     <div className="font-bold text-xs text-[#101410]">
                       Vào vai Người bán (Seller)
                     </div>
-                    <div className="text-[10px] font-mono text-[#5E5E61]">
-                      admin · MK: admin
+                    <div className="text-[10px] text-[#5E5E61]">
+                      Tài khoản quản trị chủ tiệm
                     </div>
                   </div>
                 </div>
@@ -272,7 +344,7 @@ export function DemoController({ onRoleSwitched, onDataReset }: DemoControllerPr
                 )}
               </button>
 
-              {/* 3. Xem như Khách vãng lai (2.7) */}
+              {/* 3. Xem như Khách vãng lai */}
               <button
                 onClick={handleSwitchGuest}
                 disabled={switching}
@@ -291,7 +363,7 @@ export function DemoController({ onRoleSwitched, onDataReset }: DemoControllerPr
                       Xem như khách vãng lai
                     </div>
                     <div className="text-[10px] text-[#5E5E61]">
-                      Đăng xuất để thấy Hero dải thẻ cong
+                      Đăng xuất để thấy Hero landing
                     </div>
                   </div>
                 </div>
@@ -347,33 +419,62 @@ export function DemoController({ onRoleSwitched, onDataReset }: DemoControllerPr
               )}
             </div>
 
-            {/* Reset Database Section */}
+            {/* Reset Database Section (2 Confirmations Required) */}
             <div className="pt-2 border-t border-[#E2E8D8]">
-              {!showConfirmReset ? (
+              {resetConfirmStep === 0 && (
                 <button
                   type="button"
-                  onClick={() => setShowConfirmReset(true)}
+                  onClick={() => setResetConfirmStep(1)}
                   className="w-full py-2.5 px-3 rounded-2xl border border-[#B3362F]/40 text-[#B3362F] hover:bg-[#F6DDDB] font-bold flex items-center justify-center gap-2 transition-colors"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                   Reset dữ liệu demo ban đầu
                 </button>
-              ) : (
-                <div className="p-3 bg-[#F6DDDB] rounded-2xl border border-[#B3362F]/40 space-y-2.5 animate-fade-in">
-                  <div className="flex items-start gap-2 text-[#B3362F]">
-                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              )}
+
+              {resetConfirmStep === 1 && (
+                <div className="p-3 bg-amber-50 rounded-2xl border border-amber-300 space-y-2.5 animate-fade-in">
+                  <div className="flex items-start gap-2 text-amber-900">
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-700" />
                     <p className="text-[11px] leading-snug font-medium">
-                      Xác nhận đưa hệ thống về trạng thái sạch ban đầu? (2 tài khoản mẫu, 10 sản phẩm gốc, 2 mã giảm giá, xóa toàn bộ đơn và đánh giá).
+                      <strong>Bạn có chắc?</strong> Toàn bộ đơn hàng mới, tin nhắn, trả giá và đánh giá thử nghiệm sẽ bị làm mới.
                     </p>
                   </div>
                   <div className="flex items-center justify-end gap-2 pt-1">
                     <button
                       type="button"
-                      onClick={() => setShowConfirmReset(false)}
-                      disabled={resetting}
-                      className="px-3 py-1.5 rounded-xl border border-[#E2E8D8] bg-white text-[11px] font-bold text-[#5E5E61] hover:bg-[#F5F8EF]"
+                      onClick={() => setResetConfirmStep(0)}
+                      className="px-3 py-1.5 rounded-xl border border-amber-300 bg-white text-[11px] font-bold text-[#5E5E61]"
                     >
                       Hủy bỏ
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setResetConfirmStep(2)}
+                      className="px-3 py-1.5 rounded-xl bg-amber-700 text-white text-[11px] font-bold hover:bg-amber-800"
+                    >
+                      Tiếp tục
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {resetConfirmStep === 2 && (
+                <div className="p-3 bg-[#F6DDDB] rounded-2xl border border-[#B3362F]/40 space-y-2.5 animate-fade-in">
+                  <div className="flex items-start gap-2 text-[#B3362F]">
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <p className="text-[11px] leading-snug font-medium">
+                      <strong>Xác nhận lần 2:</strong> Khôi phục dữ liệu ban đầu về trạng thái ban đầu?
+                    </p>
+                  </div>
+                  <div className="flex items-center justify-end gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setResetConfirmStep(0)}
+                      disabled={resetting}
+                      className="px-3 py-1.5 rounded-xl border border-[#E2E8D8] bg-white text-[11px] font-bold text-[#5E5E61]"
+                    >
+                      Hủy
                     </button>
                     <button
                       type="button"
@@ -382,7 +483,7 @@ export function DemoController({ onRoleSwitched, onDataReset }: DemoControllerPr
                       className="px-3 py-1.5 rounded-xl bg-[#B3362F] text-white text-[11px] font-bold hover:bg-red-800 flex items-center gap-1.5 shadow-xs"
                     >
                       <RotateCcw className={`w-3 h-3 ${resetting ? 'animate-spin' : ''}`} />
-                      {resetting ? 'Đang reset...' : 'Đồng ý Reset'}
+                      {resetting ? 'Đang xóa...' : 'Xác nhận xóa sạch và khởi tạo lại'}
                     </button>
                   </div>
                 </div>

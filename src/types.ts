@@ -6,6 +6,7 @@ export interface User {
   username: string;
   phone?: string;
   full_name: string;
+  is_owner?: boolean;
   created_at?: string;
 }
 
@@ -54,11 +55,32 @@ export interface Review {
   id: number;
   order_id: number;
   product_id: number;
+  product_name?: string;
+  product_image?: string;
+  product_condition_pct?: number;
+  user_id?: number;
   rating: number;
   comment: string;
   tags?: string[];
+  images?: string[];
+  video_url?: string | null;
+  video_duration?: number | null;
+  video_poster?: string | null;
+  is_anonymous?: boolean;
   author_name: string;
+  author_phone?: string;
+  order_code?: string;
+  helpful_count?: number;
+  is_helpful_by_me?: boolean;
+  seller_reply?: string | null;
+  seller_reply_at?: string | null;
+  is_hidden?: boolean;
+  is_hidden_notice?: string | null;
+  report_reason?: string | null;
   created_at: string;
+  updated_at?: string | null;
+  edit_count?: number;
+  can_edit?: boolean;
 }
 
 export interface ReviewsResponse {
@@ -66,6 +88,8 @@ export interface ReviewsResponse {
   total_reviews: number;
   average_rating: number;
   distribution: Record<number, number>;
+  media_count?: number;
+  recent_reviews?: Review[];
 }
 
 export interface Coupon {

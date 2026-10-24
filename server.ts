@@ -15,6 +15,7 @@ import demoRoutes from './server/routes/demo.js';
 import offersRoutes from './server/routes/offers.js';
 import chatRoutes from './server/routes/chat.js';
 import returnsRoutes from './server/routes/returns.js';
+import uploadRoutes from './server/routes/upload.js';
 import { seedDatabase } from './server/seed.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -24,8 +25,11 @@ const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 app.use(cors());
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// Serve static uploads
+app.use('/uploads', express.static(path.resolve(__dirname, 'uploads')));
 
 // Gắn các API routes
 app.use('/api/auth', authRoutes);
@@ -41,6 +45,7 @@ app.use('/api/demo', demoRoutes);
 app.use('/api/offers', offersRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/returns', returnsRoutes);
+app.use('/api/upload', uploadRoutes);
 
 // Endpoint kiểm tra sức khỏe
 app.get('/api/health', (req, res) => {

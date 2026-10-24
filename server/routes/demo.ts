@@ -1,16 +1,50 @@
 import { Router } from 'express';
 import { queryAll, queryOne, run, createNotification } from '../db.js';
-import { generateToken } from '../auth.js';
+import { generateToken, requireAuth, AuthRequest } from '../auth.js';
 import { seedDatabase } from '../seed.js';
 
 const router = Router();
 
-// Chuyển nhanh sang vai trò Khách hàng (Buyer: 0987654321 / nguoidung)
-router.post('/switch-buyer', (req, res) => {
+// Trạng thái Chế độ thuyết trình
+let isPresentationMode = false;
+
+export function isPresentationModeActive(): boolean {
+  return isPresentationMode;
+}
+
+export function setPresentationModeActive(val: boolean): void {
+  isPresentationMode = Boolean(val);
+}
+
+// Middleware kiểm tra quyền chủ sở hữu (isOwner)
+function requireOwner(req: AuthRequest, res: any, next: any) {
+  if (!req.user || !req.user.is_owner) {
+    return res.status(403).json({ message: 'Chỉ tài khoản chủ sở hữu mới có quyền thực hiện thao tác này' });
+  }
+  next();
+}
+
+// Lấy trạng thái chế độ thuyết trình
+router.get('/presentation-mode', (req, res) => {
+  res.json({ presentation_mode: isPresentationMode });
+});
+
+// Bật / tắt chế độ thuyết trình (chỉ tài khoản chủ)
+router.post('/presentation-mode', requireAuth, requireOwner, (req: AuthRequest, res) => {
+  const { enabled } = req.body;
+  isPresentationMode = Boolean(enabled);
+  res.json({ 
+    message: isPresentationMode ? 'Đã bật Chế độ thuyết trình' : 'Đã tắt Chế độ thuyết trình', 
+    presentation_mode: isPresentationMode 
+  });
+});
+
+// Chuyển nhanh sang vai trò Khách hàng chủ (Chỉ khi đang là tài khoản chủ)
+router.post('/switch-buyer', requireAuth, requireOwner, (req: AuthRequest, res) => {
   try {
-    const user = queryOne('SELECT * FROM users WHERE role = "buyer" AND phone = "0987654321"');
+    const user = queryOne('SELECT * FROM users WHERE role = "buyer" AND (username = "0987654321" OR is_owner = 1)');
     if (!user) {
-      return res.status(404).json({ message: 'Không tìm thấy tài khoản người mua mẫu' });
+      return res.status(404).json({ message: 'Không tìm thấy tài khoản người mua chủ' });
     }
 
     const token = generateToken({
@@ -18,18 +52,20 @@ router.post('/switch-buyer', (req, res) => {
       role: user.role,
       username: user.username,
       full_name: user.full_name,
-      phone: user.phone
+      phone: user.phone,
+      is_owner: true
     });
 
     return res.json({
-      message: 'Đã chuyển sang vai Khách hàng mẫu (Nguyễn Văn A)',
+      message: 'Đã chuyển sang vai Khách hàng chủ (Nguyễn Văn A)',
       token,
       user: {
         id: user.id,
         role: user.role,
         username: user.username,
         full_name: user.full_name,
-        phone: user.phone
+        phone: user.phone,
+        is_owner: true
       }
     });
   } catch (error: any) {
@@ -37,12 +73,12 @@ router.post('/switch-buyer', (req, res) => {
   }
 });
 
-// Chuyển nhanh sang vai trò Người bán (Seller: admin / admin)
-router.post('/switch-seller', (req, res) => {
+// Chuyển nhanh sang vai trò Người bán chủ (Chỉ khi đang là tài khoản chủ)
+router.post('/switch-seller', requireAuth, requireOwner, (req: AuthRequest, res) => {
   try {
-    const user = queryOne('SELECT * FROM users WHERE role = "seller" AND username = "admin"');
+    const user = queryOne('SELECT * FROM users WHERE role = "seller" AND (username = "admin" OR is_owner = 1)');
     if (!user) {
-      return res.status(404).json({ message: 'Không tìm thấy tài khoản người bán mẫu' });
+      return res.status(404).json({ message: 'Không tìm thấy tài khoản người bán chủ' });
     }
 
     const token = generateToken({
@@ -50,7 +86,8 @@ router.post('/switch-seller', (req, res) => {
       role: user.role,
       username: user.username,
       full_name: user.full_name,
-      phone: user.phone
+      phone: user.phone,
+      is_owner: true
     });
 
     return res.json({
@@ -61,7 +98,8 @@ router.post('/switch-seller', (req, res) => {
         role: user.role,
         username: user.username,
         full_name: user.full_name,
-        phone: user.phone
+        phone: user.phone,
+        is_owner: true
       }
     });
   } catch (error: any) {
@@ -69,8 +107,8 @@ router.post('/switch-seller', (req, res) => {
   }
 });
 
-// Reset dữ liệu demo về trạng thái ban đầu
-router.post('/reset', async (req, res) => {
+// Reset dữ liệu demo về trạng thái ban đầu (Chỉ tài khoản chủ)
+router.post('/reset', requireAuth, requireOwner, async (req: AuthRequest, res) => {
   try {
     await seedDatabase(true);
     return res.json({
@@ -82,8 +120,8 @@ router.post('/reset', async (req, res) => {
   }
 });
 
-// Lấy danh sách các đơn hàng có thể tua nhanh vận chuyển (chưa hoàn thành/hủy)
-router.get('/eligible-orders', (req, res) => {
+// Lấy danh sách các đơn hàng có thể tua nhanh vận chuyển (Chỉ tài khoản chủ)
+router.get('/eligible-orders', requireAuth, requireOwner, (req: AuthRequest, res) => {
   try {
     const orders = queryAll(`
       SELECT id, code, recipient_name, total, status, carrier, tracking_code, payment_method, payment_status, created_at
@@ -98,8 +136,8 @@ router.get('/eligible-orders', (req, res) => {
   }
 });
 
-// Tua từng bước vận chuyển (1 -> 2 -> 3 -> 4)
-router.post('/advance-shipment-step', (req, res) => {
+// Tua từng bước vận chuyển (1 -> 2 -> 3 -> 4) (Chỉ tài khoản chủ)
+router.post('/advance-shipment-step', requireAuth, requireOwner, (req: AuthRequest, res) => {
   try {
     const { order_id, step } = req.body;
     const orderId = Number(order_id);

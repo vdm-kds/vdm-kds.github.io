@@ -39,22 +39,20 @@ Dự án đã được cấu hình sẵn file `vercel.json` và serverless API `
 
 ---
 
-## 👥 Tài Khoản Thử Nghiệm Có Sẵn (Seeded Accounts)
+## 👥 Tài Khoản Thử Nghiệm Có Sẵn (Tài Khoản Chủ Tiệm)
 
-### 1. Người bán (Seller)
+Mật khẩu được bảo vệ bằng mã hóa SHA-256 một chiều (`dcct:{username}:{password}` hex) và tự động khóa chống brute-force sau 5 lần nhập sai liên tiếp.
+
+### 1. Người bán (Seller - Chủ)
 - **Tên đăng nhập:** `admin`
-- **Mật khẩu:** `admin`
 - **Họ tên hiển thị:** Chủ Tiệm Còn Thương
-- **Quyền hạn:** Truy cập Dashboard quản trị, thêm/sửa/xóa sản phẩm trong kho, duyệt đơn hàng, chọn đơn vị vận chuyển, gửi báo cáo hành trình giao hàng từng chặng, hủy đơn và hoàn trả tồn kho.
+- **Quyền hạn:** Chủ tiệm (Owner), truy cập Dashboard quản trị, quản lý kho đồ cũ, duyệt đơn, chọn đơn vị vận chuyển, gửi báo cáo hành trình, xử lý đổi trả/trả giá/tin nhắn/đánh giá và bảng điều khiển demo.
 
-### 2. Khách mua (Buyer)
+### 2. Khách mua (Buyer - Chủ)
 - **Tên đăng nhập / Số điện thoại:** `0987654321`
-- **Mật khẩu:** `nguoidung`
 - **Họ tên hiển thị:** Nguyễn Văn A
 - **Địa chỉ giao hàng có sẵn:** 128 Đường Hai Bà Trưng, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh
-- **Giỏ hàng ban đầu:** Trống, 0 đơn hàng ban đầu.
-
-> **Mẹo:** Trên thanh điều hướng (Header) có sẵn nút chuyển nhanh tài khoản **"Khách mua"** và **"Người bán"** để bạn chuyển đổi kiểm thử tức thì trong 1 click.
+- **Quyền hạn:** Khách mua chủ tiệm (Owner). Khi bật Chế độ thuyết trình, đây là tài khoản duy nhất được phép đặt hàng, chat, trả giá và gửi đánh giá.
 
 ---
 

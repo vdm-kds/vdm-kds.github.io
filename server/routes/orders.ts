@@ -2,8 +2,10 @@ import { Router, Response } from 'express';
 import { queryAll, queryOne, run, createNotification } from '../db.js';
 import { requireBuyer, AuthenticatedRequest } from '../auth.js';
 import { calculateShippingFee } from './cart.js';
+import { isPresentationModeActive } from './demo.js';
 
 const router = Router();
+
 
 // Hàm sinh mã đơn hàng chuẩn: DCT + YYYYMMDD + 3 số (vd: DCT20261022001)
 function generateOrderCode(): string {
@@ -101,6 +103,9 @@ router.get('/:id', requireBuyer, (req: AuthenticatedRequest, res: Response) => {
 router.post('/', requireBuyer, (req: AuthenticatedRequest, res: Response) => {
   try {
     const buyerId = req.user!.id;
+    if (isPresentationModeActive() && !req.user?.is_owner) {
+      return res.status(403).json({ message: 'Cửa hàng đang tạm dừng nhận đơn trong buổi thuyết trình. Bạn vẫn có thể xem sản phẩm nhé!' });
+    }
     const {
       recipient_name,
       phone,

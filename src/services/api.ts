@@ -161,15 +161,83 @@ export const api = {
       total_reviews: number;
       average_rating: number;
       distribution: Record<number, number>;
+      media_count?: number;
     }>(`/reviews/product/${productId}`),
 
-  getOrderReviewedItems: (orderId: number) =>
-    request<{ reviewed_product_ids: number[] }>(`/reviews/order/${orderId}/checked`),
+  getShopReviews: () =>
+    request<{
+      reviews: any[];
+      recent_reviews: any[];
+      total_reviews: number;
+      average_rating: number;
+      distribution: Record<number, number>;
+    }>('/reviews/shop'),
 
-  submitReview: (payload: { order_id: number; product_id: number; rating: number; comment: string; tags?: string[] }) =>
-    request<{ message: string }>('/reviews', {
+  getSellerReviews: () =>
+    request<{
+      reviews: any[];
+      total_reviews: number;
+      average_rating: number;
+      unreplied_count: number;
+    }>('/reviews/seller'),
+
+  getOrderReviewedItems: (orderId: number) =>
+    request<{ reviewed_product_ids: number[]; reviews?: any[] }>(`/reviews/order/${orderId}/checked`),
+
+  submitReview: (payload: {
+    order_id: number;
+    product_id: number;
+    rating: number;
+    comment: string;
+    tags?: string[];
+    images?: string[];
+    video_url?: string | null;
+    video_duration?: number | null;
+    video_poster?: string | null;
+    is_anonymous?: boolean;
+  }) =>
+    request<{ message: string; review_id: number }>('/reviews', {
       method: 'POST',
       body: JSON.stringify(payload)
+    }),
+
+  updateReview: (id: number, payload: {
+    rating?: number;
+    comment?: string;
+    tags?: string[];
+    images?: string[];
+    video_url?: string | null;
+    video_duration?: number | null;
+    video_poster?: string | null;
+    is_anonymous?: boolean;
+  }) =>
+    request<{ message: string }>(`/reviews/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    }),
+
+  toggleHelpfulReview: (id: number) =>
+    request<{ helpful_count: number; is_helpful: boolean }>(`/reviews/${id}/helpful`, {
+      method: 'POST'
+    }),
+
+  replyReview: (id: number, reply: string) =>
+    request<{ message: string; seller_reply: string; seller_reply_at: string }>(`/reviews/${id}/reply`, {
+      method: 'POST',
+      body: JSON.stringify({ reply })
+    }),
+
+  reportReview: (id: number, reason: string) =>
+    request<{ message: string; is_hidden: boolean; report_reason: string }>(`/reviews/${id}/report`, {
+      method: 'POST',
+      body: JSON.stringify({ reason })
+    }),
+
+  // File Upload
+  uploadFile: (dataUrl: string) =>
+    request<{ url: string; size: number; mimeType: string }>('/upload', {
+      method: 'POST',
+      body: JSON.stringify({ dataUrl })
     }),
 
   // Coupons
@@ -215,8 +283,8 @@ export const api = {
       body: JSON.stringify(data)
     }),
 
-  changePassword: (data: { old_password: string; new_password: string }) =>
-    request<{ message: string }>('/account/change-password', {
+  changePassword: (data: { old_password: string; new_password: string; confirm_password?: string }) =>
+    request<{ message: string }>('/auth/change-password', {
       method: 'POST',
       body: JSON.stringify(data)
     }),
@@ -266,6 +334,15 @@ export const api = {
 
   resetDemo: () =>
     request<{ message: string }>('/demo/reset', { method: 'POST' }),
+
+  getPresentationMode: () =>
+    request<{ presentation_mode: boolean }>('/demo/presentation-mode'),
+
+  setPresentationMode: (enabled: boolean) =>
+    request<{ message: string; presentation_mode: boolean }>('/demo/presentation-mode', {
+      method: 'POST',
+      body: JSON.stringify({ enabled })
+    }),
 
   // Seller operations & Bulk
   getSellerStats: () =>

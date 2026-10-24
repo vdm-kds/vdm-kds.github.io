@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Store, Package, ShoppingBag, DollarSign, TrendingUp, AlertTriangle, 
   Plus, Edit2, Trash2, CheckCircle2, XCircle, Truck, Send, Clock, 
   MapPin, RefreshCw, X, ChevronRight, Eye, Printer, Download, Tag, Percent, CheckSquare, Square,
-  MessageSquare, RotateCcw, Sparkles, ShieldAlert
+  MessageSquare, RotateCcw, Sparkles, ShieldAlert, Bell, KeyRound, LogOut, UserCheck, Star, Play, Flag, ChevronDown, Check, User
 } from 'lucide-react';
 import { Product, Order, SellerStats, Coupon, Offer, ChatConversation, ChatMessage, ReturnRequest, ProductFlaw } from '../types';
 import { api } from '../services/api';
@@ -15,11 +15,19 @@ import { Button } from './Button';
 
 interface SellerDashboardProps {
   onViewPreview?: () => void;
+  onLogout?: () => void;
+  onSwitchToBuyer?: () => void;
+  currentUser?: any;
 }
 
-export const SellerDashboard: React.FC<SellerDashboardProps> = ({ onViewPreview }) => {
+export const SellerDashboard: React.FC<SellerDashboardProps> = ({ 
+  onViewPreview, 
+  onLogout, 
+  onSwitchToBuyer, 
+  currentUser 
+}) => {
   const { showToast } = useToast();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'shipping' | 'orders' | 'products' | 'coupons' | 'offers' | 'chat' | 'returns'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'orders' | 'shipping' | 'returns' | 'offers' | 'chat' | 'reviews' | 'products' | 'coupons'>('dashboard');
 
   // Dashboard Stats
   const [stats, setStats] = useState<SellerStats | null>(null);
@@ -103,6 +111,131 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({ onViewPreview 
   const [loadingReturns, setLoadingReturns] = useState(false);
   const [returnActionModal, setReturnActionModal] = useState<{ open: boolean; item?: ReturnRequest; targetStatus: string }>({ open: false, targetStatus: '' });
   const [returnSellerNote, setReturnSellerNote] = useState('');
+
+  // SELLER REVIEWS (ĐÁNH GIÁ)
+  const [sellerReviews, setSellerReviews] = useState<any[]>([]);
+  const [loadingSellerReviews, setLoadingSellerReviews] = useState(false);
+  const [reviewsStats, setReviewsStats] = useState<{ total_reviews: number; average_rating: number; unreplied_count: number }>({
+    total_reviews: 0,
+    average_rating: 0,
+    unreplied_count: 0
+  });
+  const [sellerReviewFilter, setSellerReviewFilter] = useState<string>('all');
+  const [replyModal, setReplyModal] = useState<{ open: boolean; review: any | null; text: string; submitting: boolean }>({
+    open: false,
+    review: null,
+    text: '',
+    submitting: false
+  });
+  const [reportModal, setReportModal] = useState<{ open: boolean; review: any | null; reason: string; submitting: boolean }>({
+    open: false,
+    review: null,
+    reason: 'Ngôn từ không phù hợp',
+    submitting: false
+  });
+
+  // Top Bar Dropdown & Profile & Password States
+  const [sellerMenuOpen, setSellerMenuOpen] = useState(false);
+  const [shopProfileModal, setShopProfileModal] = useState(false);
+  const [changePasswordModal, setChangePasswordModal] = useState({
+    open: false,
+    oldPass: '',
+    newPass: '',
+    confirmPass: '',
+    loading: false
+  });
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setSellerMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const fetchSellerReviews = async () => {
+    setLoadingSellerReviews(true);
+    try {
+      const res = await api.getSellerReviews();
+      setSellerReviews(res.reviews || []);
+      setReviewsStats({
+        total_reviews: res.total_reviews || 0,
+        average_rating: res.average_rating || 0,
+        unreplied_count: res.unreplied_count || 0
+      });
+    } catch (err: any) {
+      console.error('Fetch seller reviews error:', err);
+    } finally {
+      setLoadingSellerReviews(false);
+    }
+  };
+
+  const handleReplySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!replyModal.review) return;
+    const trimmed = replyModal.text.trim();
+    if (!trimmed) {
+      showToast('Vui lòng nhập nội dung phản hồi', 'error');
+      return;
+    }
+    setReplyModal(prev => ({ ...prev, submitting: true }));
+    try {
+      await api.replyReview(replyModal.review.id, trimmed);
+      showToast('Phản hồi đánh giá thành công!', 'success');
+      setReplyModal({ open: false, review: null, text: '', submitting: false });
+      await fetchSellerReviews();
+    } catch (err: any) {
+      showToast(err.message || 'Lỗi phản hồi đánh giá', 'error');
+      setReplyModal(prev => ({ ...prev, submitting: false }));
+    }
+  };
+
+  const handleReportSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reportModal.review) return;
+    setReportModal(prev => ({ ...prev, submitting: true }));
+    try {
+      await api.reportReview(reportModal.review.id, reportModal.reason);
+      showToast('Đã ẩn đánh giá khỏi trang công khai vì lý do vi phạm', 'success');
+      setReportModal({ open: false, review: null, reason: 'Ngôn từ không phù hợp', submitting: false });
+      await fetchSellerReviews();
+    } catch (err: any) {
+      showToast(err.message || 'Lỗi báo cáo vi phạm', 'error');
+      setReportModal(prev => ({ ...prev, submitting: false }));
+    }
+  };
+
+  const handleChangePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!changePasswordModal.oldPass) {
+      showToast('Vui lòng nhập mật khẩu hiện tại', 'error');
+      return;
+    }
+    if (changePasswordModal.newPass.length < 8) {
+      showToast('Mật khẩu mới phải có tối thiểu 8 ký tự', 'error');
+      return;
+    }
+    if (changePasswordModal.newPass !== changePasswordModal.confirmPass) {
+      showToast('Xác nhận mật khẩu mới không khớp', 'error');
+      return;
+    }
+    setChangePasswordModal(prev => ({ ...prev, loading: true }));
+    try {
+      await api.changePassword({
+        old_password: changePasswordModal.oldPass,
+        new_password: changePasswordModal.newPass,
+        confirm_password: changePasswordModal.confirmPass
+      });
+      showToast('Đổi mật khẩu thành công!', 'success');
+      setChangePasswordModal({ open: false, oldPass: '', newPass: '', confirmPass: '', loading: false });
+    } catch (err: any) {
+      showToast(err.message || 'Lỗi đổi mật khẩu', 'error');
+      setChangePasswordModal(prev => ({ ...prev, loading: false }));
+    }
+  };
 
   const fetchStats = async () => {
     setLoadingStats(true);
@@ -204,6 +337,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({ onViewPreview 
     fetchOffers();
     fetchChat();
     fetchReturns();
+    fetchSellerReviews();
   }, []);
 
   useEffect(() => {
@@ -214,6 +348,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({ onViewPreview 
     if (activeTab === 'offers') fetchOffers();
     if (activeTab === 'chat') fetchChat();
     if (activeTab === 'returns') fetchReturns();
+    if (activeTab === 'reviews') fetchSellerReviews();
   }, [activeTab, orderStatusFilter]);
 
   // Polling cho đơn hàng, tin nhắn và trả giá mỗi 5-10 giây
@@ -223,6 +358,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({ onViewPreview 
       if (activeTab === 'orders') fetchOrders(true);
       if (activeTab === 'chat') fetchChat();
       if (activeTab === 'offers') fetchOffers();
+      if (activeTab === 'reviews') fetchSellerReviews();
     }, 5000);
     return () => clearInterval(timer);
   }, [activeTab, orderStatusFilter, selectedOrder?.id, activeConversation?.id]);
@@ -586,152 +722,203 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({ onViewPreview 
   ];
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-      {/* Seller Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-[#E2E8D8]">
-        <div>
-          <div className="flex items-center gap-2 text-xs font-bold text-[#08482D] uppercase tracking-wider">
-            <Store className="w-4 h-4" />
-            Kênh Quản Trị Người Bán (Admin)
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-[#101410] mt-1">
-            Bảng điều khiển Tiệm Đồ Cũ Còn Thương
-          </h1>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          {onViewPreview && (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={onViewPreview}
-              className="text-xs"
-            >
-              <Eye className="w-3.5 h-3.5 mr-1 text-[#08482D]" />
-              <span>Xem cửa hàng</span>
-            </Button>
-          )}
-
-          {/* Navigation Tabs */}
-          <div className="flex flex-wrap bg-[#DAE7C7]/50 p-1.5 rounded-full text-xs font-bold border border-[#E2E8D8] gap-1">
+    <div className="min-h-screen bg-[#F5F8EF] text-[#101410] flex flex-col pb-16">
+      {/* 1. THANH TRÊN CÙNG CỐ ĐỊNH (STICKY) CHO MỌI TRANG /SELLER */}
+      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-[#DAE7C7] shadow-xs">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+          {/* Bên trái: logo + chữ "Đồ Cũ Còn Thương · Kênh người bán" */}
           <button
+            type="button"
             onClick={() => setActiveTab('dashboard')}
-            className={`px-4 py-2 rounded-full transition-all ${
-              activeTab === 'dashboard'
-                ? 'bg-[#08482D] text-white shadow-xs'
-                : 'text-[#5E5E61] hover:text-[#101410]'
-            }`}
+            className="flex items-center gap-2.5 text-left group focus:outline-none"
           >
-            Tổng quan (KPI)
-          </button>
-
-          <button
-            onClick={() => setActiveTab('shipping')}
-            className={`px-4 py-2 rounded-full transition-all flex items-center gap-1.5 ${
-              activeTab === 'shipping'
-                ? 'bg-[#08482D] text-white shadow-xs'
-                : 'text-[#5E5E61] hover:text-[#101410]'
-            }`}
-          >
-            <Truck className="w-3.5 h-3.5" />
-            <span>Vận chuyển (Kanban)</span>
-            {stats && (stats.status_counts.confirmed > 0 || stats.status_counts.shipping > 0) && (
-              <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
-                activeTab === 'shipping' ? 'bg-[#DAE7C7] text-[#08482D]' : 'bg-[#08482D] text-white'
-              }`}>
-                {(stats.status_counts.confirmed || 0) + (stats.status_counts.shipping || 0)}
+            <div className="w-9 h-9 rounded-xl bg-[#08482D] text-white flex items-center justify-center font-bold text-base shadow-xs group-hover:scale-105 transition-transform">
+              ♻
+            </div>
+            <div>
+              <span className="font-serif font-bold text-base sm:text-lg text-[#08482D] tracking-tight block">
+                Đồ Cũ Còn Thương
               </span>
-            )}
-          </button>
-
-          <button
-            onClick={() => setActiveTab('orders')}
-            className={`px-4 py-2 rounded-full transition-all ${
-              activeTab === 'orders'
-                ? 'bg-[#08482D] text-white shadow-xs'
-                : 'text-[#5E5E61] hover:text-[#101410]'
-            }`}
-          >
-            Quản lý Đơn hàng
-          </button>
-
-          <button
-            onClick={() => setActiveTab('products')}
-            className={`px-4 py-2 rounded-full transition-all ${
-              activeTab === 'products'
-                ? 'bg-[#08482D] text-white shadow-xs'
-                : 'text-[#5E5E61] hover:text-[#101410]'
-            }`}
-          >
-            Quản lý Kho sản phẩm
-          </button>
-
-          <button
-            onClick={() => setActiveTab('offers')}
-            className={`px-4 py-2 rounded-full transition-all flex items-center gap-1.5 ${
-              activeTab === 'offers'
-                ? 'bg-[#08482D] text-white shadow-xs'
-                : 'text-[#5E5E61] hover:text-[#101410]'
-            }`}
-          >
-            <Tag className="w-3.5 h-3.5" />
-            <span>Trả giá</span>
-            {sellerOffers.filter(o => o.status === 'pending').length > 0 && (
-              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-amber-500 text-white font-bold">
-                {sellerOffers.filter(o => o.status === 'pending').length}
+              <span className="text-[10px] uppercase font-mono tracking-wider font-semibold text-[#C2522D] block -mt-1">
+                Kênh người bán
               </span>
-            )}
+            </div>
           </button>
 
-          <button
-            onClick={() => setActiveTab('chat')}
-            className={`px-4 py-2 rounded-full transition-all flex items-center gap-1.5 ${
-              activeTab === 'chat'
-                ? 'bg-[#08482D] text-white shadow-xs'
-                : 'text-[#5E5E61] hover:text-[#101410]'
-            }`}
-          >
-            <MessageSquare className="w-3.5 h-3.5" />
-            <span>Tin nhắn</span>
-            {chatConversations.reduce((acc, c) => acc + (c.seller_unread || 0), 0) > 0 && (
-              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-emerald-600 text-white font-bold animate-pulse">
-                {chatConversations.reduce((acc, c) => acc + (c.seller_unread || 0), 0)}
-              </span>
+          {/* Bên phải: Nút Xem cửa hàng + Chuông thông báo + Avatar Dropdown */}
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            {/* Nút Xem cửa hàng (Secondary, icon con mắt) */}
+            {onViewPreview && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={onViewPreview}
+                className="text-xs font-bold gap-1.5 border-[#DAE7C7]"
+              >
+                <Eye className="w-4 h-4 text-[#08482D]" />
+                <span className="hidden sm:inline">Xem cửa hàng</span>
+              </Button>
             )}
-          </button>
 
-          <button
-            onClick={() => setActiveTab('returns')}
-            className={`px-4 py-2 rounded-full transition-all flex items-center gap-1.5 ${
-              activeTab === 'returns'
-                ? 'bg-[#08482D] text-white shadow-xs'
-                : 'text-[#5E5E61] hover:text-[#101410]'
-            }`}
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span>Trả hàng</span>
-            {sellerReturns.filter(r => r.status === 'pending').length > 0 && (
-              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-red-500 text-white font-bold">
-                {sellerReturns.filter(r => r.status === 'pending').length}
-              </span>
-            )}
-          </button>
+            {/* Chuông thông báo có badge */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => {
+                  if ((stats?.status_counts?.pending || 0) > 0) setActiveTab('orders');
+                  else if (reviewsStats.unreplied_count > 0) setActiveTab('reviews');
+                  else setActiveTab('dashboard');
+                }}
+                className="p-2 rounded-xl border border-[#DAE7C7] hover:bg-[#F5F8EF] text-[#5E5E61] transition-colors relative"
+                title="Thông báo người bán"
+              >
+                <Bell className="w-4 h-4 text-[#101410]" />
+                {((stats?.status_counts?.pending || 0) + reviewsStats.unreplied_count + (sellerReturns.filter(r => r.status === 'pending').length)) > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#C2522D] text-white text-[9px] font-bold flex items-center justify-center shadow-xs">
+                    {Math.min(99, (stats?.status_counts?.pending || 0) + reviewsStats.unreplied_count + (sellerReturns.filter(r => r.status === 'pending').length))}
+                  </span>
+                )}
+              </button>
+            </div>
 
-          <button
-            onClick={() => setActiveTab('coupons')}
-            className={`px-4 py-2 rounded-full transition-all flex items-center gap-1.5 ${
-              activeTab === 'coupons'
-                ? 'bg-[#08482D] text-white shadow-xs'
-                : 'text-[#5E5E61] hover:text-[#101410]'
-            }`}
-          >
-            <Percent className="w-3.5 h-3.5" />
-            <span>Mã giảm giá</span>
-          </button>
+            {/* Avatar + Shop name menu */}
+            <div className="relative" ref={menuRef}>
+              <button
+                type="button"
+                onClick={() => setSellerMenuOpen(!sellerMenuOpen)}
+                className="flex items-center gap-2 p-1.5 pl-2 rounded-2xl hover:bg-[#F5F8EF] border border-[#DAE7C7] transition-all"
+              >
+                <div className="w-7 h-7 rounded-full bg-[#08482D] text-white flex items-center justify-center text-xs font-bold shadow-xs">
+                  S
+                </div>
+                <div className="text-left hidden md:block">
+                  <span className="text-xs font-bold text-[#101410] block leading-tight">
+                    Tiệm Đồ Cũ Còn Thương
+                  </span>
+                  <span className="text-[10px] text-[#5E5E61] font-mono block">
+                    @{currentUser?.username || 'admin'}
+                  </span>
+                </div>
+                <ChevronDown className="w-3.5 h-3.5 text-[#5E5E61]" />
+              </button>
+
+              {/* Dropdown Menu */}
+              {sellerMenuOpen && (
+                <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl border border-[#DAE7C7] shadow-xl py-1.5 text-xs z-50 animate-fade-in text-[#101410]">
+                  {/* Tên shop và @tên đăng nhập (dòng thông tin, không bấm được) */}
+                  <div className="px-4 py-2.5 bg-[#F5F8EF]/60 border-b border-[#DAE7C7]/60">
+                    <p className="font-bold text-[#101410]">Tiệm Đồ Cũ Còn Thương</p>
+                    <p className="text-[11px] text-[#5E5E61] font-mono">@{currentUser?.username || 'admin'}</p>
+                    <span className="inline-block mt-1 text-[9px] font-bold px-1.5 py-0.2 rounded bg-[#08482D] text-white uppercase font-mono">
+                      Kênh Người Bán
+                    </span>
+                  </div>
+
+                  {/* Hồ sơ shop */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSellerMenuOpen(false);
+                      setShopProfileModal(true);
+                    }}
+                    className="w-full text-left px-4 py-2 hover:bg-[#F5F8EF] flex items-center gap-2 font-medium"
+                  >
+                    <UserCheck className="w-3.5 h-3.5 text-[#08482D]" />
+                    <span>Hồ sơ shop</span>
+                  </button>
+
+                  {/* Đổi mật khẩu */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSellerMenuOpen(false);
+                      setChangePasswordModal({ open: true, oldPass: '', newPass: '', confirmPass: '', loading: false });
+                    }}
+                    className="w-full text-left px-4 py-2 hover:bg-[#F5F8EF] flex items-center gap-2 font-medium"
+                  >
+                    <KeyRound className="w-3.5 h-3.5 text-[#08482D]" />
+                    <span>Đổi mật khẩu</span>
+                  </button>
+
+                  {/* Chuyển sang mua hàng */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSellerMenuOpen(false);
+                      if (onSwitchToBuyer) onSwitchToBuyer();
+                    }}
+                    className="w-full text-left px-4 py-2 hover:bg-[#F5F8EF] flex items-center gap-2 font-medium text-[#08482D]"
+                  >
+                    <ShoppingBag className="w-3.5 h-3.5 text-[#08482D]" />
+                    <span>Chuyển sang mua hàng</span>
+                  </button>
+
+                  {/* Đường kẻ ngăn cách */}
+                  <div className="border-t border-[#DAE7C7] my-1" />
+
+                  {/* Đăng xuất (chữ đỏ, icon cửa ra) */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSellerMenuOpen(false);
+                      if (onLogout) onLogout();
+                      showToast('Đã đăng xuất', 'success');
+                    }}
+                    className="w-full text-left px-4 py-2 hover:bg-red-50 text-red-600 flex items-center gap-2 font-bold"
+                  >
+                    <LogOut className="w-3.5 h-3.5 text-red-600" />
+                    <span>Đăng xuất</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
-        </div>
-      </div>
 
+        {/* THANH ĐIỀU HƯỚNG CÁC MỤC (NGAY DƯỚI THANH TRÊN CÙNG): 
+            Một hàng duy nhất, không xuống dòng; màn hình hẹp thì cuộn ngang được.
+            Thứ tự: Tổng quan · Đơn hàng · Vận chuyển · Trả hàng · Trả giá · Tin nhắn · Đánh giá · Sản phẩm · Mã giảm giá
+        */}
+        <div className="border-t border-[#DAE7C7]/70 bg-[#F5F8EF]/80 px-4 sm:px-6 lg:px-8">
+          <div className="max-w-7xl mx-auto flex items-center gap-2 overflow-x-auto whitespace-nowrap scrollbar-none py-2 text-xs font-bold">
+            {[
+              { id: 'dashboard', label: 'Tổng quan' },
+              { id: 'orders', label: 'Đơn hàng', badge: stats?.status_counts?.pending },
+              { id: 'shipping', label: 'Vận chuyển', badge: (stats?.status_counts?.confirmed || 0) + (stats?.status_counts?.shipping || 0) },
+              { id: 'returns', label: 'Trả hàng', badge: sellerReturns.filter(r => r.status === 'pending').length },
+              { id: 'offers', label: 'Trả giá', badge: sellerOffers.filter(o => o.status === 'pending').length },
+              { id: 'chat', label: 'Tin nhắn', badge: chatConversations.reduce((acc, c) => acc + (c.seller_unread || 0), 0) },
+              { id: 'reviews', label: 'Đánh giá', badge: reviewsStats.unreplied_count },
+              { id: 'products', label: 'Sản phẩm' },
+              { id: 'coupons', label: 'Mã giảm giá' }
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`px-3.5 py-1.5 rounded-full transition-all flex items-center gap-1.5 shrink-0 ${
+                  activeTab === tab.id
+                    ? 'bg-[#08482D] text-white shadow-xs'
+                    : 'bg-white text-[#5E5E61] border border-[#DAE7C7] hover:text-[#101410] hover:border-[#08482D]/40'
+                }`}
+              >
+                <span>{tab.label}</span>
+                {typeof tab.badge === 'number' && tab.badge > 0 && (
+                  <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full font-bold ${
+                    activeTab === tab.id
+                      ? 'bg-[#DAE7C7] text-[#08482D]'
+                      : 'bg-[#C2522D] text-white'
+                  }`}>
+                    {tab.badge}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      </header>
+
+      {/* Main Container */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-6 w-full flex-1">
       {/* TAB: VẬN CHUYỂN (KANBAN) */}
       {activeTab === 'shipping' && (
         <SellerShippingKanban
@@ -746,6 +933,14 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({ onViewPreview 
       {/* TAB 1: DASHBOARD OVERVIEW */}
       {activeTab === 'dashboard' && (
         <div className="space-y-6 animate-in fade-in">
+          {/* Header Title changed to: small "Xin chào," + "Đồ Cũ Còn Thương" */}
+          <div className="pb-2">
+            <span className="text-xs text-[#5E5E61] block font-medium">Xin chào,</span>
+            <h1 className="text-2xl sm:text-3xl font-serif font-bold text-[#08482D] mt-0.5">
+              Đồ Cũ Còn Thương
+            </h1>
+          </div>
+
           {loadingStats || !stats ? (
             <div className="p-12 text-center bg-[#FFFFFF] rounded-3xl border border-[#E2E8D8]">
               <RefreshCw className="w-8 h-8 animate-spin text-[#C2522D] mx-auto mb-2" />
@@ -753,57 +948,71 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({ onViewPreview 
             </div>
           ) : (
             <>
-              {/* Metric Cards Grid */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="p-5 rounded-2xl bg-white border border-[#E6DFD5] space-y-2">
-                  <div className="flex items-center justify-between text-[#786F66]">
+              {/* Metric Cards Grid (including Đánh giá trung bình) */}
+              <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5 sm:gap-4">
+                <div className="p-4 sm:p-5 rounded-2xl bg-white border border-[#E2E8D8] space-y-1.5 shadow-xs">
+                  <div className="flex items-center justify-between text-[#5E5E61]">
                     <span className="text-xs font-semibold uppercase">Tổng doanh thu</span>
-                    <DollarSign className="w-4 h-4 text-[#556B2F]" />
+                    <DollarSign className="w-4 h-4 text-[#08482D]" />
                   </div>
-                  <div className="font-mono text-2xl font-bold text-[#101410]">
+                  <div className="font-mono text-xl sm:text-2xl font-bold text-[#101410]">
                     {formatVND(stats.total_revenue)}
                   </div>
-                  <span className="text-[11px] text-[#556B2F] font-medium block">
-                    Doanh thu từ đơn thanh toán
+                  <span className="text-[11px] text-[#08482D] font-medium block">
+                    Đã thanh toán
                   </span>
                 </div>
 
-                <div className="p-5 rounded-2xl bg-white border border-[#E6DFD5] space-y-2">
-                  <div className="flex items-center justify-between text-[#786F66]">
+                <div className="p-4 sm:p-5 rounded-2xl bg-white border border-[#E2E8D8] space-y-1.5 shadow-xs">
+                  <div className="flex items-center justify-between text-[#5E5E61]">
                     <span className="text-xs font-semibold uppercase">Tổng đơn hàng</span>
-                    <Package className="w-4 h-4 text-[#3E7B88]" />
+                    <Package className="w-4 h-4 text-[#08482D]" />
                   </div>
-                  <div className="font-mono text-2xl font-bold text-[#101410]">
+                  <div className="font-mono text-xl sm:text-2xl font-bold text-[#101410]">
                     {stats.total_orders}
                   </div>
-                  <span className="text-[11px] text-[#786F66] block">
-                    {stats.status_counts.pending} đơn chờ xác nhận
+                  <span className="text-[11px] text-[#5E5E61] block">
+                    {stats.status_counts.pending} đơn chờ duyệt
                   </span>
                 </div>
 
-                <div className="p-5 rounded-2xl bg-white border border-[#E6DFD5] space-y-2">
-                  <div className="flex items-center justify-between text-[#786F66]">
+                <div className="p-4 sm:p-5 rounded-2xl bg-white border border-[#E2E8D8] space-y-1.5 shadow-xs">
+                  <div className="flex items-center justify-between text-[#5E5E61]">
                     <span className="text-xs font-semibold uppercase">Đang giao hàng</span>
-                    <Truck className="w-4 h-4 text-[#1967D2]" />
+                    <Truck className="w-4 h-4 text-[#C2522D]" />
                   </div>
-                  <div className="font-mono text-2xl font-bold text-[#1967D2]">
+                  <div className="font-mono text-xl sm:text-2xl font-bold text-[#C2522D]">
                     {stats.status_counts.shipping}
                   </div>
-                  <span className="text-[11px] text-[#786F66] block">
+                  <span className="text-[11px] text-[#5E5E61] block">
                     {stats.status_counts.delivered} đơn đã tới nơi
                   </span>
                 </div>
 
-                <div className="p-5 rounded-2xl bg-white border border-[#E6DFD5] space-y-2">
-                  <div className="flex items-center justify-between text-[#786F66]">
-                    <span className="text-xs font-semibold uppercase">Tồn kho thấp (&le;1)</span>
-                    <AlertTriangle className="w-4 h-4 text-[#D97746]" />
+                {/* Thẻ KPI Đánh giá trung bình */}
+                <div className="p-4 sm:p-5 rounded-2xl bg-white border border-[#E2E8D8] space-y-1.5 shadow-xs">
+                  <div className="flex items-center justify-between text-[#5E5E61]">
+                    <span className="text-xs font-semibold uppercase">Đánh giá TB</span>
+                    <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
                   </div>
-                  <div className="font-mono text-2xl font-bold text-[#D97746]">
+                  <div className="font-mono text-xl sm:text-2xl font-bold text-[#101410]">
+                    {reviewsStats.average_rating || 5.0}★
+                  </div>
+                  <span className="text-[11px] text-[#5E5E61] block">
+                    {reviewsStats.total_reviews} lượt đánh giá
+                  </span>
+                </div>
+
+                <div className="p-4 sm:p-5 rounded-2xl bg-white border border-[#E2E8D8] space-y-1.5 shadow-xs col-span-2 lg:col-span-1">
+                  <div className="flex items-center justify-between text-[#5E5E61]">
+                    <span className="text-xs font-semibold uppercase">Tồn kho thấp (&le;1)</span>
+                    <AlertTriangle className="w-4 h-4 text-amber-600" />
+                  </div>
+                  <div className="font-mono text-xl sm:text-2xl font-bold text-amber-700">
                     {stats.low_stock_count}
                   </div>
-                  <span className="text-[11px] text-[#786F66] block">
-                    Đồ cũ số lượng độc bản
+                  <span className="text-[11px] text-[#5E5E61] block">
+                    Độc bản cần nhập thêm
                   </span>
                 </div>
               </div>
@@ -1943,6 +2152,309 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({ onViewPreview 
         </div>
       )}
 
+      {/* TAB: ĐÁNH GIÁ (REVIEWS) */}
+      {activeTab === 'reviews' && (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-[#E2E8D8]">
+            <div>
+              <h2 className="text-xl font-bold text-[#101410] flex items-center gap-2">
+                <Star className="w-5 h-5 text-amber-500 fill-amber-500" />
+                Quản lý Đánh giá từ Khách Hàng
+              </h2>
+              <p className="text-xs text-[#5E5E61] mt-0.5">
+                Theo dõi phản hồi, giải đáp thắc mắc và xử lý khiếu nại đánh giá vi phạm
+              </p>
+            </div>
+            <Button variant="secondary" size="sm" onClick={fetchSellerReviews}>
+              <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+              Làm mới
+            </Button>
+          </div>
+
+          {/* Quick Stats Banner */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="bg-white p-4 rounded-2xl border border-[#DAE7C7] shadow-xs flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+                <Star className="w-5 h-5 fill-amber-500 text-amber-500" />
+              </div>
+              <div>
+                <span className="text-xs text-[#5E5E61] block font-medium">Điểm đánh giá shop</span>
+                <span className="font-mono text-xl font-bold text-[#101410]">
+                  {reviewsStats.average_rating || 5.0} <span className="text-xs font-normal text-[#5E5E61]">/ 5 sao</span>
+                </span>
+              </div>
+            </div>
+
+            <div className="bg-white p-4 rounded-2xl border border-[#DAE7C7] shadow-xs flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-[#F5F8EF] text-[#08482D] flex items-center justify-center font-bold">
+                <MessageSquare className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-xs text-[#5E5E61] block font-medium">Tổng số đánh giá</span>
+                <span className="font-mono text-xl font-bold text-[#101410]">{reviewsStats.total_reviews} lượt</span>
+              </div>
+            </div>
+
+            <div className="bg-white p-4 rounded-2xl border border-[#DAE7C7] shadow-xs flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold ${
+                reviewsStats.unreplied_count > 0 ? 'bg-amber-100 text-amber-900' : 'bg-emerald-50 text-emerald-700'
+              }`}>
+                <Bell className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-xs text-[#5E5E61] block font-medium">Chưa phản hồi</span>
+                <span className={`font-mono text-xl font-bold ${
+                  reviewsStats.unreplied_count > 0 ? 'text-[#C2522D]' : 'text-emerald-700'
+                }`}>
+                  {reviewsStats.unreplied_count} đánh giá
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Filters Bar */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-2 scrollbar-none">
+            {[
+              { id: 'all', label: `Tất cả (${sellerReviews.length})` },
+              { id: 'unreplied', label: `Chưa phản hồi (${sellerReviews.filter(r => !r.seller_reply).length})` },
+              { id: 'with_media', label: `Có ảnh/video (${sellerReviews.filter(r => (Array.isArray(r.images) ? r.images.length > 0 : !!r.images) || !!r.video_url).length})` },
+              { id: '5', label: '5 sao ★' },
+              { id: '4', label: '4 sao ★' },
+              { id: '3', label: '3 sao ★' },
+              { id: '2', label: '2 sao ★' },
+              { id: '1', label: '1 sao ★' }
+            ].map(f => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setSellerReviewFilter(f.id)}
+                className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 ${
+                  sellerReviewFilter === f.id
+                    ? 'bg-[#08482D] text-white shadow-xs'
+                    : 'bg-white border border-[#DAE7C7] text-[#5E5E61] hover:text-[#101410]'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Reviews List */}
+          {loadingSellerReviews ? (
+            <div className="py-12 text-center text-xs text-[#5E5E61]">Đang tải danh sách đánh giá...</div>
+          ) : sellerReviews.length === 0 ? (
+            <div className="bg-white rounded-3xl border border-[#DAE7C7] p-12 text-center">
+              <Star className="w-12 h-12 mx-auto text-[#DAE7C7] mb-2" />
+              <h3 className="text-base font-bold text-[#101410] mb-1">Chưa có đánh giá nào</h3>
+              <p className="text-xs text-[#5E5E61]">Các đánh giá từ khách hàng sau khi nhận hàng sẽ xuất hiện tại đây.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {sellerReviews
+                .filter(r => {
+                  if (sellerReviewFilter === 'unreplied') return !r.seller_reply;
+                  if (sellerReviewFilter === 'with_media') {
+                    const hasImgs = Array.isArray(r.images) ? r.images.length > 0 : (r.images && r.images !== '[]');
+                    return hasImgs || !!r.video_url;
+                  }
+                  if (['5', '4', '3', '2', '1'].includes(sellerReviewFilter)) {
+                    return r.rating === Number(sellerReviewFilter);
+                  }
+                  return true;
+                })
+                .map(rev => {
+                  const imagesList: string[] = Array.isArray(rev.images)
+                    ? rev.images
+                    : typeof rev.images === 'string'
+                    ? JSON.parse(rev.images || '[]')
+                    : [];
+                  const tagsList: string[] = Array.isArray(rev.tags)
+                    ? rev.tags
+                    : typeof rev.tags === 'string'
+                    ? JSON.parse(rev.tags || '[]')
+                    : [];
+
+                  return (
+                    <div
+                      key={rev.id}
+                      className={`bg-white rounded-3xl border p-5 shadow-xs space-y-3.5 transition-all ${
+                        rev.is_hidden ? 'border-amber-300 bg-amber-50/20' : 'border-[#DAE7C7]'
+                      }`}
+                    >
+                      {/* Top Header of review card */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#E2E8D8] pb-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-[#08482D] text-white flex items-center justify-center font-bold text-xs shrink-0">
+                            {rev.is_anonymous ? 'A' : (rev.buyer_name || 'K')[0].toUpperCase()}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-xs text-[#101410]">
+                                {rev.is_anonymous ? 'Người mua ẩn danh' : rev.buyer_name}
+                              </span>
+                              {rev.is_anonymous && (
+                                <span className="text-[10px] bg-stone-100 text-[#5E5E61] px-1.5 py-0.2 rounded font-medium">
+                                  Ẩn danh
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[11px] text-[#5E5E61]">
+                              Sản phẩm: <strong className="text-[#08482D]">{rev.product_name}</strong>
+                              {rev.order_code && ` · Đơn #${rev.order_code}`}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {rev.is_hidden ? (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-800 flex items-center gap-1">
+                              <Flag className="w-3 h-3" />
+                              Đã ẩn ({rev.report_reason || 'Vi phạm'})
+                            </span>
+                          ) : rev.seller_reply ? (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                              Đã phản hồi
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900">
+                              Chưa phản hồi
+                            </span>
+                          )}
+                          <span className="text-[10px] text-[#5E5E61] font-mono">
+                            {new Date(rev.created_at).toLocaleString('vi-VN')}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Rating stars & Tags */}
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <div className="flex text-amber-400">
+                            {[1, 2, 3, 4, 5].map(s => (
+                              <Star
+                                key={s}
+                                className={`w-4 h-4 ${
+                                  s <= rev.rating ? 'fill-amber-400 text-amber-400' : 'text-stone-300'
+                                }`}
+                              />
+                            ))}
+                          </div>
+                          <span className="text-xs font-bold text-[#101410]">
+                            {rev.rating === 5 ? 'Tuyệt vời' : rev.rating === 4 ? 'Hài lòng' : rev.rating === 3 ? 'Bình thường' : rev.rating === 2 ? 'Không hài lòng' : 'Tệ'}
+                          </span>
+                        </div>
+
+                        {tagsList.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {tagsList.map((tag: string, i: number) => (
+                              <span
+                                key={i}
+                                className="text-[11px] px-2 py-0.5 bg-[#F5F8EF] border border-[#DAE7C7] rounded-full text-[#08482D] font-medium"
+                              >
+                                ✓ {tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {rev.comment && (
+                          <p className="text-xs text-[#101410] leading-relaxed whitespace-pre-line bg-[#FAFBF9] p-3 rounded-xl border border-[#DAE7C7]/50">
+                            {rev.comment}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Media Thumbnails */}
+                      {(imagesList.length > 0 || rev.video_url) && (
+                        <div className="flex items-center gap-2.5 overflow-x-auto pb-1 pt-1">
+                          {imagesList.map((imgUrl, i) => (
+                            <img
+                              key={i}
+                              src={imgUrl}
+                              alt={`review-${i}`}
+                              className="w-16 h-16 rounded-xl object-cover border border-[#DAE7C7] shrink-0"
+                            />
+                          ))}
+                          {rev.video_url && (
+                            <div className="relative w-16 h-16 rounded-xl overflow-hidden border border-[#DAE7C7] bg-black shrink-0 flex items-center justify-center">
+                              {rev.video_poster ? (
+                                <img src={rev.video_poster} alt="poster" className="w-full h-full object-cover opacity-80" />
+                              ) : (
+                                <video src={rev.video_url} className="w-full h-full object-cover opacity-80" />
+                              )}
+                              <div className="absolute inset-0 flex items-center justify-center">
+                                <Play className="w-5 h-5 text-white fill-white drop-shadow-md" />
+                              </div>
+                              {rev.video_duration && (
+                                <span className="absolute bottom-1 right-1 text-[9px] bg-black/70 text-white px-1 rounded font-mono">
+                                  {Math.round(rev.video_duration)}s
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Existing Seller Reply Box */}
+                      {rev.seller_reply && (
+                        <div className="p-3 bg-[#DAE7C7]/30 border border-[#DAE7C7] rounded-2xl space-y-1 text-xs">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-[#08482D] flex items-center gap-1.5">
+                              <span>Phản hồi của Người bán</span>
+                              {rev.seller_reply_at && (
+                                <span className="text-[10px] text-[#5E5E61] font-mono font-normal">
+                                  · {new Date(rev.seller_reply_at).toLocaleString('vi-VN')}
+                                </span>
+                              )}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setReplyModal({ open: true, review: rev, text: rev.seller_reply, submitting: false })}
+                              className="text-[11px] text-[#08482D] font-bold hover:underline"
+                            >
+                              Sửa phản hồi
+                            </button>
+                          </div>
+                          <p className="text-[#101410] leading-relaxed whitespace-pre-line">
+                            {rev.seller_reply}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Action buttons */}
+                      <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#E2E8D8]">
+                        {!rev.seller_reply && (
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={() => setReplyModal({ open: true, review: rev, text: '', submitting: false })}
+                            className="text-xs"
+                          >
+                            <MessageSquare className="w-3.5 h-3.5 mr-1.5" />
+                            Phản hồi đánh giá
+                          </Button>
+                        )}
+
+                        {!rev.is_hidden && (
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            onClick={() => setReportModal({ open: true, review: rev, reason: 'Ngôn từ không phù hợp', submitting: false })}
+                            className="text-xs"
+                          >
+                            <Flag className="w-3.5 h-3.5 mr-1.5" />
+                            Báo cáo vi phạm
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* MODAL: TRẢ GIÁ LẠI (COUNTER OFFER) */}
       {counterModalOffer && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
@@ -2547,6 +3059,323 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({ onViewPreview 
         isOpen={!!labelModalOrder}
         onClose={() => setLabelModalOrder(null)}
       />
+
+      {/* MODAL: PHẢN HỒI ĐÁNH GIÁ (SELLER REPLY) */}
+      {replyModal.open && replyModal.review && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-lg bg-white rounded-3xl border border-[#DAE7C7] shadow-2xl p-6 sm:p-7 space-y-4 animate-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-[#E2E8D8]">
+              <div>
+                <h3 className="text-base font-bold text-[#101410] flex items-center gap-2">
+                  <MessageSquare className="w-5 h-5 text-[#08482D]" />
+                  Phản hồi đánh giá
+                </h3>
+                <p className="text-xs text-[#5E5E61] mt-0.5">
+                  Đánh giá của <strong>{replyModal.review.is_anonymous ? 'Người mua ẩn danh' : replyModal.review.buyer_name}</strong> cho sản phẩm <strong>{replyModal.review.product_name}</strong>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReplyModal({ open: false, review: null, text: '', submitting: false })}
+                className="text-[#5E5E61] hover:text-[#101410]"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Original review brief */}
+            <div className="p-3 bg-[#F5F8EF] rounded-2xl border border-[#DAE7C7]/60 text-xs space-y-1">
+              <div className="flex items-center gap-1.5 text-amber-500 font-bold">
+                <span>{replyModal.review.rating}★</span>
+                <span className="text-[#101410] font-normal">{replyModal.review.comment || '(Không có lời nhận xét)'}</span>
+              </div>
+            </div>
+
+            <form onSubmit={handleReplySubmit} className="space-y-4">
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-bold text-[#101410]">Nội dung phản hồi của shop *</label>
+                  <span className={`text-[11px] font-mono ${replyModal.text.length > 300 ? 'text-red-600 font-bold' : 'text-[#5E5E61]'}`}>
+                    {replyModal.text.length}/300
+                  </span>
+                </div>
+                <textarea
+                  required
+                  rows={4}
+                  maxLength={300}
+                  value={replyModal.text}
+                  onChange={e => setReplyModal(prev => ({ ...prev, text: e.target.value }))}
+                  placeholder="Nhập nội dung phản hồi gửi khách hàng (tối đa 300 ký tự)..."
+                  className="w-full px-3.5 py-2.5 text-xs bg-[#F5F8EF] border border-[#DAE7C7] rounded-xl focus:outline-none focus:border-[#08482D] text-[#101410]"
+                />
+              </div>
+
+              {/* Mẫu nhanh */}
+              <div className="space-y-1.5">
+                <span className="text-[11px] font-semibold text-[#5E5E61] block">Mẫu phản hồi nhanh:</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    'Cảm ơn bạn đã tin tưởng shop ạ!',
+                    'Dạ shop cảm ơn bạn nhiều! Chúc bạn dùng món đồ thật ưng ý ạ.',
+                    'Dạ shop xin lỗi vì trải nghiệm chưa trọn vẹn, shop sẽ liên hệ hỗ trợ bạn ngay ạ!'
+                  ].map((preset, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setReplyModal(prev => ({ ...prev, text: preset }))}
+                      className="text-[11px] px-2.5 py-1 rounded-full bg-[#DAE7C7]/40 hover:bg-[#DAE7C7] text-[#08482D] transition-colors border border-[#DAE7C7]"
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2.5 pt-3 border-t border-[#E2E8D8]">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  type="button"
+                  onClick={() => setReplyModal({ open: false, review: null, text: '', submitting: false })}
+                >
+                  Hủy
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  type="submit"
+                  disabled={!replyModal.text.trim() || replyModal.text.length > 300 || replyModal.submitting}
+                >
+                  {replyModal.submitting ? 'Đang gửi...' : 'Gửi phản hồi'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: BÁO CÁO VI PHẠM (SELLER REPORT) */}
+      {reportModal.open && reportModal.review && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white rounded-3xl border border-[#DAE7C7] shadow-2xl p-6 space-y-4 animate-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-[#E2E8D8]">
+              <h3 className="text-base font-bold text-red-700 flex items-center gap-2">
+                <Flag className="w-5 h-5 text-red-600" />
+                Báo cáo vi phạm đánh giá
+              </h3>
+              <button
+                type="button"
+                onClick={() => setReportModal({ open: false, review: null, reason: 'Ngôn từ không phù hợp', submitting: false })}
+                className="text-[#5E5E61] hover:text-[#101410]"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-[#5E5E61] leading-relaxed">
+              Đánh giá này sẽ bị ẩn khỏi trang sản phẩm và trang shop công khai. Người mua vẫn thấy đánh giá của họ với thông báo <em>"Đánh giá đang bị ẩn"</em>.
+            </p>
+
+            <form onSubmit={handleReportSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-[#101410] block">Chọn lý do vi phạm *</label>
+                {[
+                  'Ngôn từ không phù hợp',
+                  'Spam',
+                  'Không liên quan'
+                ].map(r => (
+                  <label
+                    key={r}
+                    className={`flex items-center gap-2.5 p-3 rounded-xl border text-xs cursor-pointer transition-colors ${
+                      reportModal.reason === r
+                        ? 'border-red-500 bg-red-50/50 font-bold text-red-900'
+                        : 'border-[#DAE7C7] hover:bg-[#F5F8EF] text-[#101410]'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="reportReason"
+                      value={r}
+                      checked={reportModal.reason === r}
+                      onChange={e => setReportModal(prev => ({ ...prev, reason: e.target.value }))}
+                      className="accent-red-600"
+                    />
+                    <span>{r}</span>
+                  </label>
+                ))}
+              </div>
+
+              <div className="flex justify-end gap-2.5 pt-3 border-t border-[#E2E8D8]">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  type="button"
+                  onClick={() => setReportModal({ open: false, review: null, reason: 'Ngôn từ không phù hợp', submitting: false })}
+                >
+                  Hủy
+                </Button>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  type="submit"
+                  disabled={reportModal.submitting}
+                >
+                  {reportModal.submitting ? 'Đang xử lý...' : 'Xác nhận ẩn đánh giá'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: ĐỔI MẬT KHẨU (CHANGE PASSWORD) */}
+      {changePasswordModal.open && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white rounded-3xl border border-[#DAE7C7] shadow-2xl p-6 sm:p-7 space-y-4 animate-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-[#E2E8D8]">
+              <h3 className="text-base font-bold text-[#101410] flex items-center gap-2">
+                <KeyRound className="w-5 h-5 text-[#08482D]" />
+                Đổi mật khẩu người bán
+              </h3>
+              <button
+                type="button"
+                onClick={() => setChangePasswordModal({ open: false, oldPass: '', newPass: '', confirmPass: '', loading: false })}
+                className="text-[#5E5E61] hover:text-[#101410]"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleChangePasswordSubmit} className="space-y-3.5 text-xs">
+              <div>
+                <label className="font-semibold text-[#101410] block mb-1">Mật khẩu hiện tại *</label>
+                <input
+                  type="password"
+                  required
+                  value={changePasswordModal.oldPass}
+                  onChange={e => setChangePasswordModal(prev => ({ ...prev, oldPass: e.target.value }))}
+                  placeholder="Nhập mật khẩu hiện tại..."
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#DAE7C7] bg-[#F5F8EF] focus:outline-none focus:border-[#08482D]"
+                />
+              </div>
+
+              <div>
+                <label className="font-semibold text-[#101410] block mb-1">Mật khẩu mới (tối thiểu 8 ký tự) *</label>
+                <input
+                  type="password"
+                  required
+                  minLength={8}
+                  value={changePasswordModal.newPass}
+                  onChange={e => setChangePasswordModal(prev => ({ ...prev, newPass: e.target.value }))}
+                  placeholder="Tối thiểu 8 ký tự..."
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#DAE7C7] bg-[#F5F8EF] focus:outline-none focus:border-[#08482D]"
+                />
+              </div>
+
+              <div>
+                <label className="font-semibold text-[#101410] block mb-1">Nhập lại mật khẩu mới *</label>
+                <input
+                  type="password"
+                  required
+                  minLength={8}
+                  value={changePasswordModal.confirmPass}
+                  onChange={e => setChangePasswordModal(prev => ({ ...prev, confirmPass: e.target.value }))}
+                  placeholder="Nhập lại mật khẩu mới..."
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#DAE7C7] bg-[#F5F8EF] focus:outline-none focus:border-[#08482D]"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2.5 pt-3 border-t border-[#E2E8D8]">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  type="button"
+                  onClick={() => setChangePasswordModal({ open: false, oldPass: '', newPass: '', confirmPass: '', loading: false })}
+                >
+                  Hủy
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  type="submit"
+                  disabled={changePasswordModal.loading}
+                >
+                  {changePasswordModal.loading ? 'Đang cập nhật...' : 'Cập nhật mật khẩu'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: HỒ SƠ SHOP (SHOP PROFILE) */}
+      {shopProfileModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-lg bg-white rounded-3xl border border-[#DAE7C7] shadow-2xl p-6 sm:p-7 space-y-5 animate-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-[#E2E8D8]">
+              <h3 className="text-base font-bold text-[#101410] flex items-center gap-2">
+                <UserCheck className="w-5 h-5 text-[#08482D]" />
+                Hồ sơ Tiệm Đồ Cũ Còn Thương
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShopProfileModal(false)}
+                className="text-[#5E5E61] hover:text-[#101410]"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3.5 text-xs">
+              <div className="flex items-center gap-3 p-3 bg-[#F5F8EF] rounded-2xl border border-[#DAE7C7]">
+                <div className="w-12 h-12 rounded-2xl bg-[#08482D] text-white flex items-center justify-center text-lg font-bold shadow-xs">
+                  ♻
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-[#101410]">Tiệm Đồ Cũ Còn Thương</h4>
+                  <p className="text-[11px] text-[#5E5E61] font-mono">Tài khoản quản trị: @{currentUser?.username || 'admin'}</p>
+                  <span className="inline-block mt-0.5 text-[9px] font-bold px-2 py-0.5 rounded-full bg-[#08482D] text-white uppercase">
+                    Kênh Người Bán Chính Thức
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-2 p-4 bg-white rounded-2xl border border-[#DAE7C7]/70">
+                <div className="flex justify-between py-1 border-b border-[#DAE7C7]/40">
+                  <span className="text-[#5E5E61]">Hotline hỗ trợ:</span>
+                  <span className="font-mono font-bold text-[#101410]">0987 654 321</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-[#DAE7C7]/40">
+                  <span className="text-[#5E5E61]">Địa chỉ kho tiếp nhận:</span>
+                  <span className="text-right text-[#101410] font-medium">123 Đường Bạc Hà, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-[#DAE7C7]/40">
+                  <span className="text-[#5E5E61]">Chính sách độc bản:</span>
+                  <span className="text-right text-[#08482D] font-bold">Bảo chứng 3 ngày đổi trả hoàn tiền</span>
+                </div>
+                <div className="py-1">
+                  <span className="text-[#5E5E61] block mb-1">Mô tả tôn chỉ hoạt động:</span>
+                  <p className="text-[#101410] leading-relaxed italic bg-[#F5F8EF]/50 p-2.5 rounded-xl border border-[#DAE7C7]/40">
+                    "Mỗi món đồ cũ đều mang một câu chuyện đẹp. Chúng tôi kiểm định công khai từng vết xước, khuyết điểm để mang lại sự an tâm tuyệt đối cho người mua."
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-[#E2E8D8]">
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setShopProfileModal(false)}
+              >
+                Đóng hồ sơ
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      </div>
     </div>
   );
 };
+

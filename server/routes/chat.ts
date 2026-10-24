@@ -1,8 +1,10 @@
 import { Router } from 'express';
 import { queryAll, queryOne, run, createNotification } from '../db.js';
 import { requireAuth, AuthRequest } from '../auth.js';
+import { isPresentationModeActive } from './demo.js';
 
 const router = Router();
+
 
 // Filter checking for phone numbers and external URLs
 function containsRestrictedContact(text: string): boolean {
@@ -58,6 +60,10 @@ router.get('/conversations', requireAuth, (req: AuthRequest, res) => {
 // 2. POST /api/chat/start - Start or retrieve conversation
 router.post('/start', requireAuth, (req: AuthRequest, res) => {
   const { product_id, order_id } = req.body;
+  const isSeller = req.user?.role === 'seller';
+  if (!isSeller && isPresentationModeActive() && !req.user?.is_owner) {
+    return res.status(403).json({ error: 'Cửa hàng đang tạm dừng nhận đơn trong buổi thuyết trình. Bạn vẫn có thể xem sản phẩm nhé!' });
+  }
   const buyerId = req.user?.role === 'buyer' ? req.user.id : Number(req.body.buyer_id);
 
   if (!buyerId) {
@@ -149,6 +155,9 @@ router.post(['/:id/messages', '/conversations/:id/messages'], requireAuth, (req:
   const convId = Number(req.params.id);
   const isSeller = req.user?.role === 'seller';
   const userId = req.user?.id;
+  if (!isSeller && isPresentationModeActive() && !req.user?.is_owner) {
+    return res.status(403).json({ error: 'Cửa hàng đang tạm dừng nhận đơn trong buổi thuyết trình. Bạn vẫn có thể xem sản phẩm nhé!' });
+  }
   const { content } = req.body;
 
   if (!content || !String(content).trim()) {

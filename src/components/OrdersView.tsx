@@ -38,7 +38,10 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
     image_url: string;
     condition_pct: number;
   } | null>(null);
+  const [reviewModalInitial, setReviewModalInitial] = useState<any | null>(null);
   const [reviewedProductIds, setReviewedProductIds] = useState<number[]>([]);
+  const [orderReviewsMap, setOrderReviewsMap] = useState<Record<number, any[]>>({});
+  const [postCompletePromptOrder, setPostCompletePromptOrder] = useState<Order | null>(null);
 
   // Cancellation modal state
   const [cancelModalOrder, setCancelModalOrder] = useState<Order | null>(null);
@@ -56,6 +59,9 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
     try {
       const res = await api.getOrderReviewedItems(orderId);
       setReviewedProductIds(res.reviewed_product_ids || []);
+      if (res.reviews) {
+        setOrderReviewsMap(prev => ({ ...prev, [orderId]: res.reviews || [] }));
+      }
     } catch {
       setReviewedProductIds([]);
     }
@@ -144,9 +150,13 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
 
   const handleCompleteOrder = async (orderId: number) => {
     try {
-      await api.completeOrder(orderId);
+      const res = await api.completeOrder(orderId);
       showToast('Cảm ơn bạn đã xác nhận đã nhận hàng!', 'success');
       await fetchOrders(false);
+      const updated = res.order || orders.find(o => o.id === orderId) || selectedOrder;
+      if (updated) {
+        setPostCompletePromptOrder({ ...updated, status: 'completed' });
+      }
     } catch (err: any) {
       showToast(err.message || 'Lỗi xác nhận nhận hàng', 'error');
     }
@@ -577,17 +587,32 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                         {/* Nút đánh giá khi đơn đã Hoàn thành */}
                         {selectedOrder.status === 'completed' && (
                           isReviewed ? (
-                            <span className="text-[11px] font-mono text-[#08482D] font-bold flex items-center gap-1 bg-[#08482D]/10 px-2 py-0.5 rounded-full">
-                              ✓ Đã đánh giá
-                            </span>
+                            <button
+                              onClick={() => {
+                                const rev = (orderReviewsMap[selectedOrder.id] || []).find((r: any) => r.product_id === item.product_id);
+                                setReviewModalInitial(rev || null);
+                                setReviewModalProduct({
+                                  id: item.product_id,
+                                  name: item.product_name,
+                                  image_url: item.image_url,
+                                  condition_pct: item.condition_pct
+                                });
+                              }}
+                              className="px-2.5 py-1 bg-[#DAE7C7]/50 hover:bg-[#DAE7C7] text-[#08482D] text-[11px] font-bold rounded-lg transition-colors border border-[#DAE7C7]"
+                            >
+                              Xem đánh giá
+                            </button>
                           ) : (
                             <button
-                              onClick={() => setReviewModalProduct({
-                                id: item.product_id,
-                                name: item.product_name,
-                                image_url: item.image_url,
-                                condition_pct: item.condition_pct
-                              })}
+                              onClick={() => {
+                                setReviewModalInitial(null);
+                                setReviewModalProduct({
+                                  id: item.product_id,
+                                  name: item.product_name,
+                                  image_url: item.image_url,
+                                  condition_pct: item.condition_pct
+                                });
+                              }}
                               className="px-2.5 py-1 bg-[#C2522D] text-white text-[11px] font-bold rounded-lg hover:bg-[#B33F33] transition-colors shadow-xs"
                             >
                               ⭐ Đánh giá
@@ -788,14 +813,64 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
         </div>
       )}
 
+      {/* Post Complete Prompt Modal */}
+      {postCompletePromptOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-2xl border border-[#DAE7C7] text-center space-y-4">
+            <div className="w-14 h-14 rounded-full bg-[#DAE7C7]/60 text-[#08482D] flex items-center justify-center mx-auto">
+              <Star className="w-7 h-7 fill-[#08482D]" />
+            </div>
+            <div>
+              <h3 className="font-serif text-xl font-bold text-[#08482D]">Cảm ơn bạn!</h3>
+              <p className="text-xs text-[#5E5E61] mt-1.5 leading-relaxed">
+                Đánh giá món đồ để giúp người mua sau nhé
+              </p>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setPostCompletePromptOrder(null)}
+                className="flex-1 py-2.5 rounded-xl border border-[#DAE7C7] text-xs font-semibold text-[#5E5E61] hover:bg-[#F5F8EF] transition-colors"
+              >
+                Để sau
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const ord = postCompletePromptOrder;
+                  setPostCompletePromptOrder(null);
+                  if (ord.items && ord.items.length > 0) {
+                    setSelectedOrder(ord);
+                    setReviewModalInitial(null);
+                    setReviewModalProduct({
+                      id: ord.items[0].product_id,
+                      name: ord.items[0].product_name,
+                      image_url: ord.items[0].image_url,
+                      condition_pct: ord.items[0].condition_pct
+                    });
+                  }
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-[#08482D] text-white text-xs font-bold hover:bg-[#08482D]/90 shadow-sm transition-colors"
+              >
+                Đánh giá ngay
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Product Review Modal */}
       {reviewModalProduct && selectedOrder && (
         <ReviewModal
           isOpen={!!reviewModalProduct}
-          onClose={() => setReviewModalProduct(null)}
+          onClose={() => {
+            setReviewModalProduct(null);
+            setReviewModalInitial(null);
+          }}
           orderId={selectedOrder.id}
           orderCode={selectedOrder.code}
           product={reviewModalProduct}
+          initialReview={reviewModalInitial}
           onSuccess={() => {
             fetchReviewedItems(selectedOrder.id);
             fetchOrders(true);

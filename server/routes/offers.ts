@@ -1,8 +1,10 @@
 import { Router } from 'express';
 import { queryAll, queryOne, run, createNotification } from '../db.js';
 import { requireAuth, AuthRequest } from '../auth.js';
+import { isPresentationModeActive } from './demo.js';
 
 const router = Router();
+
 
 // Auto-expire outdated offers
 function expireOutdatedOffers() {
@@ -59,6 +61,10 @@ router.get('/seller', requireAuth, (req: AuthRequest, res) => {
 router.post('/', requireAuth, (req: AuthRequest, res) => {
   if (req.user?.role !== 'buyer') {
     return res.status(403).json({ error: 'Chỉ tài khoản người mua mới được gửi lời trả giá' });
+  }
+
+  if (isPresentationModeActive() && !req.user?.is_owner) {
+    return res.status(403).json({ error: 'Cửa hàng đang tạm dừng nhận đơn trong buổi thuyết trình. Bạn vẫn có thể xem sản phẩm nhé!' });
   }
 
   expireOutdatedOffers();
