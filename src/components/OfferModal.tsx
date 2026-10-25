@@ -85,19 +85,19 @@ export const OfferModal: React.FC<OfferModalProps> = ({ product, onClose, onSucc
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
       <div 
-        className="relative w-full max-w-lg bg-white rounded-3xl border border-[#E2E8D8] shadow-2xl overflow-hidden p-6 text-[#101410]"
+        className="relative w-full max-w-lg max-h-[90vh] flex flex-col bg-white rounded-3xl border border-[#E2E8D8] shadow-2xl overflow-hidden p-6 text-[#101410]"
         onClick={(e) => e.stopPropagation()}
       >
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 w-9 h-9 rounded-full bg-[#F5F8EF] border border-[#E2E8D8] text-[#5E5E61] hover:text-[#101410] flex items-center justify-center transition-colors"
+          className="absolute top-4 right-4 w-9 h-9 rounded-full bg-[#F5F8EF] border border-[#E2E8D8] text-[#5E5E61] hover:text-[#101410] flex items-center justify-center transition-colors shrink-0 z-10"
           aria-label="Đóng"
         >
           <X className="w-5 h-5" />
         </button>
 
-        <div className="flex items-center gap-3 mb-5">
-          <div className="w-10 h-10 rounded-2xl bg-[#DAE7C7]/50 flex items-center justify-center text-[#08482D]">
+        <div className="flex items-center gap-3 mb-4 shrink-0">
+          <div className="w-10 h-10 rounded-2xl bg-[#DAE7C7]/50 flex items-center justify-center text-[#08482D] shrink-0">
             <Tag className="w-5 h-5" />
           </div>
           <div>
@@ -107,7 +107,7 @@ export const OfferModal: React.FC<OfferModalProps> = ({ product, onClose, onSucc
         </div>
 
         {/* Product mini info */}
-        <div className="p-3 rounded-2xl bg-[#F5F8EF] border border-[#E2E8D8] flex items-center gap-3 mb-5">
+        <div className="p-3 rounded-2xl bg-[#F5F8EF] border border-[#E2E8D8] flex items-center gap-3 mb-4 shrink-0">
           <img
             src={product.image_url}
             alt={product.name}
@@ -134,89 +134,91 @@ export const OfferModal: React.FC<OfferModalProps> = ({ product, onClose, onSucc
             </p>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
-              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm flex items-start gap-2">
-                <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
-                <span>{error}</span>
-              </div>
-            )}
+          <form onSubmit={handleSubmit} className="flex-1 min-h-0 flex flex-col">
+            <div className="overflow-y-auto flex-1 pr-1 space-y-4">
+              {error && (
+                <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm flex items-start gap-2">
+                  <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+                  <span>{error}</span>
+                </div>
+              )}
 
-            <div>
-              <label className="block text-xs font-semibold text-[#5E5E61] uppercase tracking-wider mb-1.5">
-                Giá bạn muốn đề nghị (VNĐ)
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={priceInput}
-                  onChange={handlePriceChange}
-                  placeholder="Ví dụ: 850.000"
-                  className="w-full px-4 py-3 text-lg font-bold font-mono text-[#08482D] bg-[#F5F8EF] border border-[#DAE7C7] rounded-xl focus:outline-none focus:border-[#08482D] focus:ring-1 focus:ring-[#08482D]"
-                  required
+              <div>
+                <label className="block text-xs font-semibold text-[#5E5E61] uppercase tracking-wider mb-1.5">
+                  Giá bạn muốn đề nghị (VNĐ)
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={priceInput}
+                    onChange={handlePriceChange}
+                    placeholder="Ví dụ: 850.000"
+                    className="w-full px-4 py-3 text-lg font-bold font-mono text-[#08482D] bg-[#F5F8EF] border border-[#DAE7C7] rounded-xl focus:outline-none focus:border-[#08482D] focus:ring-1 focus:ring-[#08482D]"
+                    required
+                  />
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-medium text-[#5E5E61]">
+                    đ
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-xs text-[#5E5E61] mt-1.5">
+                  <span>Khoảng giá hợp lệ: {formatVND(minPrice)} – {formatVND(maxPrice)}</span>
+                  {discountFromOrig > 0 && discountFromOrig <= 30 && (
+                    <span className="text-emerald-700 font-semibold font-mono">Giảm {discountFromOrig}%</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Quick shortcuts */}
+              <div>
+                <span className="text-xs text-[#5E5E61] block mb-2 font-medium">Gợi ý trả nhanh:</span>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleShortcut(5)}
+                    className="py-2 px-3 text-xs font-semibold rounded-xl bg-[#F5F8EF] border border-[#DAE7C7] hover:bg-[#DAE7C7]/40 text-[#08482D] transition-colors"
+                  >
+                    -5% ({formatVND(Math.round(product.price * 0.95))})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleShortcut(10)}
+                    className="py-2 px-3 text-xs font-semibold rounded-xl bg-[#F5F8EF] border border-[#DAE7C7] hover:bg-[#DAE7C7]/40 text-[#08482D] transition-colors"
+                  >
+                    -10% ({formatVND(Math.round(product.price * 0.9))})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleShortcut(15)}
+                    className="py-2 px-3 text-xs font-semibold rounded-xl bg-[#F5F8EF] border border-[#DAE7C7] hover:bg-[#DAE7C7]/40 text-[#08482D] transition-colors"
+                  >
+                    -15% ({formatVND(Math.round(product.price * 0.85))})
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#5E5E61] uppercase tracking-wider mb-1.5">
+                  Lời nhắn gửi shop (không bắt buộc)
+                </label>
+                <textarea
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  placeholder="VD: Em ở gần có thể qua lấy ngay trong ngày nếu shop đồng ý giá này..."
+                  rows={2}
+                  maxLength={200}
+                  className="w-full px-3 py-2 text-sm bg-white border border-[#DAE7C7] rounded-xl focus:outline-none focus:border-[#08482D]"
                 />
-                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-medium text-[#5E5E61]">
-                  đ
+              </div>
+
+              <div className="p-3 rounded-xl bg-amber-50/70 border border-amber-200/80 text-xs text-amber-900 flex items-start gap-2">
+                <Clock className="w-4 h-4 shrink-0 mt-0.5 text-amber-700" />
+                <span>
+                  Khi shop đồng ý, bạn có <strong>24 giờ</strong> để đặt hàng với giá ưu đãi này. Mỗi sản phẩm bạn chỉ có 1 lời trả giá đang chờ.
                 </span>
               </div>
-              <div className="flex justify-between items-center text-xs text-[#5E5E61] mt-1.5">
-                <span>Khoảng giá hợp lệ: {formatVND(minPrice)} – {formatVND(maxPrice)}</span>
-                {discountFromOrig > 0 && discountFromOrig <= 30 && (
-                  <span className="text-emerald-700 font-semibold font-mono">Giảm {discountFromOrig}%</span>
-                )}
-              </div>
             </div>
 
-            {/* Quick shortcuts */}
-            <div>
-              <span className="text-xs text-[#5E5E61] block mb-2 font-medium">Gợi ý trả nhanh:</span>
-              <div className="grid grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleShortcut(5)}
-                  className="py-2 px-3 text-xs font-semibold rounded-xl bg-[#F5F8EF] border border-[#DAE7C7] hover:bg-[#DAE7C7]/40 text-[#08482D] transition-colors"
-                >
-                  -5% ({formatVND(Math.round(product.price * 0.95))})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleShortcut(10)}
-                  className="py-2 px-3 text-xs font-semibold rounded-xl bg-[#F5F8EF] border border-[#DAE7C7] hover:bg-[#DAE7C7]/40 text-[#08482D] transition-colors"
-                >
-                  -10% ({formatVND(Math.round(product.price * 0.9))})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleShortcut(15)}
-                  className="py-2 px-3 text-xs font-semibold rounded-xl bg-[#F5F8EF] border border-[#DAE7C7] hover:bg-[#DAE7C7]/40 text-[#08482D] transition-colors"
-                >
-                  -15% ({formatVND(Math.round(product.price * 0.85))})
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-[#5E5E61] uppercase tracking-wider mb-1.5">
-                Lời nhắn gửi shop (không bắt buộc)
-              </label>
-              <textarea
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                placeholder="VD: Em ở gần có thể qua lấy ngay trong ngày nếu shop đồng ý giá này..."
-                rows={2}
-                maxLength={200}
-                className="w-full px-3 py-2 text-sm bg-white border border-[#DAE7C7] rounded-xl focus:outline-none focus:border-[#08482D]"
-              />
-            </div>
-
-            <div className="p-3 rounded-xl bg-amber-50/70 border border-amber-200/80 text-xs text-amber-900 flex items-start gap-2">
-              <Clock className="w-4 h-4 shrink-0 mt-0.5 text-amber-700" />
-              <span>
-                Khi shop đồng ý, bạn có <strong>24 giờ</strong> để đặt hàng với giá ưu đãi này. Mỗi sản phẩm bạn chỉ có 1 lời trả giá đang chờ.
-              </span>
-            </div>
-
-            <div className="flex gap-3 pt-2">
+            <div className="flex gap-3 pt-3 mt-3 border-t border-[#E2E8D8] shrink-0 bg-white">
               <Button
                 type="button"
                 variant="secondary"

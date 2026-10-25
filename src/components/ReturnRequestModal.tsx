@@ -127,86 +127,88 @@ export const ReturnRequestModal: React.FC<ReturnRequestModalProps> = ({
             </p>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-4 overflow-y-auto pr-1">
-            {error && (
-              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                <span>{error}</span>
-              </div>
-            )}
+          <form onSubmit={handleSubmit} className="flex-1 min-h-0 flex flex-col">
+            <div className="overflow-y-auto pr-1 space-y-4 flex-1">
+              {error && (
+                <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{error}</span>
+                </div>
+              )}
 
-            <div>
-              <label className="block text-xs font-semibold text-[#5E5E61] uppercase tracking-wider mb-1.5">
-                Lý do trả hàng <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                className="w-full px-3.5 py-2.5 text-sm bg-[#F5F8EF] border border-[#DAE7C7] rounded-xl focus:outline-none focus:border-[#08482D]"
-              >
-                {REASONS.map((r, i) => (
-                  <option key={i} value={r}>{r}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-[#5E5E61] uppercase tracking-wider mb-1.5">
-                Mô tả chi tiết tình trạng hàng <span className="text-red-500">*</span>
-              </label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Vui lòng mô tả cụ thể điểm không hài lòng hoặc khác biệt so với cam kết..."
-                rows={3}
-                className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#DAE7C7] rounded-xl focus:outline-none focus:border-[#08482D]"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-[#5E5E61] uppercase tracking-wider mb-1.5">
-                Hình ảnh bằng chứng thực tế
-              </label>
-              <div className="flex gap-2 mb-2">
-                <input
-                  type="url"
-                  value={newUrlInput}
-                  onChange={(e) => setNewUrlInput(e.target.value)}
-                  placeholder="Dán link ảnh bằng chứng..."
-                  className="flex-1 px-3 py-1.5 text-xs bg-[#F5F8EF] border border-[#DAE7C7] rounded-xl focus:outline-none"
-                />
-                <button
-                  type="button"
-                  onClick={handleAddImage}
-                  className="px-3 py-1.5 text-xs font-medium bg-[#08482D] text-white rounded-xl hover:bg-[#073d26] transition-colors"
+              <div>
+                <label className="block text-xs font-semibold text-[#5E5E61] uppercase tracking-wider mb-1.5">
+                  Lý do trả hàng <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  className="w-full px-3.5 py-2.5 text-sm bg-[#F5F8EF] border border-[#DAE7C7] rounded-xl focus:outline-none focus:border-[#08482D]"
                 >
-                  Thêm ảnh
-                </button>
+                  {REASONS.map((r, i) => (
+                    <option key={i} value={r}>{r}</option>
+                  ))}
+                </select>
               </div>
 
-              {/* Thumbnails */}
-              <div className="flex flex-wrap gap-2">
-                {imageUrls.map((url, i) => (
-                  <div key={i} className="relative w-16 h-16 rounded-xl border border-[#DAE7C7] overflow-hidden group">
-                    <img src={url} alt={`proof-${i}`} className="w-full h-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveImage(i)}
-                      className="absolute inset-0 bg-black/50 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
+              <div>
+                <label className="block text-xs font-semibold text-[#5E5E61] uppercase tracking-wider mb-1.5">
+                  Mô tả chi tiết tình trạng hàng <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Vui lòng mô tả cụ thể điểm không hài lòng hoặc khác biệt so với cam kết..."
+                  rows={3}
+                  className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#DAE7C7] rounded-xl focus:outline-none focus:border-[#08482D]"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#5E5E61] uppercase tracking-wider mb-1.5">
+                  Hình ảnh bằng chứng thực tế
+                </label>
+                <div className="flex gap-2 mb-2">
+                  <input
+                    type="url"
+                    value={newUrlInput}
+                    onChange={(e) => setNewUrlInput(e.target.value)}
+                    placeholder="Dán link ảnh bằng chứng..."
+                    className="flex-1 px-3 py-1.5 text-xs bg-[#F5F8EF] border border-[#DAE7C7] rounded-xl focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddImage}
+                    className="px-3 py-1.5 text-xs font-medium bg-[#08482D] text-white rounded-xl hover:bg-[#073d26] transition-colors"
+                  >
+                    Thêm ảnh
+                  </button>
+                </div>
+
+                {/* Thumbnails */}
+                <div className="flex flex-wrap gap-2">
+                  {imageUrls.map((url, i) => (
+                    <div key={i} className="relative w-16 h-16 rounded-xl border border-[#DAE7C7] overflow-hidden group">
+                      <img src={url} alt={`proof-${i}`} className="w-full h-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveImage(i)}
+                        className="absolute inset-0 bg-black/50 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="p-3 bg-[#DAE7C7]/30 border border-[#DAE7C7] rounded-xl text-[11px] text-[#08482D]">
+                <strong>Chính sách bảo vệ người mua:</strong> Sau khi shop xác nhận nhận lại sản phẩm theo mã vận đơn chuyển trả, hệ thống sẽ tự động hoàn tiền 100% và cập nhật số lượng tồn kho.
               </div>
             </div>
 
-            <div className="p-3 bg-[#DAE7C7]/30 border border-[#DAE7C7] rounded-xl text-[11px] text-[#08482D]">
-              <strong>Chính sách bảo vệ người mua:</strong> Sau khi shop xác nhận nhận lại sản phẩm theo mã vận đơn chuyển trả, hệ thống sẽ tự động hoàn tiền 100% và cập nhật số lượng tồn kho.
-            </div>
-
-            <div className="flex gap-3 pt-2">
+            <div className="flex gap-3 pt-3 mt-3 border-t border-[#E2E8D8] shrink-0 bg-white">
               <Button
                 type="button"
                 variant="secondary"

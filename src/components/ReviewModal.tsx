@@ -342,15 +342,15 @@ export function ReviewModal({
   const activeStar = hoverRating || rating;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-fade-in overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
       <div 
-        className="relative w-full max-w-2xl bg-[#FFFFFF] rounded-3xl border border-[#DAE7C7] shadow-2xl overflow-hidden my-6 text-[#101410]"
+        className="relative w-full max-w-2xl max-h-[90vh] flex flex-col bg-[#FFFFFF] rounded-3xl border border-[#DAE7C7] shadow-2xl overflow-hidden my-auto text-[#101410]"
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#DAE7C7]/60 bg-[#F5F8EF]/80">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#DAE7C7]/60 bg-[#F5F8EF]/80 shrink-0">
           <div>
             <h3 className="font-serif text-xl font-bold text-[#08482D]">
               {initialReview ? 'Chỉnh sửa đánh giá sản phẩm' : 'Đánh giá sản phẩm'}
@@ -368,7 +368,8 @@ export function ReviewModal({
         </div>
 
         {/* Content */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-5 max-h-[80vh] overflow-y-auto">
+        <form onSubmit={handleSubmit} className="flex-1 overflow-hidden flex flex-col">
+          <div className="p-6 space-y-5 overflow-y-auto flex-1">
           {/* Product Block */}
           <div className="flex items-center gap-3.5 p-3.5 bg-[#F5F8EF] rounded-2xl border border-[#DAE7C7]">
             <img
@@ -660,8 +661,10 @@ export function ReviewModal({
             </div>
           )}
 
+          </div>
+
           {/* Buttons */}
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#DAE7C7]">
+          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[#DAE7C7] bg-[#F5F8EF]/80 shrink-0">
             <Button
               type="button"
               variant="secondary"

@@ -6,7 +6,7 @@ import { Header } from './components/Header';
 import { ProductCard } from './components/ProductCard';
 import { ProductDetailModal } from './components/ProductDetailModal';
 import { CartDrawer } from './components/CartDrawer';
-import { CheckoutModal } from './components/CheckoutModal';
+import { CheckoutView } from './components/CheckoutView';
 import { OrdersView } from './components/OrdersView';
 import { SellerDashboard } from './components/SellerDashboard';
 import { AuthModal } from './components/AuthModal';
@@ -38,7 +38,7 @@ function MainShopApp() {
   const { showToast } = useToast();
 
   // Navigation State
-  const [currentView, setCurrentView] = useState<'home' | 'orders' | 'seller' | 'account' | 'preview' | '404'>('home');
+  const [currentView, setCurrentView] = useState<'home' | 'orders' | 'seller' | 'account' | 'preview' | 'checkout' | '404'>('home');
   const [selectedOrderCodeForTracking, setSelectedOrderCodeForTracking] = useState<string | null>(null);
 
   // Products State & Filters
@@ -64,7 +64,6 @@ function MainShopApp() {
   const [detailOpenChat, setDetailOpenChat] = useState(false);
 
   const [isCartOpen, setIsCartOpen] = useState(false);
-  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [directCheckoutItem, setDirectCheckoutItem] = useState<{ product: Product; quantity: number } | undefined>(undefined);
   const [successOrder, setSuccessOrder] = useState<Order | null>(null);
   const [authModal, setAuthModal] = useState<{ 
@@ -106,6 +105,9 @@ function MainShopApp() {
         break;
       case 'account':
         document.title = 'Tài khoản của tôi — Đồ Cũ Còn Thương';
+        break;
+      case 'checkout':
+        document.title = 'Thanh toán đơn hàng — Đồ Cũ Còn Thương';
         break;
       case '404':
         document.title = '404 Không tìm thấy — Đồ Cũ Còn Thương';
@@ -197,6 +199,14 @@ function MainShopApp() {
         } else {
           setCurrentView('seller');
         }
+      } else if (path === '/checkout') {
+        if (user && user.role === 'buyer') {
+          setCurrentView('checkout');
+        } else if (!user) {
+          setAuthModal({ open: true, role: 'buyer', initialIsRegister: false, promptMessage: 'Đăng nhập để tiếp tục thanh toán' });
+        } else {
+          setCurrentView('seller');
+        }
       }
     };
 
@@ -259,10 +269,10 @@ function MainShopApp() {
   };
 
   useEffect(() => {
-    if (isCartOpen || isCheckoutOpen) {
+    if (isCartOpen || currentView === 'checkout') {
       loadCartData();
     }
-  }, [isCartOpen, isCheckoutOpen, user]);
+  }, [isCartOpen, currentView, user]);
 
   // Wishlist toggle handler
   const handleToggleWishlist = async (productId: number) => {
@@ -359,7 +369,9 @@ function MainShopApp() {
 
     setDirectCheckoutItem({ product, quantity });
     if (detailProduct) setDetailProduct(null);
-    setIsCheckoutOpen(true);
+    setCurrentView('checkout');
+    window.history.pushState({}, '', '/checkout');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   // Cart operations
@@ -396,8 +408,18 @@ function MainShopApp() {
   };
 
   // Navigation Guard
-  const handleNavigate = (view: 'home' | 'orders' | 'seller' | 'account') => {
-    if (view === 'seller') {
+  const handleNavigate = (view: 'home' | 'orders' | 'seller' | 'account' | 'checkout') => {
+    if (view === 'checkout') {
+      if (!user) {
+        setAuthModal({ open: true, role: 'buyer', initialIsRegister: false, promptMessage: 'Đăng nhập để tiếp tục thanh toán' });
+        return;
+      }
+      if (user.role !== 'buyer') {
+        showToast('Bạn đang đăng nhập bằng tài khoản người bán', 'error');
+        return;
+      }
+      window.history.pushState({}, '', '/checkout');
+    } else if (view === 'seller') {
       if (!user) {
         setAuthModal({ open: true, role: 'seller', initialIsRegister: false });
         return;
@@ -466,7 +488,9 @@ function MainShopApp() {
           } else if (action.type === 'buy') {
             setDirectCheckoutItem({ product: action.product, quantity: action.quantity });
             if (detailProduct) setDetailProduct(null);
-            setIsCheckoutOpen(true);
+            setCurrentView('checkout');
+            window.history.pushState({}, '', '/checkout');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
           } else if (action.type === 'offer') {
             setDetailProduct(action.product);
             setDetailOpenOffer(true);
@@ -591,6 +615,25 @@ function MainShopApp() {
             onBackToHome={() => setCurrentView('home')}
             onSelectProduct={prod => setDetailProduct(prod)}
             onAddToCart={prod => handleAddToCart(prod, 1)}
+          />
+        ) : currentView === 'checkout' ? (
+          <CheckoutView
+            items={cartItems}
+            subtotal={cartSubtotal}
+            shippingFee={cartShippingFee}
+            total={cartTotal}
+            directItem={directCheckoutItem}
+            onBackToCart={() => {
+              setCurrentView('home');
+              window.history.pushState({}, '', '/');
+              setIsCartOpen(true);
+            }}
+            onSuccess={(order) => {
+              setDirectCheckoutItem(undefined);
+              setSuccessOrder(order);
+              refreshCartCount();
+              loadCartData();
+            }}
           />
         ) : currentView === '404' ? (
           <NotFoundView onBackToHome={() => setCurrentView('home')} />
@@ -1102,25 +1145,9 @@ function MainShopApp() {
         onProceedToCheckout={() => {
           setIsCartOpen(false);
           setDirectCheckoutItem(undefined);
-          setIsCheckoutOpen(true);
-        }}
-      />
-
-      {/* Checkout Modal */}
-      <CheckoutModal
-        isOpen={isCheckoutOpen}
-        onClose={() => {
-          setIsCheckoutOpen(false);
-          setDirectCheckoutItem(undefined);
-        }}
-        items={cartItems}
-        subtotal={cartSubtotal}
-        shippingFee={cartShippingFee}
-        total={cartTotal}
-        directItem={directCheckoutItem}
-        onSuccess={order => {
-          setSuccessOrder(order);
-          setIsCheckoutOpen(false);
+          setCurrentView('checkout');
+          window.history.pushState({}, '', '/checkout');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
         }}
       />
 

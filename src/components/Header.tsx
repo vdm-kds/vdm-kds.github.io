@@ -11,8 +11,8 @@ import { formatVND } from '../utils/format';
 import { Button } from './Button';
 
 interface HeaderProps {
-  currentView: 'home' | 'orders' | 'seller' | 'account' | 'preview' | '404';
-  onNavigate: (view: 'home' | 'orders' | 'seller' | 'account') => void;
+  currentView: 'home' | 'orders' | 'seller' | 'account' | 'preview' | 'checkout' | '404';
+  onNavigate: (view: 'home' | 'orders' | 'seller' | 'account' | 'checkout') => void;
   onOpenCart: () => void;
   onOpenAuth: (role: 'buyer' | 'seller', isRegister?: boolean) => void;
   onSelectOrder?: (orderId: number) => void;

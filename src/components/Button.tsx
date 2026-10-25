@@ -30,7 +30,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(({
   ...props
 }, ref) => {
   // Base classes for pill shape, flex alignment, smooth transitions, elevation, and keyboard focus
-  const baseClasses = 'inline-flex items-center justify-center whitespace-nowrap font-sans font-semibold transition-all duration-200 select-none cursor-pointer focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[#DAE7C7] active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none disabled:active:scale-100';
+  const baseClasses = 'inline-flex flex-row items-center justify-center whitespace-nowrap font-sans font-semibold transition-all duration-200 select-none cursor-pointer focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[#DAE7C7] active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none disabled:active:scale-100';
 
   // Variant classes
   const variantClasses: Record<ButtonVariant, string> = {
@@ -38,7 +38,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(({
     secondary: 'bg-white border border-[#E2E8D8] text-[#101410] hover:bg-[#F5F8EF] hover:border-[#DAE7C7] hover:-translate-y-px shadow-2xs',
     soft: 'bg-[#DAE7C7] text-[#08482D] hover:bg-[#c9dcb2] hover:-translate-y-px',
     ghost: 'bg-transparent text-[#101410] hover:text-[#08482D] hover:underline underline-offset-4 active:scale-100',
-    danger: 'bg-[#F6DDDB] text-[#B3362F] hover:bg-[#B3362F] hover:text-white hover:-translate-y-px',
+    danger: 'bg-[#F6DDDB] text-[#B33F33] hover:bg-[#B3362F] hover:text-white hover:-translate-y-px',
     icon: 'bg-white border border-[#E2E8D8] text-[#101410] hover:bg-[#F5F8EF] hover:text-[#08482D] hover:-translate-y-px rounded-full p-0 shadow-2xs'
   };
 
@@ -65,16 +65,16 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(({
       {...props}
     >
       {loading ? (
-        <>
+        <span className="inline-flex flex-row items-center justify-center gap-2 whitespace-nowrap shrink-0">
           <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-          {children && <span>{children}</span>}
-        </>
+          {children && <span className="shrink-0">{children}</span>}
+        </span>
       ) : (
-        <>
-          {icon && <span className="shrink-0 flex items-center justify-center">{icon}</span>}
-          {children && <span>{children}</span>}
-          {iconRight && <span className="shrink-0 flex items-center justify-center">{iconRight}</span>}
-        </>
+        <span className="inline-flex flex-row items-center justify-center gap-2 whitespace-nowrap shrink-0">
+          {icon && <span className="shrink-0 inline-flex items-center justify-center">{icon}</span>}
+          {children && <span className="shrink-0 inline-flex flex-row items-center gap-1.5 whitespace-nowrap">{children}</span>}
+          {iconRight && <span className="shrink-0 inline-flex items-center justify-center">{iconRight}</span>}
+        </span>
       )}
     </button>
   );

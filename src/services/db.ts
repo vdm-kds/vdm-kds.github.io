@@ -529,22 +529,39 @@ export function getDb(): DCCTDatabase {
 
   try {
     const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object' || parsed.version < DB_VERSION) {
-      // Upgrade database version while preserving user created content if possible
-      const fresh = createInitialDatabase();
-      if (parsed?.users && Array.isArray(parsed.users)) {
-        // preserve non-owner users
-        const nonOwners = parsed.users.filter((u: any) => !u.is_owner);
-        fresh.users.push(...nonOwners);
+    if (!parsed || typeof parsed !== 'object') {
+      const initial = createInitialDatabase();
+      localStorage.setItem(DB_KEY, JSON.stringify(initial));
+      return initial;
+    }
+
+    // In-place migration & self-healing without deleting user messages, orders, or offers
+    let modified = false;
+    if (typeof parsed.version !== 'number' || parsed.version < DB_VERSION) {
+      parsed.version = DB_VERSION;
+      modified = true;
+    }
+
+    const arrayKeys: (keyof DCCTDatabase)[] = [
+      'users', 'addresses', 'products', 'coupons', 'cart_items',
+      'orders', 'shipment_events', 'offers', 'chat_conversations',
+      'chat_messages', 'return_requests', 'reviews', 'notifications', 'wishlist'
+    ];
+    for (const key of arrayKeys) {
+      if (!Array.isArray(parsed[key])) {
+        (parsed as any)[key] = [];
+        modified = true;
       }
-      localStorage.setItem(DB_KEY, JSON.stringify(fresh));
-      return fresh;
+    }
+
+    if (modified) {
+      localStorage.setItem(DB_KEY, JSON.stringify(parsed));
     }
     return parsed as DCCTDatabase;
   } catch {
-    const fresh = createInitialDatabase();
-    localStorage.setItem(DB_KEY, JSON.stringify(fresh));
-    return fresh;
+    const initial = createInitialDatabase();
+    localStorage.setItem(DB_KEY, JSON.stringify(initial));
+    return initial;
   }
 }
 
@@ -1124,7 +1141,7 @@ export const db = {
   },
 
   // --- COUPONS ---
-  async validateCoupon(code: string, subtotal: number): Promise<{ valid: boolean; discount_amount: number; coupon: Coupon; message: string }> {
+  async validateCoupon(code: string, subtotal: number, shippingFee?: number): Promise<{ valid: boolean; discount_amount: number; coupon: Coupon; message: string }> {
     await delay();
     const cleanCode = (code || '').toUpperCase().trim();
     const database = getDb();
@@ -1137,21 +1154,26 @@ export const db = {
       throw new Error(`Đơn hàng tối thiểu phải từ ${(cpn.min_order_amount || 0).toLocaleString()}đ để dùng mã này`);
     }
 
+    const actualShippingFee = shippingFee !== undefined ? shippingFee : (subtotal >= 1000000 ? 0 : 30000);
+
     let discount = 0;
-    if (cpn.type === 'percent') {
+    if (cpn.type === 'shipping') {
+      if (actualShippingFee <= 0) {
+        throw new Error('Đơn của bạn đã được miễn phí vận chuyển, không cần dùng mã này');
+      }
+      discount = Math.min(actualShippingFee, 30000);
+    } else if (cpn.type === 'percent') {
       discount = Math.round((subtotal * cpn.value) / 100);
       if (cpn.max_discount && discount > cpn.max_discount) {
         discount = cpn.max_discount;
       }
     } else if (cpn.type === 'fixed') {
-      discount = cpn.value;
-    } else if (cpn.type === 'shipping') {
-      discount = 30000;
+      discount = Math.min(subtotal, cpn.value);
     }
 
     return {
       valid: true,
-      discount_amount: Math.min(subtotal, discount),
+      discount_amount: discount,
       coupon: cpn,
       message: 'Áp dụng mã giảm giá thành công'
     };
@@ -1213,19 +1235,19 @@ export const db = {
       });
     }
 
+    const shipping_fee = subtotal >= 1000000 ? 0 : 30000;
     let discount_amount = 0;
     if (payload.coupon_code) {
       try {
-        const valRes = await db.validateCoupon(payload.coupon_code, subtotal);
+        const valRes = await db.validateCoupon(payload.coupon_code, subtotal, shipping_fee);
         discount_amount = valRes.discount_amount;
-        const cpn = database.coupons.find((c) => c.code === payload.coupon_code);
+        const cpn = database.coupons.find((c) => c.code.toUpperCase() === payload.coupon_code?.toUpperCase());
         if (cpn) cpn.usage_count = (cpn.usage_count || 0) + 1;
       } catch {
         // ignore invalid coupon
       }
     }
 
-    const shipping_fee = subtotal >= 1000000 ? 0 : 30000;
     const total = Math.max(0, subtotal + shipping_fee - discount_amount);
 
     const newOrderId = (database.orders.reduce((max, o) => Math.max(max, o.id), 0) || 0) + 1;
@@ -1789,7 +1811,16 @@ export const db = {
     if (session?.user?.role === 'buyer') {
       convs = convs.filter((c) => c.buyer_id === session.user.id);
     }
-    return { conversations: convs };
+
+    const populated = convs.map((c) => {
+      const msgs = database.chat_messages.filter((m) => m.conversation_id === c.id);
+      return {
+        ...c,
+        messages: msgs
+      };
+    });
+
+    return { conversations: populated };
   },
 
   async getChatDetail(conversationId: number): Promise<{ conversation: ChatConversation; messages: ChatMessage[] }> {

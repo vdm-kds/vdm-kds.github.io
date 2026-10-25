@@ -54,16 +54,16 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({
           const res = await api.getChatDetail(existingConversationId);
           if (active) {
             setConversation(res.conversation);
-            setMessages(res.conversation.messages || []);
+            setMessages(res.messages || res.conversation.messages || []);
           }
-        } else if (product || order) {
+        } else {
           const res = await api.startChat({
             product_id: product?.id,
             order_id: order?.id
           });
           if (active) {
             setConversation(res.conversation);
-            setMessages(res.conversation.messages || []);
+            setMessages(res.messages || res.conversation.messages || []);
           }
         }
       } catch (err: any) {

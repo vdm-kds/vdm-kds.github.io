@@ -289,23 +289,41 @@ export const api = {
     db.getChatConversations(),
 
   startChat: async (payload: { product_id?: number; order_id?: number; initial_message?: string }) => {
+    let convId: number | undefined;
+
     if (payload.initial_message) {
       const res = await db.sendChatMessage({
         product_id: payload.product_id,
+        order_code: payload.order_id ? String(payload.order_id) : undefined,
         content: payload.initial_message
       });
-      return { conversation: res.conversation, is_new: true };
-    }
-    const convs = await db.getChatConversations();
-    let conv = convs.conversations.find((c) => (payload.product_id ? c.product_id === payload.product_id : false));
-    if (!conv) {
-      const res = await db.sendChatMessage({
-        product_id: payload.product_id,
-        content: 'Xin chào shop, mình quan tâm đến món đồ này!'
+      convId = res.conversation.id;
+    } else {
+      const convs = await db.getChatConversations();
+      let conv = convs.conversations.find((c) => {
+        if (payload.order_id && c.order_id === payload.order_id) return true;
+        if (payload.product_id && c.product_id === payload.product_id) return true;
+        return false;
       });
-      conv = res.conversation;
+
+      if (!conv) {
+        const res = await db.sendChatMessage({
+          product_id: payload.product_id,
+          order_code: payload.order_id ? String(payload.order_id) : undefined,
+          content: 'Xin chào shop, mình quan tâm đến món đồ này!'
+        });
+        convId = res.conversation.id;
+      } else {
+        convId = conv.id;
+      }
     }
-    return { conversation: conv, is_new: true };
+
+    const detail = await db.getChatDetail(convId!);
+    return {
+      conversation: detail.conversation,
+      messages: detail.messages,
+      is_new: false
+    };
   },
 
   getChatDetail: (id: number) =>
