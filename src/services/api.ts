@@ -1,133 +1,79 @@
-import { Product, CartItem, Order, User, SellerStats, Address } from '../types';
-
-const TOKEN_KEY = 'do_cu_con_thuong_token';
+import { db, getCurrentSession, setCurrentSession, clearCurrentSession } from './db';
+import { Product, CartItem, Order, User, SellerStats, Address, ReturnRequest, Review, NotificationItem, Offer, ChatConversation, ChatMessage, Coupon } from '../types';
 
 export function getStoredToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
+  const session = getCurrentSession();
+  return session ? session.token : null;
 }
 
 export function setStoredToken(token: string): void {
-  localStorage.setItem(TOKEN_KEY, token);
+  // Session is maintained in sessionStorage via db.ts
 }
 
 export function clearStoredToken(): void {
-  localStorage.removeItem(TOKEN_KEY);
-}
-
-async function request<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const token = getStoredToken();
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(options.headers as Record<string, string> || {})
-  };
-
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
-  const response = await fetch(`/api${endpoint}`, {
-    ...options,
-    headers
-  });
-
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    throw new Error(data.message || `Lỗi yêu cầu: ${response.status}`);
-  }
-
-  return data as T;
+  clearCurrentSession();
 }
 
 export const api = {
-  // Auth
+  // --- AUTH ---
   login: (credentials: { username: string; password: string; role: 'buyer' | 'seller' }) =>
-    request<{ token: string; user: User }>('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify(credentials)
-    }),
+    db.login(credentials),
 
-  register: (payload: { username?: string; phone?: string; password: string; full_name: string; role: 'buyer' | 'seller'; address?: string }) =>
-    request<{ token: string; user: User }>('/auth/register', {
-      method: 'POST',
-      body: JSON.stringify(payload)
-    }),
+  register: (payload: { username?: string; phone?: string; password: string; full_name: string; role: 'buyer' | 'seller'; address?: string; shop_name?: string }) =>
+    db.register(payload),
 
   getMe: () =>
-    request<{ user: User; address?: Address }>('/auth/me'),
+    db.getMe(),
 
-  // Products
-  getProducts: (params?: { category?: string; search?: string; sort?: string; min_price?: number; max_price?: number; min_condition?: number; in_stock?: boolean }) => {
-    const query = new URLSearchParams();
-    if (params?.category) query.set('category', params.category);
-    if (params?.search) query.set('search', params.search);
-    if (params?.sort) query.set('sort', params.sort);
-    if (params?.min_price !== undefined) query.set('min_price', String(params.min_price));
-    if (params?.max_price !== undefined) query.set('max_price', String(params.max_price));
-    if (params?.min_condition !== undefined) query.set('min_condition', String(params.min_condition));
-    if (params?.in_stock) query.set('in_stock', 'true');
-    return request<{ products: Product[] }>(`/products?${query.toString()}`);
-  },
+  changePassword: (data: { old_password?: string; new_password?: string; confirm_password?: string }) =>
+    db.changePassword(data),
+
+  // --- PRODUCTS ---
+  getProducts: (params?: { category?: string; search?: string; sort?: string; min_price?: number; max_price?: number; min_condition?: number; in_stock?: boolean }) =>
+    db.getProducts(params),
 
   getAutocomplete: (q: string) =>
-    request<{ suggestions: Array<{ id: number; name: string; category: string; price: number; original_price: number; condition_pct: number; image_url: string; stock: number }> }>(`/products/autocomplete?q=${encodeURIComponent(q)}`),
+    db.getAutocomplete(q),
 
   getProduct: (id: number) =>
-    request<{ product: Product }>(`/products/${id}`),
+    db.getProduct(id),
 
   createProduct: (productData: Partial<Product>) =>
-    request<{ message: string; product: Product }>('/products', {
-      method: 'POST',
-      body: JSON.stringify(productData)
-    }),
+    db.createProduct(productData),
 
   updateProduct: (id: number, productData: Partial<Product>) =>
-    request<{ message: string; product: Product }>(`/products/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(productData)
-    }),
+    db.updateProduct(id, productData),
 
   deleteProduct: (id: number) =>
-    request<{ message: string }>(`/products/${id}`, {
-      method: 'DELETE'
-    }),
+    db.deleteProduct(id),
 
-  // Cart
+  recordProductView: (productId: number) =>
+    db.recordProductView(productId),
+
+  // --- CART ---
   getCart: () =>
-    request<{ items: CartItem[]; subtotal: number; shipping_fee: number; total: number; item_count: number }>('/cart'),
+    db.getCart(),
 
   addToCart: (productId: number, quantity: number = 1, offerId?: number) =>
-    request<{ message: string }>('/cart', {
-      method: 'POST',
-      body: JSON.stringify({ product_id: productId, quantity, offer_id: offerId })
-    }),
+    db.addToCart(productId, quantity),
 
   updateCartQty: (cartId: number, quantity: number) =>
-    request<{ message: string }>(`/cart/${cartId}`, {
-      method: 'PUT',
-      body: JSON.stringify({ quantity })
-    }),
+    db.updateCartQty(cartId, quantity),
 
   removeFromCart: (cartId: number) =>
-    request<{ message: string }>(`/cart/${cartId}`, {
-      method: 'DELETE'
-    }),
+    db.removeFromCart(cartId),
 
   clearCart: () =>
-    request<{ message: string }>('/cart', {
-      method: 'DELETE'
-    }),
+    db.clearCart(),
 
-  // Orders (Buyer)
-  getOrders: (status?: string) => {
-    const query = status && status !== 'all' ? `?status=${status}` : '';
-    return request<{ orders: Order[] }>(`/orders${query}`);
-  },
+  // --- ORDERS (BUYER) ---
+  getOrders: (status?: string) =>
+    db.getMyOrders(status),
 
-  getOrder: (id: number) =>
-    request<{ order: Order }>(`/orders/${id}`),
+  getOrder: (id: number | string) =>
+    db.getOrder(id),
 
-  checkout: (orderData: {
+  checkout: async (orderData: {
     recipient_name: string;
     phone: string;
     address: string;
@@ -137,52 +83,47 @@ export const api = {
     card_type?: string;
     direct_items?: Array<{ product_id: number; quantity: number; offer_id?: number }>;
     coupon_code?: string;
-  }) =>
-    request<{ message: string; order: Order }>('/orders', {
-      method: 'POST',
-      body: JSON.stringify(orderData)
-    }),
+  }) => {
+    let items = orderData.direct_items;
+    if (!items || items.length === 0) {
+      const cart = await db.getCart();
+      items = cart.items.map((i) => ({ product_id: i.product_id, quantity: i.quantity }));
+    }
+    return db.createOrder({
+      items,
+      recipient_name: orderData.recipient_name,
+      phone: orderData.phone,
+      address: orderData.address,
+      note: orderData.note,
+      payment_method: orderData.payment_method === 'cod' ? 'cod' : 'card',
+      card_info: {
+        number: '****' + (orderData.card_last4 || '1111'),
+        expiry: '',
+        cvv: '',
+        card_type: orderData.card_type
+      },
+      coupon_code: orderData.coupon_code
+    });
+  },
 
   cancelOrder: (id: number, reason: string) =>
-    request<{ message: string; order: Order }>(`/orders/${id}/cancel`, {
-      method: 'POST',
-      body: JSON.stringify({ reason })
-    }),
+    db.cancelOrder(id, reason),
 
   completeOrder: (id: number) =>
-    request<{ message: string; order: Order }>(`/orders/${id}/complete`, {
-      method: 'POST'
-    }),
+    db.confirmOrderReceived(id),
 
-  // Reviews
+  // --- REVIEWS ---
   getProductReviews: (productId: number) =>
-    request<{
-      reviews: any[];
-      total_reviews: number;
-      average_rating: number;
-      distribution: Record<number, number>;
-      media_count?: number;
-    }>(`/reviews/product/${productId}`),
+    db.getProductReviews(productId),
 
   getShopReviews: () =>
-    request<{
-      reviews: any[];
-      recent_reviews: any[];
-      total_reviews: number;
-      average_rating: number;
-      distribution: Record<number, number>;
-    }>('/reviews/shop'),
+    db.getShopReviews(),
 
   getSellerReviews: () =>
-    request<{
-      reviews: any[];
-      total_reviews: number;
-      average_rating: number;
-      unreplied_count: number;
-    }>('/reviews/seller'),
+    db.getSellerReviews(),
 
   getOrderReviewedItems: (orderId: number) =>
-    request<{ reviewed_product_ids: number[]; reviews?: any[] }>(`/reviews/order/${orderId}/checked`),
+    db.getOrderReviewedItems(orderId),
 
   submitReview: (payload: {
     order_id: number;
@@ -196,308 +137,206 @@ export const api = {
     video_poster?: string | null;
     is_anonymous?: boolean;
   }) =>
-    request<{ message: string; review_id: number }>('/reviews', {
-      method: 'POST',
-      body: JSON.stringify(payload)
-    }),
+    db.submitReview(payload as any),
 
-  updateReview: (id: number, payload: {
-    rating?: number;
-    comment?: string;
-    tags?: string[];
-    images?: string[];
-    video_url?: string | null;
-    video_duration?: number | null;
-    video_poster?: string | null;
-    is_anonymous?: boolean;
-  }) =>
-    request<{ message: string }>(`/reviews/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(payload)
-    }),
+  updateReview: (id: number, payload: any) =>
+    db.updateReview(id, payload),
 
   toggleHelpfulReview: (id: number) =>
-    request<{ helpful_count: number; is_helpful: boolean }>(`/reviews/${id}/helpful`, {
-      method: 'POST'
-    }),
+    db.toggleHelpfulReview(id),
 
   replyReview: (id: number, reply: string) =>
-    request<{ message: string; seller_reply: string; seller_reply_at: string }>(`/reviews/${id}/reply`, {
-      method: 'POST',
-      body: JSON.stringify({ reply })
-    }),
+    db.replyReview(id, reply),
 
   reportReview: (id: number, reason: string) =>
-    request<{ message: string; is_hidden: boolean; report_reason: string }>(`/reviews/${id}/report`, {
-      method: 'POST',
-      body: JSON.stringify({ reason })
-    }),
+    db.reportReview(id, reason),
 
-  // File Upload
-  uploadFile: (dataUrl: string) =>
-    request<{ url: string; size: number; mimeType: string }>('/upload', {
-      method: 'POST',
-      body: JSON.stringify({ dataUrl })
-    }),
+  // --- UPLOAD ---
+  uploadFile: (dataUrl: string, type: 'image' | 'video' = 'image') =>
+    db.uploadFile(dataUrl, type),
 
-  // Coupons
-  validateCoupon: (code: string, subtotal: number, shipping_fee: number) =>
-    request<{
-      valid: boolean;
-      coupon: { code: string; type: string; value: number; max_discount?: number; min_order_amount: number; description: string };
-      discount_amount: number;
-    }>('/coupons/validate', {
-      method: 'POST',
-      body: JSON.stringify({ code, subtotal, shipping_fee })
-    }),
+  // --- COUPONS ---
+  validateCoupon: (code: string, subtotal: number, shipping_fee?: number) =>
+    db.validateCoupon(code, subtotal),
 
   getPublicCoupons: () =>
-    request<{ coupons: any[] }>('/coupons/public'),
+    db.getPublicCoupons(),
 
   getSellerCoupons: () =>
-    request<{ coupons: any[] }>('/coupons/seller/list'),
+    db.getSellerCoupons(),
 
   createSellerCoupon: (couponData: any) =>
-    request<{ message: string; coupon: any }>('/coupons/seller/create', {
-      method: 'POST',
-      body: JSON.stringify(couponData)
-    }),
+    db.createCoupon(couponData),
 
   toggleSellerCoupon: (id: number) =>
-    request<{ message: string; is_active: number }>(`/coupons/seller/${id}/toggle`, {
-      method: 'PATCH'
-    }),
+    db.toggleCoupon(id),
 
   deleteSellerCoupon: (id: number) =>
-    request<{ message: string }>(`/coupons/seller/${id}`, {
-      method: 'DELETE'
-    }),
+    db.deleteCoupon(id),
 
-  // Account & Profile & Wishlist
+  // --- ACCOUNT & PROFILE & WISHLIST ---
   getProfile: () =>
-    request<{ user: User }>('/account/profile'),
+    db.getMe(),
 
   updateProfile: (data: { full_name: string; phone?: string }) =>
-    request<{ message: string; user: User }>('/account/profile', {
-      method: 'PUT',
-      body: JSON.stringify(data)
-    }),
-
-  changePassword: (data: { old_password: string; new_password: string; confirm_password?: string }) =>
-    request<{ message: string }>('/auth/change-password', {
-      method: 'POST',
-      body: JSON.stringify(data)
-    }),
+    db.updateProfile(data),
 
   getAddresses: () =>
-    request<{ addresses: Address[] }>('/account/addresses'),
+    db.getAddresses(),
 
   addAddress: (data: { recipient_name: string; phone: string; address_line: string; is_default?: boolean }) =>
-    request<{ message: string; addresses: Address[] }>('/account/addresses', {
-      method: 'POST',
-      body: JSON.stringify(data)
-    }),
+    db.addAddress(data),
 
   updateAddress: (id: number, data: { recipient_name: string; phone: string; address_line: string; is_default?: boolean }) =>
-    request<{ message: string; addresses: Address[] }>(`/account/addresses/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data)
-    }),
+    db.updateAddress(id, data),
 
   deleteAddress: (id: number) =>
-    request<{ message: string; addresses: Address[] }>(`/account/addresses/${id}`, {
-      method: 'DELETE'
-    }),
+    db.deleteAddress(id),
 
   setDefaultAddress: (id: number) =>
-    request<{ message: string; addresses: Address[] }>(`/account/addresses/${id}/default`, {
-      method: 'POST'
-    }),
+    db.setDefaultAddress(id),
 
   getWishlist: () =>
-    request<{ products: Product[] }>('/account/wishlist'),
+    db.getWishlist(),
 
   getWishlistIds: () =>
-    request<{ product_ids: number[] }>('/account/wishlist/ids'),
+    db.getWishlistIds(),
 
   toggleWishlist: (productId: number) =>
-    request<{ liked: boolean; message: string }>(`/account/wishlist/${productId}/toggle`, {
-      method: 'POST'
-    }),
+    db.toggleWishlist(productId),
 
-  // Demo controller
+  // --- DEMO CONTROLLER ---
   switchBuyer: () =>
-    request<{ message: string; token: string; user: User }>('/demo/switch-buyer', { method: 'POST' }),
+    db.switchBuyer(),
 
   switchSeller: () =>
-    request<{ message: string; token: string; user: User }>('/demo/switch-seller', { method: 'POST' }),
+    db.switchSeller(),
 
   resetDemo: () =>
-    request<{ message: string }>('/demo/reset', { method: 'POST' }),
+    db.resetDemo(),
 
   getPresentationMode: () =>
-    request<{ presentation_mode: boolean }>('/demo/presentation-mode'),
+    db.getPresentationMode(),
 
   setPresentationMode: (enabled: boolean) =>
-    request<{ message: string; presentation_mode: boolean }>('/demo/presentation-mode', {
-      method: 'POST',
-      body: JSON.stringify({ enabled })
-    }),
+    db.setPresentationMode(enabled),
 
-  // Seller operations & Bulk
+  // --- SELLER OPERATIONS & KANBAN ---
   getSellerStats: () =>
-    request<{ stats: SellerStats }>('/seller/stats'),
+    db.getSellerStats(),
 
-  getSellerOrders: (status?: string) => {
-    const query = status && status !== 'all' ? `?status=${status}` : '';
-    return request<{ orders: Order[] }>(`/seller/orders${query}`);
-  },
+  getSellerOrders: (status?: string) =>
+    db.getSellerOrders(status),
 
   getSellerOrder: (id: number) =>
-    request<{ order: Order }>(`/seller/orders/${id}`),
+    db.getOrder(id),
 
   updateOrderStatus: (id: number, target_status: string, note?: string, cancel_reason?: string) =>
-    request<{ message: string; order: Order }>(`/seller/orders/${id}/status`, {
-      method: 'POST',
-      body: JSON.stringify({ target_status, note, cancel_reason })
-    }),
+    db.updateOrderStatus(id, target_status, note, cancel_reason),
 
   bulkConfirmOrders: (orderIds: number[]) =>
-    request<{ message: string; confirmed_count: number }>('/seller/orders/bulk-confirm', {
-      method: 'POST',
-      body: JSON.stringify({ order_ids: orderIds })
-    }),
+    db.bulkConfirmOrders(orderIds),
 
   bulkHandoverOrders: (orderIds: number[], carrier: string) =>
-    request<{ message: string; handover_count: number }>('/seller/orders/bulk-handover', {
-      method: 'POST',
-      body: JSON.stringify({ order_ids: orderIds, carrier })
-    }),
+    db.bulkHandoverOrders(orderIds, carrier),
 
   assignCarrier: (id: number, carrier: string) =>
-    request<{ message: string; order: Order; carrier: string; tracking_code: string }>(`/seller/orders/${id}/carrier`, {
-      method: 'POST',
-      body: JSON.stringify({ carrier })
-    }),
+    db.assignCarrier(id, carrier),
 
   addShipmentEvent: (id: number, eventData: { status: string; location: string; note: string }) =>
-    request<{ message: string; shipment_events: any[]; order: Order }>(`/seller/orders/${id}/shipment-events`, {
-      method: 'POST',
-      body: JSON.stringify(eventData)
-    }),
+    db.addShipmentEvent(id, eventData),
 
   handoverOrder: (id: number, handoverData: { carrier: string; location?: string; note?: string }) =>
-    request<{ message: string; order: Order; shipment_events: any[] }>(`/seller/orders/${id}/handover`, {
-      method: 'POST',
-      body: JSON.stringify(handoverData)
-    }),
+    db.handoverOrder(id, handoverData),
 
-  // Notifications
+  // --- NOTIFICATIONS ---
   getNotifications: () =>
-    request<{ notifications: any[]; unread_count: number }>('/notifications'),
+    db.getNotifications(),
 
   markNotificationRead: (id: number) =>
-    request<{ message: string }>(`/notifications/${id}/read`, {
-      method: 'PUT'
-    }),
+    db.markNotificationRead(id),
 
   markAllNotificationsRead: () =>
-    request<{ message: string }>('/notifications/read-all', {
-      method: 'PUT'
-    }),
+    db.markAllNotificationsRead(),
 
-  // Product View Log
-  recordProductView: (productId: number) =>
-    request<{ success: boolean }>(`/products/${productId}/view`, {
-      method: 'POST'
-    }).catch(() => ({ success: false })),
-
-  // Offers / Bargaining
+  // --- OFFERS / TRẢ GIÁ ---
   getOffers: () =>
-    request<{ offers: any[] }>('/offers/my'),
+    db.getOffers(),
 
   getSellerOffers: () =>
-    request<{ offers: any[] }>('/offers/seller'),
+    db.getSellerOffers(),
 
   createOffer: (payload: { product_id: number; offered_price: number; message?: string }) =>
-    request<{ message: string; offer: any }>('/offers', {
-      method: 'POST',
-      body: JSON.stringify(payload)
-    }),
+    db.createOffer({ productId: payload.product_id, offeredPrice: payload.offered_price, message: payload.message }),
 
   acceptOffer: (id: number) =>
-    request<{ message: string; offer: any }>(`/offers/${id}/accept`, {
-      method: 'POST'
-    }),
+    db.acceptOffer(id),
 
   counterOffer: (id: number, counter_price: number, seller_note?: string) =>
-    request<{ message: string; offer: any }>(`/offers/${id}/counter`, {
-      method: 'POST',
-      body: JSON.stringify({ counter_price, seller_note })
-    }),
+    db.counterOffer(id, counter_price, seller_note),
 
   rejectOffer: (id: number, seller_note?: string) =>
-    request<{ message: string; offer: any }>(`/offers/${id}/reject`, {
-      method: 'POST',
-      body: JSON.stringify({ seller_note })
-    }),
+    db.rejectOffer(id, seller_note),
 
   buyerAcceptCounter: (id: number) =>
-    request<{ message: string; offer: any }>(`/offers/${id}/buyer-accept`, {
-      method: 'POST'
-    }),
+    db.acceptCounterOffer(id),
 
   buyerRejectCounter: (id: number) =>
-    request<{ message: string; offer: any }>(`/offers/${id}/buyer-reject`, {
-      method: 'POST'
-    }),
+    db.rejectCounterOffer(id),
 
-  // Chat
+  // --- CHAT ---
   getChatConversations: () =>
-    request<{ conversations: any[]; unread_total: number }>('/chat/conversations'),
+    db.getChatConversations(),
 
-  startChat: (payload: { product_id?: number; order_id?: number; initial_message?: string }) =>
-    request<{ conversation: any; is_new: boolean }>('/chat/start', {
-      method: 'POST',
-      body: JSON.stringify(payload)
-    }),
+  startChat: async (payload: { product_id?: number; order_id?: number; initial_message?: string }) => {
+    if (payload.initial_message) {
+      const res = await db.sendChatMessage({
+        product_id: payload.product_id,
+        content: payload.initial_message
+      });
+      return { conversation: res.conversation, is_new: true };
+    }
+    const convs = await db.getChatConversations();
+    let conv = convs.conversations.find((c) => (payload.product_id ? c.product_id === payload.product_id : false));
+    if (!conv) {
+      const res = await db.sendChatMessage({
+        product_id: payload.product_id,
+        content: 'Xin chào shop, mình quan tâm đến món đồ này!'
+      });
+      conv = res.conversation;
+    }
+    return { conversation: conv, is_new: true };
+  },
 
   getChatDetail: (id: number) =>
-    request<{ conversation: any }>(`/chat/${id}`),
+    db.getChatDetail(id),
 
   sendChatMessage: (id: number, content: string) =>
-    request<{ message: any }>(`/chat/${id}/messages`, {
-      method: 'POST',
-      body: JSON.stringify({ content })
-    }),
+    db.sendChatMessage({ conversation_id: id, content }),
 
-  // Returns / Refunds
+  // --- RETURNS & REFUNDS ---
   getMyReturns: () =>
-    request<{ return_requests: any[] }>('/returns/my'),
+    db.getMyReturns(),
 
   getSellerReturns: () =>
-    request<{ return_requests: any[] }>('/returns/seller'),
+    db.getSellerReturns(),
 
   createReturn: (payload: { order_id: number; product_id?: number; reason: string; description: string; images?: string[] }) =>
-    request<{ message: string; return_request: any }>('/returns', {
-      method: 'POST',
-      body: JSON.stringify(payload)
+    db.requestReturn({
+      order_id: payload.order_id,
+      reason: payload.reason,
+      description: payload.description,
+      images: payload.images,
+      refund_method: 'Chuyển khoản ngân hàng / Ví điện tử'
     }),
 
   updateReturnStatus: (id: number, payload: { status: string; seller_note?: string }) =>
-    request<{ message: string; return_request: any }>(`/returns/${id}/status`, {
-      method: 'POST',
-      body: JSON.stringify(payload)
-    }),
+    db.updateReturnStatus(id, payload),
 
-  // Demo Shipment Fast-forward
+  // --- SHIPMENT FAST FORWARD ---
   getEligibleShipmentOrders: () =>
-    request<{ orders: Order[] }>('/demo/eligible-orders'),
+    db.getEligibleShipmentOrders(),
 
   advanceShipmentStep: (order_id: number, step?: number) =>
-    request<{ message: string; order: Order; completed_step: number; is_finished: boolean }>('/demo/advance-shipment-step', {
-      method: 'POST',
-      body: JSON.stringify({ order_id, step })
-    })
+    db.advanceShipmentStep(order_id, step || 1)
 };
-

@@ -23,6 +23,9 @@ interface ProductDetailModalProps {
   onDisabledBuyClick?: () => void;
   currentUser?: any;
   onSelectProduct?: (product: Product) => void;
+  onRequestAuth?: (actionType: 'offer' | 'chat' | 'cart' | 'buy' | 'wishlist', product: Product) => void;
+  initialOpenOffer?: boolean;
+  initialOpenChat?: boolean;
 }
 
 export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
@@ -35,12 +38,16 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   disabledBuy = false,
   onDisabledBuyClick,
   currentUser,
-  onSelectProduct
+  onSelectProduct,
+  onRequestAuth,
+  initialOpenOffer = false,
+  initialOpenChat = false
 }) => {
   if (!product) return null;
 
   const [quantity, setQuantity] = useState<number>(1);
   const [imgError, setImgError] = useState(false);
+  const [brokenThumbs, setBrokenThumbs] = useState<Set<number>>(new Set());
   const [justAdded, setJustAdded] = useState(false);
   const [reviewsData, setReviewsData] = useState<ReviewsResponse | null>(null);
   const [loadingReviews, setLoadingReviews] = useState(false);
@@ -93,8 +100,13 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
   // Dynamic social & details data
   const [fullProduct, setFullProduct] = useState<Product>(product);
-  const [showOfferModal, setShowOfferModal] = useState(false);
-  const [showChatDrawer, setShowChatDrawer] = useState(false);
+  const [showOfferModal, setShowOfferModal] = useState(initialOpenOffer);
+  const [showChatDrawer, setShowChatDrawer] = useState(initialOpenChat);
+
+  useEffect(() => {
+    if (initialOpenOffer) setShowOfferModal(true);
+    if (initialOpenChat) setShowChatDrawer(true);
+  }, [initialOpenOffer, initialOpenChat]);
 
   // Parse images array
   const imageList: string[] = React.useMemo(() => {
@@ -357,7 +369,13 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
               {/* Wishlist button */}
               {onToggleWishlist && (
                 <button
-                  onClick={() => onToggleWishlist(fullProduct.id)}
+                  onClick={() => {
+                    if (!currentUser && onRequestAuth) {
+                      onRequestAuth('wishlist', fullProduct);
+                      return;
+                    }
+                    onToggleWishlist(fullProduct.id);
+                  }}
                   className={`absolute bottom-3 left-3 z-10 p-2.5 rounded-full shadow-md transition-all ${
                     isWishlisted
                       ? 'bg-[#B3362F] text-white'
@@ -373,20 +391,28 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             {/* Thumbnail Strip */}
             {imageList.length > 1 && (
               <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar mb-4">
-                {imageList.map((img, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => setSelectedImageIndex(idx)}
-                    className={`w-14 h-14 rounded-xl border-2 overflow-hidden shrink-0 transition-all ${
-                      selectedImageIndex === idx
-                        ? 'border-[#08482D] ring-2 ring-[#08482D]/20'
-                        : 'border-[#E2E8D8] opacity-70 hover:opacity-100'
-                    }`}
-                  >
-                    <img src={img} alt={`thumb-${idx}`} className="w-full h-full object-cover" />
-                  </button>
-                ))}
+                {imageList.map((img, idx) => {
+                  if (brokenThumbs.has(idx)) return null;
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setSelectedImageIndex(idx)}
+                      className={`w-14 h-14 rounded-xl border-2 overflow-hidden shrink-0 transition-all ${
+                        selectedImageIndex === idx
+                          ? 'border-[#08482D] ring-2 ring-[#08482D]/20'
+                          : 'border-[#E2E8D8] opacity-70 hover:opacity-100'
+                      }`}
+                    >
+                      <img 
+                        src={img} 
+                        alt={`thumb-${idx}`} 
+                        onError={() => setBrokenThumbs(prev => new Set(prev).add(idx))}
+                        className="w-full h-full object-cover" 
+                      />
+                    </button>
+                  );
+                })}
               </div>
             )}
 
@@ -981,6 +1007,10 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                       onDisabledBuyClick();
                       return;
                     }
+                    if (!currentUser && onRequestAuth) {
+                      onRequestAuth('offer', fullProduct);
+                      return;
+                    }
                     setShowOfferModal(true);
                   }}
                   disabled={isSoldOut}
@@ -994,6 +1024,10 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   variant="soft"
                   size="sm"
                   onClick={() => {
+                    if (!currentUser && onRequestAuth) {
+                      onRequestAuth('chat', fullProduct);
+                      return;
+                    }
                     setShowChatDrawer(true);
                   }}
                   className="w-full text-xs font-bold gap-1.5"

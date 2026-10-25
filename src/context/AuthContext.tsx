@@ -1,15 +1,27 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { User, Address } from '../types';
-import { api, getStoredToken, setStoredToken, clearStoredToken } from '../services/api';
+import { api, getStoredToken } from '../services/api';
+import { getCurrentSession, clearCurrentSession, subscribeDb } from '../services/db';
 import { useToast } from './ToastContext';
 
+export type AuthStatus = 'loading' | 'guest' | 'buyer' | 'seller';
+
 interface AuthContextType {
+  status: AuthStatus;
   user: User | null;
   address: Address | null;
   loading: boolean;
   cartCount: number;
   login: (username: string, password: string, role: 'buyer' | 'seller') => Promise<void>;
-  register: (payload: { username?: string; phone?: string; password: string; full_name: string; role: 'buyer' | 'seller'; address?: string }) => Promise<void>;
+  register: (payload: {
+    username?: string;
+    phone?: string;
+    password: string;
+    full_name: string;
+    role: 'buyer' | 'seller';
+    address?: string;
+    shop_name?: string;
+  }) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
   refreshCartCount: () => Promise<void>;
@@ -19,75 +31,166 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [address, setAddress] = useState<Address | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [authState, setAuthState] = useState<{
+    status: AuthStatus;
+    user: User | null;
+    address: Address | null;
+  }>({
+    status: 'loading',
+    user: null,
+    address: null
+  });
+
   const [cartCount, setCartCount] = useState<number>(0);
   const { showToast } = useToast();
+  const mountedRef = useRef(true);
 
+  // Refresh cart count
   const refreshCartCount = async () => {
-    if (!user || user.role !== 'buyer') {
-      setCartCount(0);
+    const session = getCurrentSession();
+    if (!session || !session.user || session.user.role !== 'buyer') {
+      if (mountedRef.current) setCartCount(0);
       return;
     }
     try {
       const data = await api.getCart();
-      setCartCount(data.item_count || 0);
+      if (mountedRef.current) {
+        setCartCount(data.item_count || 0);
+      }
     } catch {
-      // ignore
+      // quiet catch
     }
   };
 
+  // Refresh user from current tab session
   const refreshUser = async () => {
-    const token = getStoredToken();
-    if (!token) {
-      setUser(null);
-      setAddress(null);
-      setLoading(false);
+    const session = getCurrentSession();
+    if (!session || !session.user) {
+      if (mountedRef.current) {
+        setAuthState({
+          status: 'guest',
+          user: null,
+          address: null
+        });
+        setCartCount(0);
+      }
       return;
     }
 
     try {
       const data = await api.getMe();
-      setUser(data.user);
-      setAddress(data.address || null);
-      if (data.user.role === 'buyer') {
-        const cartData = await api.getCart();
-        setCartCount(cartData.item_count || 0);
+      if (mountedRef.current) {
+        setAuthState({
+          status: data.user.role === 'seller' ? 'seller' : 'buyer',
+          user: data.user,
+          address: data.address || null
+        });
+        if (data.user.role === 'buyer') {
+          const cartData = await api.getCart();
+          if (mountedRef.current) {
+            setCartCount(cartData.item_count || 0);
+          }
+        } else {
+          setCartCount(0);
+        }
       }
-    } catch (err) {
-      clearStoredToken();
-      setUser(null);
-      setAddress(null);
-    } finally {
-      setLoading(false);
+    } catch {
+      clearCurrentSession();
+      if (mountedRef.current) {
+        setAuthState({
+          status: 'guest',
+          user: null,
+          address: null
+        });
+        setCartCount(0);
+      }
     }
   };
 
+  // On mount: initialize session with max 3s timeout to fallback to 'guest'
   useEffect(() => {
-    refreshUser();
+    mountedRef.current = true;
+
+    // Timeout guard: if loading takes > 3 seconds, fallback to guest
+    const timeoutTimer = setTimeout(() => {
+      setAuthState((prev) => {
+        if (prev.status === 'loading') {
+          return { status: 'guest', user: null, address: null };
+        }
+        return prev;
+      });
+    }, 3000);
+
+    refreshUser().finally(() => {
+      clearTimeout(timeoutTimer);
+    });
+
+    // Subscribe to cross-tab storage changes
+    const unsubscribe = subscribeDb(() => {
+      if (mountedRef.current) {
+        refreshCartCount();
+      }
+    });
+
+    return () => {
+      mountedRef.current = false;
+      clearTimeout(timeoutTimer);
+      unsubscribe();
+    };
   }, []);
 
   const login = async (username: string, password: string, role: 'buyer' | 'seller') => {
     try {
       const data = await api.login({ username, password, role });
-      setStoredToken(data.token);
-      setUser(data.user);
-      await refreshUser();
-      showToast(`Chào mừng ${data.user.full_name} (${data.user.role === 'seller' ? 'Người bán' : 'Khách mua'}) đã quay trở lại!`, 'success');
+      if (!mountedRef.current) return;
+
+      // Single atomic setState
+      setAuthState({
+        status: data.user.role === 'seller' ? 'seller' : 'buyer',
+        user: data.user,
+        address: null
+      });
+
+      if (data.user.role === 'buyer') {
+        refreshCartCount();
+      } else {
+        setCartCount(0);
+      }
+
+      showToast(`Chào mừng ${data.user.full_name} (${data.user.role === 'seller' ? 'Chủ Tiệm' : 'Khách mua'}) đã quay trở lại!`, 'success');
     } catch (error: any) {
       showToast(error.message || 'Đăng nhập thất bại', 'error');
       throw error;
     }
   };
 
-  const register = async (payload: { username?: string; phone?: string; password: string; full_name: string; role: 'buyer' | 'seller'; address?: string }) => {
+  const register = async (payload: {
+    username?: string;
+    phone?: string;
+    password: string;
+    full_name: string;
+    role: 'buyer' | 'seller';
+    address?: string;
+    shop_name?: string;
+  }) => {
     try {
       const data = await api.register(payload);
-      setStoredToken(data.token);
-      setUser(data.user);
-      await refreshUser();
-      showToast(`Đăng ký tài khoản ${data.user.full_name} thành công!`, 'success');
+      if (!mountedRef.current) return;
+
+      // Single atomic setState
+      setAuthState({
+        status: data.user.role === 'seller' ? 'seller' : 'buyer',
+        user: data.user,
+        address: null
+      });
+
+      if (data.user.role === 'buyer') {
+        refreshCartCount();
+        showToast('Tạo tài khoản thành công', 'success');
+      } else {
+        setCartCount(0);
+        showToast('Tạo tài khoản người bán thành công', 'success');
+      }
     } catch (error: any) {
       showToast(error.message || 'Đăng ký thất bại', 'error');
       throw error;
@@ -95,23 +198,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
-    clearStoredToken();
-    setUser(null);
-    setAddress(null);
-    setCartCount(0);
-    showToast('Đã đăng xuất tài khoản', 'info');
+    clearCurrentSession();
+    if (mountedRef.current) {
+      setAuthState({
+        status: 'guest',
+        user: null,
+        address: null
+      });
+      setCartCount(0);
+    }
+    showToast('Đã đăng xuất', 'info');
   };
 
   const quickLogin = async (targetRole: 'buyer' | 'seller') => {
     try {
       if (targetRole === 'seller') {
         const res = await api.switchSeller();
-        setStoredToken(res.token);
+        if (mountedRef.current) {
+          setAuthState({
+            status: 'seller',
+            user: res.user,
+            address: null
+          });
+          setCartCount(0);
+        }
       } else {
         const res = await api.switchBuyer();
-        setStoredToken(res.token);
+        if (mountedRef.current) {
+          setAuthState({
+            status: 'buyer',
+            user: res.user,
+            address: null
+          });
+          refreshCartCount();
+        }
       }
-      await refreshUser();
+      showToast('Đã chuyển đổi tài khoản thành công', 'success');
     } catch (err: any) {
       showToast(err.message || 'Lỗi chuyển đổi tài khoản', 'error');
     }
@@ -120,9 +242,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider
       value={{
-        user,
-        address,
-        loading,
+        status: authState.status,
+        user: authState.user,
+        address: authState.address,
+        loading: authState.status === 'loading',
         cartCount,
         login,
         register,

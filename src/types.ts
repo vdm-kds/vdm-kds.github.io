@@ -6,6 +6,8 @@ export interface User {
   username: string;
   phone?: string;
   full_name: string;
+  shop_name?: string;
+  avatar_url?: string;
   is_owner?: boolean;
   created_at?: string;
 }
@@ -16,7 +18,7 @@ export interface Address {
   recipient_name: string;
   phone: string;
   address_line: string;
-  is_default: number;
+  is_default: number | boolean;
 }
 
 export interface ProductFlaw {
@@ -29,6 +31,7 @@ export interface ProductFlaw {
 
 export interface Product {
   id: number;
+  seller_id?: number;
   name: string;
   category: string;
   price: number;
@@ -59,6 +62,7 @@ export interface Review {
   product_image?: string;
   product_condition_pct?: number;
   user_id?: number;
+  buyer_name?: string;
   rating: number;
   comment: string;
   tags?: string[];
@@ -71,6 +75,7 @@ export interface Review {
   author_phone?: string;
   order_code?: string;
   helpful_count?: number;
+  helpful_user_ids?: number[];
   is_helpful_by_me?: boolean;
   seller_reply?: string | null;
   seller_reply_at?: string | null;
@@ -94,12 +99,13 @@ export interface ReviewsResponse {
 
 export interface Coupon {
   id: number;
+  seller_id?: number;
   code: string;
   type: 'percent' | 'fixed' | 'shipping';
   value: number;
   max_discount?: number;
   min_order_amount: number;
-  is_active: number;
+  is_active: number | boolean;
   usage_count: number;
   created_at?: string;
   description?: string;
@@ -108,6 +114,8 @@ export interface Coupon {
 export interface CartItem {
   id: number;
   product_id: number;
+  product_name?: string;
+  product_image?: string;
   quantity: number;
   name: string;
   category: string;
@@ -126,15 +134,17 @@ export interface CartItem {
 
 export type OrderStatus = 'pending' | 'confirmed' | 'shipping' | 'delivered' | 'completed' | 'cancelled';
 export type PaymentMethod = 'card' | 'napas' | 'cod';
-export type PaymentStatus = 'unpaid' | 'paid' | 'refunded';
+export type PaymentStatus = 'unpaid' | 'paid' | 'refunded' | 'pending';
 
 export interface OrderItem {
   id: number;
   order_id: number;
   product_id: number;
   product_name: string;
+  product_image?: string;
   category?: string;
   price: number;
+  original_price?: number;
   quantity: number;
   condition_pct: number;
   image_url: string;
@@ -190,10 +200,13 @@ export interface Order {
   id: number;
   code: string;
   buyer_id: number;
+  user_id?: number;
+  seller_id?: number;
   buyer_name?: string;
   buyer_phone?: string;
   subtotal: number;
   shipping_fee: number;
+  discount_amount?: number;
   total: number;
   status: OrderStatus;
   payment_method: PaymentMethod;
@@ -208,10 +221,11 @@ export interface Order {
   tracking_code?: string;
   cancel_reason?: string;
   coupon_code?: string;
-  discount_amount?: number;
   current_location?: string;
   shipper_name?: string;
   shipper_phone?: string;
+  completed_at?: string;
+  items_count?: number;
   created_at: string;
   updated_at: string;
   items?: OrderItem[];
@@ -225,6 +239,8 @@ export type OfferStatus = 'pending' | 'accepted' | 'rejected' | 'countered' | 'e
 export interface Offer {
   id: number;
   buyer_id: number;
+  user_id?: number;
+  seller_id?: number;
   buyer_name?: string;
   buyer_phone?: string;
   product_id: number;
@@ -249,13 +265,14 @@ export interface ChatMessage {
   sender_role: 'buyer' | 'seller';
   sender_id: number;
   content: string;
-  is_read: number;
+  is_read: number | boolean;
   created_at: string;
 }
 
 export interface ChatConversation {
   id: number;
   buyer_id: number;
+  seller_id?: number;
   buyer_name?: string;
   buyer_phone?: string;
   product_id?: number;
@@ -286,10 +303,13 @@ export interface SellerStats {
 export interface AppNotification {
   id: number;
   user_id: number;
+  role?: string;
   order_id?: number;
-  type: string;
+  type?: string;
   title: string;
   message: string;
-  is_read: number;
+  is_read: number | boolean;
   created_at: string;
 }
+
+export type NotificationItem = AppNotification;

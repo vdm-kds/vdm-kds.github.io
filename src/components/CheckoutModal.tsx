@@ -51,7 +51,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   // Discount Coupon State
   const [couponInput, setCouponInput] = useState('');
-  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; description: string } | null>(null);
+  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; description?: string } | null>(null);
   const [discountAmount, setDiscountAmount] = useState(0);
   const [isValidatingCoupon, setIsValidatingCoupon] = useState(false);
   const [couponError, setCouponError] = useState('');

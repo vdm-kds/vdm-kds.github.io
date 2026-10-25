@@ -39,6 +39,8 @@ interface BuyerHomeViewProps {
   onAddToCart: (p: Product) => void;
   onOpenCart: () => void;
   onNavigateOrders: (tab?: string, orderCode?: string) => void;
+  wishlistIds?: Set<number>;
+  onToggleWishlist?: (productId: number) => void;
 }
 
 export const BuyerHomeView: React.FC<BuyerHomeViewProps> = ({
@@ -69,7 +71,9 @@ export const BuyerHomeView: React.FC<BuyerHomeViewProps> = ({
   onSelectProduct,
   onAddToCart,
   onOpenCart,
-  onNavigateOrders
+  onNavigateOrders,
+  wishlistIds = new Set(),
+  onToggleWishlist
 }) => {
   // Active shipping order for quick tracker card
   const [shippingOrders, setShippingOrders] = useState<Order[]>([]);
@@ -583,6 +587,8 @@ export const BuyerHomeView: React.FC<BuyerHomeViewProps> = ({
                 product={product}
                 onSelect={onSelectProduct}
                 onAddToCart={onAddToCart}
+                isWishlisted={wishlistIds.has(product.id)}
+                onToggleWishlist={onToggleWishlist}
               />
             ))}
           </div>

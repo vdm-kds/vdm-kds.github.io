@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ToastProvider, useToast } from './context/ToastContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { Header } from './components/Header';
 import { ProductCard } from './components/ProductCard';
 import { ProductDetailModal } from './components/ProductDetailModal';
@@ -25,8 +26,15 @@ import {
   ArrowRight, Tag, Check, Filter, RotateCcw, HelpCircle, PhoneCall, Info, Eye
 } from 'lucide-react';
 
+type PendingAction =
+  | { type: 'cart'; product: Product; quantity: number }
+  | { type: 'buy'; product: Product; quantity: number }
+  | { type: 'offer'; product: Product }
+  | { type: 'chat'; product: Product }
+  | { type: 'wishlist'; productId: number };
+
 function MainShopApp() {
-  const { user, loading: authLoading, refreshCartCount, logout } = useAuth();
+  const { status: authStatus, user, loading: authLoading, refreshCartCount, logout } = useAuth();
   const { showToast } = useToast();
 
   // Navigation State
@@ -40,6 +48,9 @@ function MainShopApp() {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [sortOption, setSortOption] = useState<string>('newest');
 
+  // Wishlist IDs for quick lookup
+  const [wishlistIds, setWishlistIds] = useState<Set<number>>(new Set());
+
   // Advanced Filters State
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [minPrice, setMinPrice] = useState<string>('');
@@ -49,6 +60,9 @@ function MainShopApp() {
 
   // Modal States
   const [detailProduct, setDetailProduct] = useState<Product | null>(null);
+  const [detailOpenOffer, setDetailOpenOffer] = useState(false);
+  const [detailOpenChat, setDetailOpenChat] = useState(false);
+
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [directCheckoutItem, setDirectCheckoutItem] = useState<{ product: Product; quantity: number } | undefined>(undefined);
@@ -64,12 +78,8 @@ function MainShopApp() {
   // Presentation Mode state
   const [presentationMode, setPresentationMode] = useState<boolean>(false);
 
-  useEffect(() => {
-    api.getPresentationMode().then(res => setPresentationMode(!!res.presentation_mode)).catch(() => {});
-  }, []);
-
   // Pending action for guest after login
-  const [pendingCartAction, setPendingCartAction] = useState<{ product: Product; quantity: number } | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
 
   // Cart Data
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -123,41 +133,77 @@ function MainShopApp() {
     }
   }, [user, currentView, authLoading]);
 
-  // Synchronize route from browser pathname on initial mount
+  // Fetch presentation mode & wishlist
+  useEffect(() => {
+    api.getPresentationMode().then(res => setPresentationMode(!!res.presentation_mode)).catch(() => {});
+  }, []);
+
+  const fetchWishlist = async () => {
+    if (user?.role === 'buyer') {
+      try {
+        const res = await api.getWishlistIds();
+        setWishlistIds(new Set(res.product_ids));
+      } catch {
+        // quiet catch
+      }
+    } else {
+      setWishlistIds(new Set());
+    }
+  };
+
+  useEffect(() => {
+    fetchWishlist();
+  }, [user]);
+
+  // Synchronize route from browser pathname on initial mount & popstate
   useEffect(() => {
     if (authLoading) return;
 
-    const path = window.location.pathname;
-    if (path.startsWith('/seller')) {
-      if (user && user.role === 'seller') {
-        setCurrentView('seller');
-      } else if (!user) {
-        setAuthModal({ open: true, role: 'seller', initialIsRegister: false });
-      } else {
-        showToast('Trang này dành cho người bán', 'error');
-        setCurrentView('home');
+    const handleRouteFromPath = () => {
+      const path = window.location.pathname;
+      if (path === '/seller/register') {
+        if (!user) setAuthModal({ open: true, role: 'seller', initialIsRegister: true });
+        else if (user.role === 'seller') setCurrentView('seller');
+      } else if (path === '/seller/login') {
+        if (!user) setAuthModal({ open: true, role: 'seller', initialIsRegister: false });
+        else if (user.role === 'seller') setCurrentView('seller');
+      } else if (path.startsWith('/seller')) {
+        if (user && user.role === 'seller') {
+          setCurrentView('seller');
+        } else if (!user) {
+          setAuthModal({ open: true, role: 'seller', initialIsRegister: false });
+        } else {
+          showToast('Trang này dành cho người bán', 'error');
+          setCurrentView('home');
+        }
+      } else if (path === '/register') {
+        if (!user) setAuthModal({ open: true, role: 'buyer', initialIsRegister: true });
+      } else if (path === '/login') {
+        if (!user) setAuthModal({ open: true, role: 'buyer', initialIsRegister: false });
+      } else if (path === '/orders') {
+        if (user && user.role === 'buyer') {
+          setCurrentView('orders');
+        } else if (!user) {
+          setAuthModal({ open: true, role: 'buyer', initialIsRegister: false });
+        } else {
+          showToast('Bạn đang đăng nhập bằng tài khoản người bán', 'error');
+          setCurrentView('seller');
+        }
+      } else if (path === '/account') {
+        if (user && user.role === 'buyer') {
+          setCurrentView('account');
+        } else if (!user) {
+          setAuthModal({ open: true, role: 'buyer', initialIsRegister: false });
+        } else {
+          setCurrentView('seller');
+        }
       }
-    } else if (path === '/orders') {
-      if (user && user.role === 'buyer') {
-        setCurrentView('orders');
-      } else if (!user) {
-        setAuthModal({ open: true, role: 'buyer', initialIsRegister: false });
-      } else {
-        showToast('Bạn đang đăng nhập bằng tài khoản người bán', 'error');
-        setCurrentView('seller');
-      }
-    } else if (path === '/account') {
-      if (user && user.role === 'buyer') {
-        setCurrentView('account');
-      } else if (!user) {
-        setAuthModal({ open: true, role: 'buyer', initialIsRegister: false });
-      } else {
-        setCurrentView('seller');
-      }
-    } else if (path === '/login') {
-      if (!user) setAuthModal({ open: true, role: 'buyer', initialIsRegister: false });
-    }
-  }, [authLoading]);
+    };
+
+    handleRouteFromPath();
+    window.addEventListener('popstate', handleRouteFromPath);
+    return () => window.removeEventListener('popstate', handleRouteFromPath);
+  }, [authLoading, user]);
 
   // Load products with basic and advanced filters
   const fetchProducts = async () => {
@@ -218,6 +264,31 @@ function MainShopApp() {
     }
   }, [isCartOpen, isCheckoutOpen, user]);
 
+  // Wishlist toggle handler
+  const handleToggleWishlist = async (productId: number) => {
+    if (!user) {
+      setPendingAction({ type: 'wishlist', productId });
+      setAuthModal({
+        open: true,
+        role: 'buyer',
+        initialIsRegister: false,
+        promptMessage: 'Đăng nhập để lưu món đồ yêu thích'
+      });
+      return;
+    }
+    if (user.role !== 'buyer') {
+      showToast('Chức năng yêu thích chỉ dành cho tài khoản người mua', 'error');
+      return;
+    }
+    try {
+      const res = await api.toggleWishlist(productId);
+      showToast(res.message, 'success');
+      await fetchWishlist();
+    } catch (err: any) {
+      showToast(err.message || 'Lỗi thao tác yêu thích', 'error');
+    }
+  };
+
   // Add to cart handler
   const handleAddToCart = async (product: Product, quantity: number = 1) => {
     if (currentView === 'preview') {
@@ -232,7 +303,7 @@ function MainShopApp() {
 
     if (!user) {
       // Guest: save pending action, open buyer modal with prompt
-      setPendingCartAction({ product, quantity });
+      setPendingAction({ type: 'cart', product, quantity });
       setAuthModal({
         open: true,
         role: 'buyer',
@@ -271,7 +342,7 @@ function MainShopApp() {
     }
 
     if (!user) {
-      setPendingCartAction({ product, quantity });
+      setPendingAction({ type: 'buy', product, quantity });
       setAuthModal({
         open: true,
         role: 'buyer',
@@ -373,26 +444,44 @@ function MainShopApp() {
     }
   };
 
-  // Auth Modal Success Handler: Handles pending cart action for guest
+  // Auth Modal Success Handler: Automatically resumes pending guest action
   const handleAuthSuccess = async () => {
     if (authModal.role === 'seller') {
       setCurrentView('seller');
-    } else {
-      if (pendingCartAction) {
-        const { product, quantity } = pendingCartAction;
-        setPendingCartAction(null);
-        setTimeout(async () => {
-          try {
-            await api.addToCart(product.id, quantity);
-            showToast(`Đã thêm "${product.name}" vào giỏ hàng`, 'success');
+      setPendingAction(null);
+      return;
+    }
+
+    if (pendingAction) {
+      const action = pendingAction;
+      setPendingAction(null);
+      setTimeout(async () => {
+        try {
+          if (action.type === 'cart') {
+            await api.addToCart(action.product.id, action.quantity);
+            showToast(`Đã thêm "${action.product.name}" vào giỏ hàng`, 'success');
             await refreshCartCount();
             await loadCartData();
             setIsCartOpen(true);
-          } catch (err: any) {
-            showToast(err.message || 'Lỗi thêm vào giỏ', 'error');
+          } else if (action.type === 'buy') {
+            setDirectCheckoutItem({ product: action.product, quantity: action.quantity });
+            if (detailProduct) setDetailProduct(null);
+            setIsCheckoutOpen(true);
+          } else if (action.type === 'offer') {
+            setDetailProduct(action.product);
+            setDetailOpenOffer(true);
+          } else if (action.type === 'chat') {
+            setDetailProduct(action.product);
+            setDetailOpenChat(true);
+          } else if (action.type === 'wishlist') {
+            const res = await api.toggleWishlist(action.productId);
+            showToast(res.message, 'success');
+            await fetchWishlist();
           }
-        }, 350);
-      }
+        } catch (err: any) {
+          showToast(err.message || 'Lỗi hoàn tất thao tác', 'error');
+        }
+      }, 350);
     }
   };
 
@@ -426,7 +515,7 @@ function MainShopApp() {
   const isPreview = currentView === 'preview';
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#F5F8EF] text-[#101410]">
+    <div key={authStatus} className="min-h-screen flex flex-col bg-[#F5F8EF] text-[#101410]">
       {/* PREVIEW BANNER (Fixed on top when seller is previewing shop) */}
       {isPreview && (
         <div className="sticky top-0 z-50 bg-[#C2522D] text-white px-4 sm:px-6 py-2.5 flex items-center justify-between shadow-md">
@@ -535,6 +624,8 @@ function MainShopApp() {
             onSelectProduct={prod => setDetailProduct(prod)}
             onAddToCart={prod => handleAddToCart(prod, 1)}
             onOpenCart={() => setIsCartOpen(true)}
+            wishlistIds={wishlistIds}
+            onToggleWishlist={handleToggleWishlist}
             onNavigateOrders={(_tab, code) => {
               if (code) setSelectedOrderCodeForTracking(code);
               setCurrentView('orders');
@@ -770,6 +861,8 @@ function MainShopApp() {
                       product={product}
                       onSelect={prod => setDetailProduct(prod)}
                       onAddToCart={prod => handleAddToCart(prod, 1)}
+                      isWishlisted={wishlistIds.has(product.id)}
+                      onToggleWishlist={id => handleToggleWishlist(id)}
                       disabledBuy={isPreview}
                       onDisabledBuyClick={() => showToast('Bạn đang xem cửa hàng dưới góc nhìn của khách — chức năng mua hàng bị vô hiệu hóa', 'info')}
                     />
@@ -923,7 +1016,8 @@ function MainShopApp() {
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8 pt-6 border-t border-[#E2E8D8] flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left text-[#5E5E61]">
           <div>
-            © 2026 Đồ Cũ Còn Thương. Nền tảng thương mại điện tử đồ cũ bền vững phong cách studio xanh bạc hà.
+            <p>© 2026 Đồ Cũ Còn Thương. Nền tảng thương mại điện tử đồ cũ bền vững phong cách studio xanh bạc hà.</p>
+            <p className="text-xs text-[#08482D] font-medium mt-1">Bản demo: dữ liệu được lưu trên trình duyệt của bạn.</p>
           </div>
         </div>
       </footer>
@@ -952,7 +1046,41 @@ function MainShopApp() {
       {/* Product Detail Modal */}
       <ProductDetailModal
         product={detailProduct}
-        onClose={() => setDetailProduct(null)}
+        initialOpenOffer={detailOpenOffer}
+        initialOpenChat={detailOpenChat}
+        isWishlisted={detailProduct ? wishlistIds.has(detailProduct.id) : false}
+        onToggleWishlist={id => handleToggleWishlist(id)}
+        currentUser={user}
+        onRequestAuth={(actionType, prod) => {
+          if (actionType === 'offer') {
+            setPendingAction({ type: 'offer', product: prod });
+            setAuthModal({
+              open: true,
+              role: 'buyer',
+              initialIsRegister: false,
+              promptMessage: 'Đăng nhập để gửi giá đề xuất cho shop'
+            });
+          } else if (actionType === 'chat') {
+            setPendingAction({ type: 'chat', product: prod });
+            setAuthModal({
+              open: true,
+              role: 'buyer',
+              initialIsRegister: false,
+              promptMessage: 'Đăng nhập để trò chuyện với người bán'
+            });
+          } else if (actionType === 'wishlist') {
+            handleToggleWishlist(prod.id);
+          } else if (actionType === 'cart') {
+            handleAddToCart(prod, 1);
+          } else if (actionType === 'buy') {
+            handleBuyNow(prod, 1);
+          }
+        }}
+        onClose={() => {
+          setDetailProduct(null);
+          setDetailOpenOffer(false);
+          setDetailOpenChat(false);
+        }}
         onAddToCart={(prod, qty) => handleAddToCart(prod, qty)}
         onBuyNow={(prod, qty) => handleBuyNow(prod, qty)}
         disabledBuy={isPreview}
@@ -1021,10 +1149,12 @@ function MainShopApp() {
 
 export default function App() {
   return (
-    <ToastProvider>
-      <AuthProvider>
-        <MainShopApp />
-      </AuthProvider>
-    </ToastProvider>
+    <ErrorBoundary>
+      <ToastProvider>
+        <AuthProvider>
+          <MainShopApp />
+        </AuthProvider>
+      </ToastProvider>
+    </ErrorBoundary>
   );
 }

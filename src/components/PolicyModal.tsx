@@ -139,6 +139,9 @@ export function PolicyModal({ type, isOpen, onClose }: PolicyModalProps) {
           <div className="p-3 bg-[#F5F8EF] rounded-2xl border border-[#E2E8D8] italic text-[#101410] text-center">
             "Mỗi món đồ cũ đều còn một câu chuyện... và bạn chính là chương tiếp theo."
           </div>
+          <div className="p-2.5 bg-[#DAE7C7]/60 border border-[#08482D]/20 rounded-xl text-xs text-[#08482D] font-medium text-center">
+            Bản demo: dữ liệu được lưu trên trình duyệt của bạn.
+          </div>
         </div>
       )
     },

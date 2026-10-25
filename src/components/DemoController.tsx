@@ -13,7 +13,7 @@ interface DemoControllerProps {
 }
 
 export function DemoController({ onRoleSwitched, onDataReset, onPresentationModeChange }: DemoControllerProps) {
-  const { user, logout, refreshUser } = useAuth();
+  const { user, login, logout, refreshUser } = useAuth();
   const { showToast } = useToast();
 
   const [isOpen, setIsOpen] = useState(false);
@@ -127,10 +127,8 @@ export function DemoController({ onRoleSwitched, onDataReset, onPresentationMode
   const handleSwitchBuyer = async () => {
     setSwitching(true);
     try {
-      const res = await api.switchBuyer();
-      setStoredToken(res.token);
-      await refreshUser();
-      showToast('Đã chuyển sang vai Khách Mua Chủ Tiệm', 'success');
+      logout();
+      await login('0987654321', '123456', 'buyer');
       setIsOpen(false);
       if (onRoleSwitched) onRoleSwitched('buyer');
     } catch (err: any) {
@@ -143,10 +141,8 @@ export function DemoController({ onRoleSwitched, onDataReset, onPresentationMode
   const handleSwitchSeller = async () => {
     setSwitching(true);
     try {
-      const res = await api.switchSeller();
-      setStoredToken(res.token);
-      await refreshUser();
-      showToast('Đã chuyển sang vai Chủ Tiệm Quản Trị', 'success');
+      logout();
+      await login('admin', 'admin123', 'seller');
       setIsOpen(false);
       if (onRoleSwitched) onRoleSwitched('seller');
     } catch (err: any) {

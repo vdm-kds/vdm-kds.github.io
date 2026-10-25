@@ -218,7 +218,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onSelectOrde
                   }`}
                 >
                   <div className="p-2 rounded-xl bg-[#DAE7C7] shrink-0 mt-0.5">
-                    {getIconForType(notif.type)}
+                    {getIconForType(notif.type || '')}
                   </div>
 
                   <div className="flex-1 min-w-0">

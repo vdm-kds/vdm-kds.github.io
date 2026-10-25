@@ -30,7 +30,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(({
   ...props
 }, ref) => {
   // Base classes for pill shape, flex alignment, smooth transitions, elevation, and keyboard focus
-  const baseClasses = 'inline-flex items-center justify-center font-sans font-semibold transition-all duration-200 select-none cursor-pointer focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[#DAE7C7] active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none disabled:active:scale-100';
+  const baseClasses = 'inline-flex items-center justify-center whitespace-nowrap font-sans font-semibold transition-all duration-200 select-none cursor-pointer focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[#DAE7C7] active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none disabled:active:scale-100';
 
   // Variant classes
   const variantClasses: Record<ButtonVariant, string> = {
