@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Package, Truck, Clock, RefreshCw, XCircle, CheckCircle2, ChevronRight, 
   AlertCircle, ShieldCheck, X, Copy, Check, ArrowLeft, MapPin, Star,
-  FileText, MessageSquare, RotateCcw, Tag
+  FileText, MessageSquare, RotateCcw, Tag, Store
 } from 'lucide-react';
 import { Order, OrderStatus } from '../types';
 import { api } from '../services/api';
@@ -17,11 +17,13 @@ import { InvoiceModal } from './InvoiceModal';
 interface OrdersViewProps {
   onBackToShop: () => void;
   selectedOrderCode?: string | null;
+  onNavigateToShop?: (slug: string) => void;
 }
 
 export const OrdersView: React.FC<OrdersViewProps> = ({
   onBackToShop,
-  selectedOrderCode
+  selectedOrderCode,
+  onNavigateToShop
 }) => {
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<string>('all');
@@ -282,6 +284,26 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                       : 'border-[#E2E8D8] hover:border-[#5E5E61] shadow-vintage-sm'
                   }`}
                 >
+                  {/* Shop Header */}
+                  <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-[#E2E8D8]/60 text-xs">
+                    <div className="flex items-center gap-1.5 font-bold text-[#08482D] truncate">
+                      <Store className="w-3.5 h-3.5 shrink-0" />
+                      <span className="truncate">{order.shop_name || 'Đồ Cũ Còn Thương'}</span>
+                    </div>
+                    {onNavigateToShop && order.shop_slug && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onNavigateToShop(order.shop_slug!);
+                        }}
+                        className="text-[11px] text-[#5E5E61] hover:text-[#08482D] underline font-medium shrink-0"
+                      >
+                        Ghé shop
+                      </button>
+                    )}
+                  </div>
+
                   <div className="flex items-start justify-between gap-3 mb-3">
                     <div>
                       <div className="flex items-center gap-2">
@@ -703,7 +725,14 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
               {/* Chat with shop button */}
               <button
                 type="button"
-                onClick={() => setShowChatDrawer(true)}
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent('open-buyer-chat', {
+                    detail: {
+                      shopId: selectedOrder.shop_id || 1,
+                      order: selectedOrder
+                    }
+                  }));
+                }}
                 className="py-2.5 px-3.5 bg-white border border-[#DAE7C7] hover:bg-[#F5F8EF] text-[#08482D] rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs"
               >
                 <MessageSquare className="w-4 h-4 text-[#08482D]" />

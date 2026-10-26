@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShoppingBag, Check, Star, Heart } from 'lucide-react';
+import { ShoppingBag, Check, Star, Heart, Store } from 'lucide-react';
 import { Product } from '../types';
 import { formatVND } from '../utils/format';
 import { Button } from './Button';
@@ -7,8 +7,10 @@ import { ProductFallbackImage } from './ProductFallbackImage';
 
 interface ProductCardProps {
   product: Product;
-  onSelect: (product: Product) => void;
-  onAddToCart: (product: Product) => void;
+  onSelect?: (product: Product) => void;
+  onClick?: () => void;
+  onAddToCart?: (product: Product) => void;
+  onNavigateToShop?: (slug: string) => void;
   isAddingToCart?: boolean;
   isWishlisted?: boolean;
   onToggleWishlist?: (productId: number) => void;
@@ -19,7 +21,9 @@ interface ProductCardProps {
 export const ProductCard: React.FC<ProductCardProps> = ({
   product,
   onSelect,
+  onClick,
   onAddToCart,
+  onNavigateToShop,
   isAddingToCart = false,
   isWishlisted = false,
   onToggleWishlist,
@@ -38,7 +42,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       return;
     }
     if (isSoldOut) return;
-    onAddToCart(product);
+    if (onAddToCart) onAddToCart(product);
     setJustAdded(true);
     setTimeout(() => setJustAdded(false), 1500);
   };
@@ -50,9 +54,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     }
   };
 
+  const handleCardClick = () => {
+    if (onSelect) onSelect(product);
+    else if (onClick) onClick();
+  };
+
   return (
     <div
-      onClick={() => onSelect(product)}
+      onClick={handleCardClick}
       className="group relative bg-white rounded-3xl border border-[#E2E8D8] overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg cursor-pointer flex flex-col h-full hover:border-[#DAE7C7]"
     >
       {/* Product Image Container */}
@@ -136,6 +145,23 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           <h3 className="text-base font-bold text-[#101410] line-clamp-1 group-hover:text-[#08482D] transition-colors mt-1">
             {product.name}
           </h3>
+
+          {/* Shop Badge */}
+          {product.shop_name && (
+            <div 
+              onClick={(e) => {
+                if (product.shop_slug) {
+                  e.stopPropagation();
+                  if (onNavigateToShop) onNavigateToShop(product.shop_slug);
+                  else window.location.href = `/shop/${product.shop_slug}`;
+                }
+              }}
+              className="mt-1 inline-flex items-center gap-1 text-[11px] text-stone-500 hover:text-[#08482D] hover:underline cursor-pointer group/shop font-medium"
+            >
+              <Store className="w-3 h-3 text-[#08482D] shrink-0" />
+              <span className="truncate">{product.shop_name}</span>
+            </div>
+          )}
 
           {/* Condition Detail Note */}
           <p className="text-xs text-[#5E5E61] line-clamp-2 mt-1.5 leading-relaxed">

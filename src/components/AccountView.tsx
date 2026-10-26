@@ -1,20 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { User, MapPin, KeyRound, Heart, Bell, Plus, Trash2, Edit2, CheckCircle2, ShieldCheck, ShoppingCart, ArrowLeft, Tag, Clock, Check, XCircle } from 'lucide-react';
+import { User, MapPin, KeyRound, Heart, Bell, Plus, Trash2, Edit2, CheckCircle2, ShieldCheck, ShoppingCart, ArrowLeft, Tag, Clock, Check, XCircle, Store, ExternalLink } from 'lucide-react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { Product, Address, AppNotification, Offer } from '../types';
+import { Product, Address, AppNotification, Offer, Shop } from '../types';
 import { formatVND } from '../utils/format';
 
 interface AccountViewProps {
   onBackToHome: () => void;
   onSelectProduct: (product: Product) => void;
   onAddToCart: (product: Product) => void;
+  onNavigateToShop?: (slug: string) => void;
 }
 
-type TabType = 'profile' | 'addresses' | 'password' | 'wishlist' | 'notifications' | 'offers';
+type TabType = 'profile' | 'addresses' | 'password' | 'wishlist' | 'notifications' | 'offers' | 'followed_shops';
 
-export function AccountView({ onBackToHome, onSelectProduct, onAddToCart }: AccountViewProps) {
+export function AccountView({ onBackToHome, onSelectProduct, onAddToCart, onNavigateToShop }: AccountViewProps) {
   const { user, refreshCartCount } = useAuth();
   const { showToast } = useToast();
 
@@ -144,11 +145,39 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart }: Acco
     }
   };
 
+  // Followed Shops State
+  const [followedShops, setFollowedShops] = useState<Shop[]>([]);
+  const [loadingFollowedShops, setLoadingFollowedShops] = useState(false);
+
+  // Load followed shops
+  const loadFollowedShops = async () => {
+    setLoadingFollowedShops(true);
+    try {
+      const res = await api.getFollowedShops();
+      setFollowedShops(res.shops);
+    } catch (err: any) {
+      showToast(err.message || 'Lỗi tải danh sách shop theo dõi', 'error');
+    } finally {
+      setLoadingFollowedShops(false);
+    }
+  };
+
+  const handleUnfollowShop = async (shopId: number) => {
+    try {
+      await api.toggleFollowShop(shopId);
+      setFollowedShops(prev => prev.filter(s => s.id !== shopId));
+      showToast('Đã bỏ theo dõi shop', 'info');
+    } catch (err: any) {
+      showToast(err.message || 'Lỗi thao tác', 'error');
+    }
+  };
+
   useEffect(() => {
     if (activeTab === 'addresses') loadAddresses();
     if (activeTab === 'wishlist') loadWishlist();
     if (activeTab === 'notifications') loadNotifications();
     if (activeTab === 'offers') loadOffers();
+    if (activeTab === 'followed_shops') loadFollowedShops();
   }, [activeTab]);
 
   // Update profile
@@ -380,6 +409,22 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart }: Acco
               }`}
             >
               <Tag className="w-4 h-4" /> Lời trả giá của tôi
+            </button>
+
+            <button
+              onClick={() => setActiveTab('followed_shops')}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all text-left ${
+                activeTab === 'followed_shops'
+                  ? 'bg-[#08482D] text-white shadow-sm'
+                  : 'text-[#5E5E61] hover:bg-[#F5F8EF] hover:text-[#101410]'
+              }`}
+            >
+              <Store className="w-4 h-4" /> Shop đang theo dõi
+              {followedShops.length > 0 && (
+                <span className="ml-auto text-[10px] bg-[#DAE7C7] text-[#08482D] px-2 py-0.5 rounded-full font-mono font-bold">
+                  {followedShops.length}
+                </span>
+              )}
             </button>
 
             <button
@@ -906,6 +951,84 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart }: Acco
                       </div>
                     );
                   })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB: FOLLOWED SHOPS */}
+          {activeTab === 'followed_shops' && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-xl font-bold text-[#101410] flex items-center gap-2">
+                  <Store className="w-5 h-5 text-[#08482D]" />
+                  Shop đang theo dõi
+                </h3>
+                <p className="text-xs text-[#5E5E61] mt-1">
+                  Danh sách các gian hàng đồ cũ bạn đang bấm theo dõi để cập nhật món mới
+                </p>
+              </div>
+
+              {loadingFollowedShops ? (
+                <div className="p-8 text-center text-xs text-[#5E5E61]">Đang tải danh sách shop...</div>
+              ) : followedShops.length === 0 ? (
+                <div className="p-12 text-center rounded-2xl bg-[#F5F8EF]/60 border border-[#E2E8D8] space-y-3">
+                  <Store className="w-10 h-10 mx-auto text-[#5E5E61]/60 stroke-1" />
+                  <p className="text-sm font-bold text-[#101410]">Bạn chưa theo dõi shop nào</p>
+                  <p className="text-xs text-[#5E5E61] max-w-sm mx-auto">
+                    Bấm "Theo dõi" tại trang của shop để nhận tin khi có sản phẩm và mã giảm giá độc quyền!
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {followedShops.map((shop) => (
+                    <div
+                      key={shop.id}
+                      className="p-4 rounded-2xl border border-[#E2E8D8] bg-[#F5F8EF]/40 hover:border-[#08482D] transition-all flex items-center justify-between gap-3 shadow-2xs"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div
+                          className="w-12 h-12 rounded-2xl flex items-center justify-center text-white font-bold text-base shrink-0 overflow-hidden shadow-xs"
+                          style={{ backgroundColor: shop.cover_color || '#08482D' }}
+                        >
+                          {shop.avatar ? (
+                            <img src={shop.avatar} alt={shop.name} className="w-full h-full object-cover" />
+                          ) : (
+                            shop.name.charAt(0)
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="font-bold text-xs sm:text-sm text-[#101410] truncate">{shop.name}</h4>
+                          <p className="text-[11px] text-[#5E5E61] truncate">{shop.description || `@${shop.slug}`}</p>
+                          <div className="flex items-center gap-2 mt-1 text-[10px] text-[#5E5E61]">
+                            <span>{shop.product_count || 0} sản phẩm</span>
+                            <span>•</span>
+                            <span>{shop.follower_ids?.length || 0} người theo dõi</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-1.5 shrink-0">
+                        {onNavigateToShop && (
+                          <button
+                            type="button"
+                            onClick={() => onNavigateToShop(shop.slug)}
+                            className="px-3 py-1.5 bg-[#08482D] text-white text-xs font-bold rounded-xl hover:bg-[#063A24] transition-colors flex items-center justify-center gap-1 shadow-xs cursor-pointer"
+                          >
+                            <span>Ghé shop</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleUnfollowShop(shop.id)}
+                          className="px-3 py-1 text-[11px] font-medium text-[#5E5E61] hover:text-[#B33F33] hover:bg-white rounded-lg transition-colors border border-transparent hover:border-[#E2E8D8] cursor-pointer"
+                        >
+                          Bỏ theo dõi
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

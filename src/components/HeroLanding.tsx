@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
-  ArrowRight, ChevronDown, X, Menu
+  ArrowRight, ChevronDown, X, Menu, Store, Star
 } from 'lucide-react';
 import { Product } from '../types';
 import { Button } from './Button';
@@ -9,11 +9,13 @@ import CurvedCarousel, { CarouselProduct } from './CurvedCarousel';
 interface HeroLandingProps {
   products: Product[];
   totalProductsCount: number;
+  shopCount?: number;
   onSelectProduct: (product: Product) => void;
   onAddToCart: (product: Product) => void;
   onNavigate: (view: 'home' | 'orders' | 'seller' | 'account') => void;
   onOpenAuth: (role: 'buyer' | 'seller', isRegister?: boolean) => void;
   onSelectCategory: (category: string) => void;
+  onNavigateToShop?: (slug: string) => void;
 }
 
 const CATEGORIES = [
@@ -29,11 +31,13 @@ const CATEGORIES = [
 export const HeroLanding: React.FC<HeroLandingProps> = ({
   products,
   totalProductsCount,
+  shopCount = 3,
   onSelectProduct,
   onAddToCart,
   onNavigate,
   onOpenAuth,
-  onSelectCategory
+  onSelectCategory,
+  onNavigateToShop
 }) => {
   // Navigation & modals state
   const [isScrolled, setIsScrolled] = useState(false);
@@ -322,7 +326,7 @@ export const HeroLanding: React.FC<HeroLandingProps> = ({
           onClick={scrollToProducts}
           className="inline-flex items-center justify-center bg-[#DAE7C7] text-[#08482D] rounded-full font-bold px-4 sm:px-5 py-2 shadow-2xs hover:bg-[#c9dcb2] hover:scale-105 transition-all duration-300 text-xs sm:text-sm whitespace-nowrap"
         >
-          <span>♻ {totalProductsCount || products.length || 10} món đồ cũ đang chờ chủ mới</span>
+          <span>♻ {totalProductsCount || products.length || 10} món đồ cũ từ {shopCount || 3} shop đang chờ chủ mới</span>
         </button>
       </div>
 
@@ -516,6 +520,100 @@ export const HeroLanding: React.FC<HeroLandingProps> = ({
         >
           hoặc bán đồ của bạn &rarr;
         </button>
+      </div>
+
+      {/* ======================================================== */}
+      {/* SHOP NỔI BẬT (FEATURED SHOPS)                            */}
+      {/* ======================================================== */}
+      <div className="w-full max-w-5xl px-4 mt-12 mb-4 z-20">
+        <div className="text-center mb-6">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#DAE7C7]/60 text-[#08482D] text-xs font-bold mb-2">
+            <Store className="w-3.5 h-3.5" /> Chợ nhiều shop độc lập
+          </div>
+          <h2 className="text-2xl sm:text-3xl font-serif font-black text-[#101410]">Shop nổi bật tại tiệm</h2>
+          <p className="text-xs sm:text-sm text-[#5E5E61] mt-1">Mỗi shop là một phong cách riêng, tự đăng và kiểm định kỹ trước khi giao</p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {[
+            {
+              id: 1,
+              name: 'Đồ Cũ Còn Thương',
+              slug: 'do-cu-con-thuong',
+              color: '#08482D',
+              avatar: 'https://images.unsplash.com/photo-1544816155-12df9643f363?w=120',
+              desc: 'Tiệm đồ second-hand có câu chuyện: thời trang, phụ kiện, đồ gia dụng đã kiểm định.',
+              productsCount: 4,
+              rating: 5.0
+            },
+            {
+              id: 2,
+              name: 'Góc Sách & Nhạc',
+              slug: 'goc-sach-nhac',
+              color: '#7A4E2D',
+              avatar: 'https://images.unsplash.com/photo-1512820790803-83ca734da794?w=120',
+              desc: 'Sách cũ còn thơm mùi giấy và nhạc cụ đã qua sử dụng, chỉnh âm kỹ trước khi giao.',
+              productsCount: 2,
+              rating: 5.0
+            },
+            {
+              id: 3,
+              name: 'Retro Tech',
+              slug: 'retro-tech',
+              color: '#2F4B6B',
+              avatar: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=120',
+              desc: 'Đồ công nghệ cũ đã test kỹ: máy ảnh film, điện thoại, tai nghe, bàn phím cơ.',
+              productsCount: 4,
+              rating: 5.0
+            }
+          ].map(s => (
+            <div
+              key={s.id}
+              className="bg-white rounded-3xl border border-[#E2E8D8] overflow-hidden shadow-xs hover:shadow-md transition-all group flex flex-col justify-between"
+            >
+              <div>
+                <div className="h-16 relative" style={{ backgroundColor: s.color }} />
+                <div className="p-4 pt-0">
+                  <div className="flex items-center gap-3 -mt-6 mb-2.5">
+                    <img
+                      src={s.avatar}
+                      alt={s.name}
+                      className="w-12 h-12 rounded-full border-2 border-white object-cover shadow-sm bg-stone-100 shrink-0"
+                    />
+                    <div className="min-w-0 pt-2">
+                      <h4 className="font-bold text-sm text-[#101410] truncate group-hover:text-[#08482D] transition-colors">
+                        {s.name}
+                      </h4>
+                      <div className="flex items-center gap-1.5 text-[11px] text-[#5E5E61]">
+                        <span className="flex items-center gap-0.5 text-amber-500 font-bold">
+                          <Star className="w-3 h-3 fill-amber-500" /> {s.rating}
+                        </span>
+                        <span>·</span>
+                        <span>{s.productsCount} món</span>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-[#5E5E61] line-clamp-2 leading-relaxed">
+                    {s.desc}
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-4 pt-0 mt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onNavigateToShop) onNavigateToShop(s.slug);
+                    else window.location.href = `/shop/${s.slug}`;
+                  }}
+                  className="w-full py-2 bg-[#F5F8EF] hover:bg-[#DAE7C7] text-[#08482D] font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-1.5 border border-[#DAE7C7]"
+                >
+                  <Store className="w-3.5 h-3.5" /> Ghé shop
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* ======================================================== */}

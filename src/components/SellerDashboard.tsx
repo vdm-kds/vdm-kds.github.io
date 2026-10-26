@@ -3,28 +3,32 @@ import {
   Store, Package, ShoppingBag, DollarSign, TrendingUp, AlertTriangle, 
   Plus, Edit2, Trash2, CheckCircle2, XCircle, Truck, Send, Clock, 
   MapPin, RefreshCw, X, ChevronRight, Eye, Printer, Download, Tag, Percent, CheckSquare, Square,
-  MessageSquare, RotateCcw, Sparkles, ShieldAlert, Bell, KeyRound, LogOut, UserCheck, Star, Play, Flag, ChevronDown, Check, User
+  MessageSquare, RotateCcw, Sparkles, ShieldAlert, Bell, KeyRound, LogOut, UserCheck, Star, Play, Flag, ChevronDown, Check, User,
+  Upload, ExternalLink
 } from 'lucide-react';
-import { Product, Order, SellerStats, Coupon, Offer, ChatConversation, ChatMessage, ReturnRequest, ProductFlaw } from '../types';
+import { Product, Order, SellerStats, Coupon, Offer, ChatConversation, ChatMessage, ReturnRequest, ProductFlaw, Shop } from '../types';
 import { api } from '../services/api';
 import { formatVND, formatDate, getOrderStatusBadge, getPaymentStatusBadge } from '../utils/format';
 import { useToast } from '../context/ToastContext';
 import { SellerShippingKanban } from './SellerShippingKanban';
 import { ShippingLabelModal } from './ShippingLabelModal';
 import { Button } from './Button';
+import { compressImageFile } from '../utils/image';
 
 interface SellerDashboardProps {
   onViewPreview?: () => void;
   onLogout?: () => void;
   onSwitchToBuyer?: () => void;
   currentUser?: any;
+  onNavigateToShop?: (slug: string) => void;
 }
 
 export const SellerDashboard: React.FC<SellerDashboardProps> = ({ 
   onViewPreview, 
   onLogout, 
   onSwitchToBuyer, 
-  currentUser 
+  currentUser,
+  onNavigateToShop
 }) => {
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<'dashboard' | 'orders' | 'shipping' | 'returns' | 'offers' | 'chat' | 'reviews' | 'products' | 'coupons'>('dashboard');
@@ -145,6 +149,96 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
     loading: false
   });
   const menuRef = useRef<HTMLDivElement>(null);
+  const [currentShop, setCurrentShop] = useState<Shop | null>(null);
+  const [uploadingImages, setUploadingImages] = useState(false);
+  const [savingShop, setSavingShop] = useState(false);
+  const [shopEditForm, setShopEditForm] = useState({
+    name: '',
+    slug: '',
+    description: '',
+    avatar: '',
+    cover_image: '',
+    cover_color: '#08482D',
+    pickup_address: '',
+    phone: ''
+  });
+
+  const fetchCurrentShop = async () => {
+    if (!currentUser) return;
+    try {
+      const res = await api.getShopByOwnerUserId(currentUser.id);
+      if (res.shop) {
+        setCurrentShop(res.shop);
+        setShopEditForm({
+          name: res.shop.name || '',
+          slug: res.shop.slug || '',
+          description: res.shop.description || '',
+          avatar: res.shop.avatar || '',
+          cover_image: res.shop.cover_image || '',
+          cover_color: res.shop.cover_color || '#08482D',
+          pickup_address: res.shop.pickup_address || '',
+          phone: res.shop.phone || ''
+        });
+      }
+    } catch {
+      // Fallback
+    }
+  };
+
+  const handleSaveShopProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentShop) return;
+    setSavingShop(true);
+    try {
+      const res = await api.updateShop(currentShop.id, {
+        name: shopEditForm.name.trim(),
+        slug: shopEditForm.slug.trim(),
+        description: shopEditForm.description.trim(),
+        avatar: shopEditForm.avatar,
+        cover_image: shopEditForm.cover_image,
+        cover_color: shopEditForm.cover_color,
+        pickup_address: shopEditForm.pickup_address.trim(),
+        phone: shopEditForm.phone.trim()
+      });
+      setCurrentShop(res.shop);
+      showToast('Cập nhật hồ sơ shop thành công!', 'success');
+      setShopProfileModal(false);
+    } catch (err: any) {
+      showToast(err.message || 'Lỗi cập nhật hồ sơ shop', 'error');
+    } finally {
+      setSavingShop(false);
+    }
+  };
+
+  const handleProductImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setUploadingImages(true);
+    try {
+      const fileList = Array.from(files).slice(0, 5);
+      const compressedUrls: string[] = [];
+      for (const file of fileList) {
+        const dataUrl = await compressImageFile(file, 1280, 0.85);
+        compressedUrls.push(dataUrl);
+      }
+      const existingUrls = prodForm.imagesText ? prodForm.imagesText.split('\n').filter(Boolean) : [];
+      const combined = [...existingUrls, ...compressedUrls].slice(0, 5);
+      setProdForm(prev => ({
+        ...prev,
+        image_url: prev.image_url || combined[0] || '',
+        imagesText: combined.join('\n')
+      }));
+      showToast(`Đã nén và nạp ${compressedUrls.length} ảnh (cạnh dài 1280px)`, 'success');
+    } catch (err: any) {
+      showToast(err.message || 'Lỗi tải ảnh', 'error');
+    } finally {
+      setUploadingImages(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCurrentShop();
+  }, [currentUser?.id]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -1490,6 +1584,26 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
               <RefreshCw className="w-8 h-8 animate-spin text-[#47533E] mx-auto mb-2" />
               <p className="text-sm text-[#786F66]">Đang tải kho hàng...</p>
             </div>
+          ) : products.length === 0 ? (
+            <div className="p-16 text-center bg-white rounded-3xl border border-[#E2E8D8] space-y-4 shadow-sm">
+              <div className="w-16 h-16 rounded-3xl bg-[#DAE7C7] text-[#08482D] flex items-center justify-center mx-auto text-2xl font-bold shadow-xs">
+                ✨
+              </div>
+              <div>
+                <h4 className="text-lg font-bold text-[#101410]">Shop của bạn đã sẵn sàng!</h4>
+                <p className="text-xs text-[#5E5E61] mt-1 max-w-sm mx-auto">
+                  Đăng món đồ đầu tiên nhé. Khách hàng trên tiệm đang chờ đón những món đồ cũ có câu chuyện từ shop bạn!
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleOpenProductModal('add')}
+                className="px-6 py-2.5 bg-[#08482D] text-white rounded-2xl text-xs font-bold hover:bg-[#063A24] transition-all shadow-vintage-sm inline-flex items-center gap-2 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Đăng sản phẩm</span>
+              </button>
+            </div>
           ) : (
             <div className="bg-white rounded-3xl border border-[#E6DFD5] overflow-hidden shadow-2xs">
               <div className="overflow-x-auto">
@@ -2767,27 +2881,47 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
               </div>
 
               <div>
-                <label className="font-semibold text-[#524B46] block mb-1">URL ảnh chính (Đại diện)</label>
-                <input
-                  type="text"
-                  value={prodForm.image_url}
-                  onChange={e => setProdForm({ ...prodForm, image_url: e.target.value })}
-                  placeholder="Để trống sẽ tự dùng ảnh đầu tiên trong bộ sưu tập hoặc sinh ảnh SVG"
-                  className="w-full px-3 py-2 rounded-xl border border-[#D8CEBE] bg-[#FAF7F2]"
-                />
-              </div>
-
-              <div>
                 <label className="font-semibold text-[#524B46] block mb-1">
-                  Bộ sưu tập ảnh chụp thực tế (Mỗi URL ảnh trên một dòng, tối đa 5 ảnh)
+                  Ảnh sản phẩm (Tải từ máy tính hoặc dán URL)
                 </label>
-                <textarea
-                  rows={2}
-                  value={prodForm.imagesText}
-                  onChange={e => setProdForm({ ...prodForm, imagesText: e.target.value })}
-                  placeholder="https://images.unsplash.com/photo-1...&#10;https://images.unsplash.com/photo-2..."
-                  className="w-full px-3 py-2 rounded-xl border border-[#D8CEBE] bg-[#FAF7F2] font-mono text-[11px]"
-                />
+                <div className="space-y-2">
+                  <label className="flex items-center justify-center gap-2 p-3 border-2 border-dashed border-[#DAE7C7] rounded-xl bg-[#F5F8EF] hover:border-[#08482D] cursor-pointer transition-colors text-xs text-[#08482D] font-bold">
+                    <Upload className="w-4 h-4" />
+                    <span>{uploadingImages ? 'Đang nén ảnh...' : 'Tải ảnh từ máy (Tối đa 5 ảnh, nén cạnh 1280px)'}</span>
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/*"
+                      onChange={handleProductImageUpload}
+                      disabled={uploadingImages}
+                      className="hidden"
+                    />
+                  </label>
+
+                  <div>
+                    <label className="text-[11px] text-[#5E5E61] block mb-0.5">URL ảnh chính (Đại diện)</label>
+                    <input
+                      type="text"
+                      value={prodForm.image_url}
+                      onChange={e => setProdForm({ ...prodForm, image_url: e.target.value })}
+                      placeholder="Dán URL ảnh hoặc dùng ảnh đã tải ở trên"
+                      className="w-full px-3 py-2 rounded-xl border border-[#D8CEBE] bg-[#FAF7F2] text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] text-[#5E5E61] block mb-0.5">
+                      Danh sách ảnh thực tế (Tối đa 5 ảnh, mỗi URL một dòng)
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={prodForm.imagesText}
+                      onChange={e => setProdForm({ ...prodForm, imagesText: e.target.value })}
+                      placeholder="Các URL ảnh hoặc ảnh nén đã tải..."
+                      className="w-full px-3 py-2 rounded-xl border border-[#D8CEBE] bg-[#FAF7F2] font-mono text-[10px]"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div>
@@ -3311,12 +3445,14 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
       {/* MODAL: HỒ SƠ SHOP (SHOP PROFILE) */}
       {shopProfileModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="w-full max-w-lg bg-white rounded-3xl border border-[#DAE7C7] shadow-2xl p-6 sm:p-7 space-y-5 animate-in zoom-in-95">
+          <div className="w-full max-w-lg bg-white rounded-3xl border border-[#DAE7C7] shadow-2xl p-6 sm:p-7 space-y-4 animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-[#E2E8D8]">
-              <h3 className="text-base font-bold text-[#101410] flex items-center gap-2">
-                <UserCheck className="w-5 h-5 text-[#08482D]" />
-                Hồ sơ Tiệm Đồ Cũ Còn Thương
-              </h3>
+              <div className="flex items-center gap-2">
+                <Store className="w-5 h-5 text-[#08482D]" />
+                <h3 className="text-base font-bold text-[#101410]">
+                  Hồ sơ shop: {currentShop?.name || 'Shop của bạn'}
+                </h3>
+              </div>
               <button
                 type="button"
                 onClick={() => setShopProfileModal(false)}
@@ -3326,51 +3462,162 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
               </button>
             </div>
 
-            <div className="space-y-3.5 text-xs">
-              <div className="flex items-center gap-3 p-3 bg-[#F5F8EF] rounded-2xl border border-[#DAE7C7]">
-                <div className="w-12 h-12 rounded-2xl bg-[#08482D] text-white flex items-center justify-center text-lg font-bold shadow-xs">
-                  ♻
+            {/* View public shop button */}
+            {currentShop?.slug && onNavigateToShop && (
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShopProfileModal(false);
+                    onNavigateToShop(currentShop.slug);
+                  }}
+                  className="px-3.5 py-1.5 rounded-xl bg-[#DAE7C7] text-[#08482D] hover:bg-[#DAE7C7]/80 text-xs font-bold transition-colors inline-flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  <span>Xem shop của tôi</span>
+                  <ExternalLink className="w-3 h-3" />
+                </button>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveShopProfile} className="space-y-3.5 text-xs">
+              <div>
+                <label className="font-semibold text-[#101410] block mb-1">Tên shop *</label>
+                <input
+                  type="text"
+                  required
+                  value={shopEditForm.name}
+                  onChange={e => {
+                    const name = e.target.value;
+                    const autoSlug = name
+                      .toLowerCase()
+                      .normalize('NFD')
+                      .replace(/[\u0300-\u036f]/g, '')
+                      .replace(/đ/g, 'd')
+                      .replace(/[^a-z0-9]+/g, '-')
+                      .replace(/^-+|-+$/g, '');
+                    setShopEditForm(prev => ({
+                      ...prev,
+                      name,
+                      slug: prev.slug === '' || prev.slug === autoSlug.slice(0, -1) ? autoSlug : prev.slug
+                    }));
+                  }}
+                  placeholder="VD: Tiệm Đồ Cũ Vintage"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#DAE7C7] bg-[#F5F8EF] focus:outline-none focus:border-[#08482D]"
+                />
+              </div>
+
+              <div>
+                <label className="font-semibold text-[#101410] block mb-1">Đường dẫn shop (Slug) *</label>
+                <div className="flex items-center gap-1 px-3.5 py-2.5 rounded-xl border border-[#DAE7C7] bg-[#F5F8EF] font-mono text-xs">
+                  <span className="text-[#5E5E61]">/shop/</span>
+                  <input
+                    type="text"
+                    required
+                    value={shopEditForm.slug}
+                    onChange={e => setShopEditForm(prev => ({ ...prev, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') }))}
+                    placeholder="tiem-do-cu"
+                    className="flex-1 bg-transparent text-[#08482D] font-bold focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="font-semibold text-[#101410] block mb-1">Mô tả ngắn về shop</label>
+                <textarea
+                  rows={2}
+                  value={shopEditForm.description}
+                  onChange={e => setShopEditForm(prev => ({ ...prev, description: e.target.value }))}
+                  placeholder="Mô tả phong cách, dòng sản phẩm thế mạnh của shop..."
+                  className="w-full px-3.5 py-2 rounded-xl border border-[#DAE7C7] bg-[#F5F8EF] focus:outline-none focus:border-[#08482D]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-semibold text-[#101410] block mb-1">Số điện thoại shop *</label>
+                  <input
+                    type="tel"
+                    required
+                    value={shopEditForm.phone}
+                    onChange={e => setShopEditForm(prev => ({ ...prev, phone: e.target.value }))}
+                    placeholder="0987654321"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-[#DAE7C7] bg-[#F5F8EF] font-mono focus:outline-none focus:border-[#08482D]"
+                  />
                 </div>
                 <div>
-                  <h4 className="font-bold text-sm text-[#101410]">Tiệm Đồ Cũ Còn Thương</h4>
-                  <p className="text-[11px] text-[#5E5E61] font-mono">Tài khoản quản trị: @{currentUser?.username || 'admin'}</p>
-                  <span className="inline-block mt-0.5 text-[9px] font-bold px-2 py-0.5 rounded-full bg-[#08482D] text-white uppercase">
-                    Kênh Người Bán Chính Thức
-                  </span>
+                  <label className="font-semibold text-[#101410] block mb-1">Màu bìa thương hiệu</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={shopEditForm.cover_color}
+                      onChange={e => setShopEditForm(prev => ({ ...prev, cover_color: e.target.value }))}
+                      className="w-10 h-10 rounded-xl border border-[#DAE7C7] cursor-pointer"
+                    />
+                    <input
+                      type="text"
+                      value={shopEditForm.cover_color}
+                      onChange={e => setShopEditForm(prev => ({ ...prev, cover_color: e.target.value }))}
+                      className="flex-1 px-3 py-2 rounded-xl border border-[#DAE7C7] bg-[#F5F8EF] font-mono text-xs"
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div className="space-y-2 p-4 bg-white rounded-2xl border border-[#DAE7C7]/70">
-                <div className="flex justify-between py-1 border-b border-[#DAE7C7]/40">
-                  <span className="text-[#5E5E61]">Hotline hỗ trợ:</span>
-                  <span className="font-mono font-bold text-[#101410]">0987 654 321</span>
+              <div>
+                <label className="font-semibold text-[#101410] block mb-1">Địa chỉ lấy hàng (cho shipper ghé lấy) *</label>
+                <textarea
+                  required
+                  rows={2}
+                  value={shopEditForm.pickup_address}
+                  onChange={e => setShopEditForm(prev => ({ ...prev, pickup_address: e.target.value }))}
+                  placeholder="Số nhà, đường, phường/xã, quận/huyện, tỉnh/thành..."
+                  className="w-full px-3.5 py-2 rounded-xl border border-[#DAE7C7] bg-[#F5F8EF] focus:outline-none focus:border-[#08482D]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-semibold text-[#101410] block mb-1">URL ảnh đại diện (Avatar)</label>
+                  <input
+                    type="text"
+                    value={shopEditForm.avatar}
+                    onChange={e => setShopEditForm(prev => ({ ...prev, avatar: e.target.value }))}
+                    placeholder="https://..."
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-[#DAE7C7] bg-[#F5F8EF] focus:outline-none focus:border-[#08482D]"
+                  />
                 </div>
-                <div className="flex justify-between py-1 border-b border-[#DAE7C7]/40">
-                  <span className="text-[#5E5E61]">Địa chỉ kho tiếp nhận:</span>
-                  <span className="text-right text-[#101410] font-medium">123 Đường Bạc Hà, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh</span>
-                </div>
-                <div className="flex justify-between py-1 border-b border-[#DAE7C7]/40">
-                  <span className="text-[#5E5E61]">Chính sách độc bản:</span>
-                  <span className="text-right text-[#08482D] font-bold">Bảo chứng 3 ngày đổi trả hoàn tiền</span>
-                </div>
-                <div className="py-1">
-                  <span className="text-[#5E5E61] block mb-1">Mô tả tôn chỉ hoạt động:</span>
-                  <p className="text-[#101410] leading-relaxed italic bg-[#F5F8EF]/50 p-2.5 rounded-xl border border-[#DAE7C7]/40">
-                    "Mỗi món đồ cũ đều mang một câu chuyện đẹp. Chúng tôi kiểm định công khai từng vết xước, khuyết điểm để mang lại sự an tâm tuyệt đối cho người mua."
-                  </p>
+                <div>
+                  <label className="font-semibold text-[#101410] block mb-1">URL ảnh bìa banner (tùy chọn)</label>
+                  <input
+                    type="text"
+                    value={shopEditForm.cover_image}
+                    onChange={e => setShopEditForm(prev => ({ ...prev, cover_image: e.target.value }))}
+                    placeholder="https://..."
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-[#DAE7C7] bg-[#F5F8EF] focus:outline-none focus:border-[#08482D]"
+                  />
                 </div>
               </div>
-            </div>
 
-            <div className="flex justify-end pt-2 border-t border-[#E2E8D8]">
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => setShopProfileModal(false)}
-              >
-                Đóng hồ sơ
-              </Button>
-            </div>
+              <div className="flex justify-end gap-2.5 pt-3 border-t border-[#E2E8D8]">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  type="button"
+                  onClick={() => setShopProfileModal(false)}
+                >
+                  Hủy
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  type="submit"
+                  disabled={savingShop}
+                >
+                  {savingShop ? 'Đang lưu...' : 'Lưu thay đổi hồ sơ shop'}
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
       )}

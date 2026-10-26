@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { 
   X, ShoppingBag, ShieldCheck, Heart, ArrowRight, Check, Star, 
-  MessageSquare, Tag, AlertTriangle, Eye, Flame, ZoomIn, ZoomOut, 
+  MessageSquare, MessageCircle, Tag, AlertTriangle, Eye, Flame, ZoomIn, ZoomOut, 
   ChevronLeft, ChevronRight, Maximize2, ThumbsUp, Play, Store, Filter, AlertCircle
 } from 'lucide-react';
-import { Product, ReviewsResponse, ProductFlaw } from '../types';
+import { Product, ReviewsResponse, ProductFlaw, Shop } from '../types';
 import { formatVND } from '../utils/format';
 import { api } from '../services/api';
 import { Button } from './Button';
@@ -24,6 +24,7 @@ interface ProductDetailModalProps {
   currentUser?: any;
   onSelectProduct?: (product: Product) => void;
   onRequestAuth?: (actionType: 'offer' | 'chat' | 'cart' | 'buy' | 'wishlist', product: Product) => void;
+  onNavigateToShop?: (slug: string) => void;
   initialOpenOffer?: boolean;
   initialOpenChat?: boolean;
 }
@@ -40,12 +41,15 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   currentUser,
   onSelectProduct,
   onRequestAuth,
+  onNavigateToShop,
   initialOpenOffer = false,
   initialOpenChat = false
 }) => {
   if (!product) return null;
 
   const [quantity, setQuantity] = useState<number>(1);
+  const [shopInfo, setShopInfo] = useState<Shop | null>(null);
+  const [otherShopProducts, setOtherShopProducts] = useState<Product[]>([]);
   const [imgError, setImgError] = useState(false);
   const [brokenThumbs, setBrokenThumbs] = useState<Set<number>>(new Set());
   const [justAdded, setJustAdded] = useState(false);
@@ -107,6 +111,14 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     if (initialOpenOffer) setShowOfferModal(true);
     if (initialOpenChat) setShowChatDrawer(true);
   }, [initialOpenOffer, initialOpenChat]);
+
+  useEffect(() => {
+    const sId = fullProduct.shop_id || 1;
+    api.getShopById(sId).then(res => setShopInfo(res.shop)).catch(() => {});
+    api.listProductsByShop(sId).then(res => {
+      setOtherShopProducts((res.products || []).filter(p => p.id !== fullProduct.id).slice(0, 4));
+    }).catch(() => {});
+  }, [fullProduct.shop_id, fullProduct.id]);
 
   // Parse images array
   const imageList: string[] = React.useMemo(() => {
@@ -1028,7 +1040,9 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                       onRequestAuth('chat', fullProduct);
                       return;
                     }
-                    setShowChatDrawer(true);
+                    window.dispatchEvent(new CustomEvent('open-buyer-chat', {
+                      detail: { shopId: fullProduct.shop_id || 1, product: fullProduct }
+                    }));
                   }}
                   className="w-full text-xs font-bold gap-1.5"
                 >
@@ -1036,6 +1050,105 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   <span>Hỏi shop</span>
                 </Button>
               </div>
+
+              {/* SHOP CARD (KIỂU SHOPEE) */}
+              <div className="p-3.5 rounded-2xl bg-[#F5F8EF] border border-[#DAE7C7] flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                <div className="flex items-center gap-3 min-w-0">
+                  <img
+                    src={shopInfo?.avatar || 'https://images.unsplash.com/photo-1544816155-12df9643f363?w=100'}
+                    alt=""
+                    className="w-11 h-11 rounded-full object-cover border-2 border-white shadow-xs shrink-0"
+                  />
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <h4 className="font-bold text-xs sm:text-sm text-[#101410] truncate">
+                        {shopInfo?.name || fullProduct.shop_name || 'Đồ Cũ Còn Thương'}
+                      </h4>
+                      <span className="text-[10px] bg-[#DAE7C7] text-[#08482D] font-bold px-1.5 py-0.5 rounded">
+                        Chính chủ
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-[11px] text-[#5E5E61] mt-0.5">
+                      <span className="flex items-center gap-0.5">
+                        <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
+                        <strong className="text-stone-800">{shopInfo?.rating_avg || 5.0}</strong>
+                      </span>
+                      <span>·</span>
+                      <span><strong>{shopInfo?.product_count || otherShopProducts.length + 1}</strong> sản phẩm</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                  {shopInfo?.slug && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        if (onNavigateToShop) onNavigateToShop(shopInfo.slug);
+                        else window.location.href = `/shop/${shopInfo.slug}`;
+                      }}
+                      className="px-3 py-1.5 rounded-xl text-xs font-bold border border-[#08482D] text-[#08482D] hover:bg-[#DAE7C7]/50 transition-colors"
+                    >
+                      Xem Shop
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!currentUser && onRequestAuth) {
+                        onRequestAuth('chat', fullProduct);
+                        return;
+                      }
+                      window.dispatchEvent(new CustomEvent('open-buyer-chat', {
+                        detail: { shopId: fullProduct.shop_id || 1, product: fullProduct }
+                      }));
+                    }}
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold bg-[#08482D] text-white hover:bg-[#08482D]/90 transition-colors inline-flex items-center gap-1 shadow-2xs"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5" /> Chat ngay
+                  </button>
+                </div>
+              </div>
+
+              {/* MÓN KHÁC CỦA SHOP NÀY */}
+              {otherShopProducts.length > 0 && (
+                <div className="p-3.5 rounded-2xl bg-white border border-[#E2E8D8] space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-serif font-bold text-[#08482D] flex items-center gap-1.5">
+                      <Store className="w-3.5 h-3.5" /> Món khác của shop này
+                    </h4>
+                    {shopInfo?.slug && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose();
+                          if (onNavigateToShop) onNavigateToShop(shopInfo.slug);
+                          else window.location.href = `/shop/${shopInfo.slug}`;
+                        }}
+                        className="text-[11px] font-semibold text-[#08482D] hover:underline"
+                      >
+                        Xem tất cả →
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {otherShopProducts.map(p => (
+                      <div
+                        key={p.id}
+                        onClick={() => {
+                          if (onSelectProduct) onSelectProduct(p);
+                        }}
+                        className="p-1.5 bg-[#F5F8EF] rounded-xl border border-[#DAE7C7] hover:border-[#08482D] transition-all cursor-pointer group text-left"
+                      >
+                        <img src={p.image_url} alt="" className="w-full aspect-square rounded-lg object-cover mb-1" />
+                        <p className="text-[11px] font-bold text-stone-900 truncate group-hover:text-[#08482D]">{p.name}</p>
+                        <p className="text-[10px] font-mono font-bold text-[#C2522D]">{formatVND(p.price)}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

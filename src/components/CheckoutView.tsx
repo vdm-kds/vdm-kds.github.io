@@ -65,7 +65,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
   const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   // Calculate order items and totals
-  const currentItems = directItem ? [{
+  const currentItems: CartItem[] = directItem ? [{
     id: 0,
     product_id: directItem.product.id,
     quantity: directItem.quantity,
@@ -76,7 +76,10 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
     condition_pct: directItem.product.condition_pct,
     condition_detail: directItem.product.condition_detail,
     stock: directItem.product.stock,
-    image_url: directItem.product.image_url
+    image_url: directItem.product.image_url,
+    shop_id: directItem.product.shop_id || 1,
+    shop_name: directItem.product.shop_name,
+    shop_slug: directItem.product.shop_slug
   }] : items;
 
   // Empty cart guard
@@ -86,8 +89,31 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
     }
   }, [items, directItem, onBackToCart]);
 
-  const orderSubtotal = directItem ? directItem.product.price * directItem.quantity : subtotal;
-  const orderShippingFee = directItem ? (orderSubtotal >= 1000000 ? 0 : 30000) : (orderSubtotal >= 1000000 ? 0 : 30000);
+  // Group items by shop
+  const shopGroups = currentItems.reduce<Record<number, { shop_id: number; shop_name: string; shop_slug: string; items: typeof currentItems; subtotal: number; shippingFee: number }>>((acc, item) => {
+    const sId = item.shop_id || 1;
+    if (!acc[sId]) {
+      acc[sId] = {
+        shop_id: sId,
+        shop_name: item.shop_name || 'Đồ Cũ Còn Thương',
+        shop_slug: item.shop_slug || 'do-cu-con-thuong',
+        items: [],
+        subtotal: 0,
+        shippingFee: 0
+      };
+    }
+    acc[sId].items.push(item);
+    acc[sId].subtotal += item.price * item.quantity;
+    return acc;
+  }, {});
+
+  Object.values(shopGroups).forEach(group => {
+    group.shippingFee = group.subtotal >= 1000000 || group.subtotal === 0 ? 0 : 30000;
+  });
+
+  const shopList = Object.values(shopGroups);
+  const orderSubtotal = shopList.reduce((sum, g) => sum + g.subtotal, 0);
+  const orderShippingFee = shopList.reduce((sum, g) => sum + g.shippingFee, 0);
   const orderTotal = Math.max(0, orderSubtotal + orderShippingFee - discountAmount);
 
   // Apply Coupon Handler
@@ -660,30 +686,42 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                 </h3>
               </div>
 
-              {/* Danh sách món hàng */}
-              <div className="max-h-60 overflow-y-auto divide-y divide-[#E2E8D8]/60 pr-1">
-                {currentItems.map((item, idx) => (
-                  <div key={idx} className="py-3 flex items-center gap-3">
-                    <img
-                      src={item.image_url}
-                      alt={item.name}
-                      referrerPolicy="no-referrer"
-                      className="w-12 h-12 rounded-xl object-cover bg-[#DAE7C7] border border-[#E2E8D8] shrink-0"
-                      onError={(e) => {
-                        (e.target as HTMLElement).style.display = 'none';
-                      }}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <h4 className="text-xs font-bold text-[#101410] truncate">
-                        {item.name}
-                      </h4>
-                      <p className="text-[11px] text-[#5E5E61] mt-0.5">
-                        SL: {item.quantity} · Độ mới: {item.condition_pct}%
-                      </p>
+              {/* Danh sách món hàng theo từng Shop */}
+              <div className="max-h-72 overflow-y-auto divide-y divide-[#E2E8D8]/60 pr-1 space-y-3">
+                {shopList.map((group) => (
+                  <div key={group.shop_id} className="pt-2 first:pt-0">
+                    <div className="flex items-center justify-between text-xs font-bold text-[#08482D] mb-1.5 bg-[#F5F8EF] px-2.5 py-1 rounded-lg">
+                      <span className="truncate">{group.shop_name}</span>
+                      <span className="font-mono text-[11px] text-[#5E5E61] font-normal">
+                        Ship: {group.shippingFee === 0 ? 'Free' : formatVND(group.shippingFee)}
+                      </span>
                     </div>
-                    <span className="font-mono text-xs font-bold text-[#08482D] shrink-0">
-                      {formatVND(item.price * item.quantity)}
-                    </span>
+                    <div className="space-y-2">
+                      {group.items.map((item, idx) => (
+                        <div key={idx} className="flex items-center gap-3 py-1">
+                          <img
+                            src={item.image_url}
+                            alt={item.name}
+                            referrerPolicy="no-referrer"
+                            className="w-10 h-10 rounded-xl object-cover bg-[#DAE7C7] border border-[#E2E8D8] shrink-0"
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = 'none';
+                            }}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-xs font-bold text-[#101410] truncate">
+                              {item.name}
+                            </h4>
+                            <p className="text-[11px] text-[#5E5E61]">
+                              SL: {item.quantity} · Mới: {item.condition_pct}%
+                            </p>
+                          </div>
+                          <span className="font-mono text-xs font-bold text-[#08482D] shrink-0">
+                            {formatVND(item.price * item.quantity)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -691,7 +729,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
               {/* Mã giảm giá */}
               <div className="border-t border-[#E2E8D8] pt-4 space-y-2.5">
                 <label className="block text-xs font-bold text-[#101410] uppercase tracking-wider">
-                  Mã giảm giá
+                  Mã giảm giá shop / hệ thống
                 </label>
                 {!appliedCoupon ? (
                   <div className="space-y-2">
@@ -703,7 +741,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                           setCouponInput(e.target.value.toUpperCase());
                           setCouponError('');
                         }}
-                        placeholder="VD: DOCU10, FREESHIP"
+                        placeholder="VD: DOCU10, SACHHAY, TECH50"
                         className="flex-1 px-3.5 py-2 bg-[#F5F8EF] border border-[#E2E8D8] rounded-xl text-xs font-mono uppercase text-[#101410] focus:outline-none focus:border-[#08482D]"
                       />
                       <button
@@ -724,7 +762,21 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                         onClick={() => handleApplyCoupon('DOCU10')}
                         className="font-mono px-2 py-0.5 rounded-lg bg-[#DAE7C7]/50 border border-[#DAE7C7] hover:border-[#08482D] font-bold text-[#08482D] cursor-pointer"
                       >
-                        DOCU10 (-10%)
+                        DOCU10
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleApplyCoupon('SACHHAY')}
+                        className="font-mono px-2 py-0.5 rounded-lg bg-[#DAE7C7]/50 border border-[#DAE7C7] hover:border-[#08482D] font-bold text-[#08482D] cursor-pointer"
+                      >
+                        SACHHAY
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleApplyCoupon('TECH50')}
+                        className="font-mono px-2 py-0.5 rounded-lg bg-[#DAE7C7]/50 border border-[#DAE7C7] hover:border-[#08482D] font-bold text-[#08482D] cursor-pointer"
+                      >
+                        TECH50
                       </button>
                       <button
                         type="button"

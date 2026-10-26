@@ -17,6 +17,9 @@ import { PolicyModal } from './components/PolicyModal';
 import { NotFoundView } from './components/NotFoundView';
 import { HeroLanding } from './components/HeroLanding';
 import { BuyerHomeView } from './components/BuyerHomeView';
+import { ShopView } from './components/ShopView';
+import { ShopSetupWizard } from './components/ShopSetupWizard';
+import { BuyerChatDock } from './components/BuyerChatDock';
 import { Button } from './components/Button';
 import { Product, CartItem, Order } from './types';
 import { api } from './services/api';
@@ -38,7 +41,9 @@ function MainShopApp() {
   const { showToast } = useToast();
 
   // Navigation State
-  const [currentView, setCurrentView] = useState<'home' | 'orders' | 'seller' | 'account' | 'preview' | 'checkout' | '404'>('home');
+  const [currentView, setCurrentView] = useState<'home' | 'orders' | 'seller' | 'account' | 'preview' | 'checkout' | 'shop' | '404'>('home');
+  const [activeShopSlug, setActiveShopSlug] = useState<string | null>(null);
+  const [showShopSetupWizard, setShowShopSetupWizard] = useState(false);
   const [selectedOrderCodeForTracking, setSelectedOrderCodeForTracking] = useState<string | null>(null);
 
   // Products State & Filters
@@ -109,6 +114,9 @@ function MainShopApp() {
       case 'checkout':
         document.title = 'Thanh toán đơn hàng — Đồ Cũ Còn Thương';
         break;
+      case 'shop':
+        document.title = 'Gian Hàng — Đồ Cũ Còn Thương';
+        break;
       case '404':
         document.title = '404 Không tìm thấy — Đồ Cũ Còn Thương';
         break;
@@ -117,12 +125,19 @@ function MainShopApp() {
     }
   }, [currentView, user]);
 
+  const handleNavigateToShop = (slug: string) => {
+    setActiveShopSlug(slug);
+    setCurrentView('shop');
+    window.history.pushState({}, '', `/shop/${slug}`);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   // Handle seller automatic redirect & route guard
   useEffect(() => {
     if (authLoading) return;
 
     if (user?.role === 'seller') {
-      // If seller is on buyer-exclusive or home view (not preview), send to seller dashboard
+      // If seller is on buyer-exclusive or home view (not preview/shop), send to seller dashboard
       if (currentView === 'home' || currentView === 'orders' || currentView === 'account') {
         setCurrentView('seller');
       }
@@ -163,7 +178,14 @@ function MainShopApp() {
 
     const handleRouteFromPath = () => {
       const path = window.location.pathname;
-      if (path === '/seller/register') {
+      if (path.startsWith('/shop/')) {
+        const slug = path.replace('/shop/', '').split('/')[0].split('?')[0];
+        if (slug) {
+          setActiveShopSlug(slug);
+          setCurrentView('shop');
+          return;
+        }
+      } else if (path === '/seller/register') {
         if (!user) setAuthModal({ open: true, role: 'seller', initialIsRegister: true });
         else if (user.role === 'seller') setCurrentView('seller');
       } else if (path === '/seller/login') {
@@ -566,7 +588,7 @@ function MainShopApp() {
       )}
 
       {/* HEADER:
-          - Shown on Buyer home view, orders, seller, account, preview, and 404
+          - Shown on Buyer home view, orders, seller, account, preview, shop, and 404
           - On Guest home view, HeroLanding has its own top navbar, so we don't duplicate Header there */}
       {(currentView !== 'home' || isBuyer || isPreview) && currentView !== 'seller' && (
         <Header
@@ -585,6 +607,7 @@ function MainShopApp() {
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           onSearchSubmit={handleSearchSubmit}
+          onNavigateToShop={handleNavigateToShop}
         />
       )}
 
@@ -604,17 +627,31 @@ function MainShopApp() {
               setCurrentView('home');
               setAuthModal({ open: true, role: 'buyer', initialIsRegister: false });
             }}
+            onNavigateToShop={handleNavigateToShop}
           />
         ) : currentView === 'orders' ? (
           <OrdersView
             onBackToShop={() => setCurrentView('home')}
             selectedOrderCode={selectedOrderCodeForTracking}
+            onNavigateToShop={handleNavigateToShop}
           />
         ) : currentView === 'account' ? (
           <AccountView
             onBackToHome={() => setCurrentView('home')}
             onSelectProduct={prod => setDetailProduct(prod)}
             onAddToCart={prod => handleAddToCart(prod, 1)}
+            onNavigateToShop={handleNavigateToShop}
+          />
+        ) : currentView === 'shop' ? (
+          <ShopView
+            slug={activeShopSlug || 'do-cu-con-thuong'}
+            onSelectProduct={(prod: Product) => setDetailProduct(prod)}
+            onAddToCart={(prod: Product) => handleAddToCart(prod, 1)}
+            onBuyNow={(prod: Product) => handleBuyNow(prod, 1)}
+            onBackToHome={() => {
+              setCurrentView('home');
+              window.history.pushState({}, '', '/');
+            }}
           />
         ) : currentView === 'checkout' ? (
           <CheckoutView
@@ -673,6 +710,7 @@ function MainShopApp() {
               if (code) setSelectedOrderCodeForTracking(code);
               setCurrentView('orders');
             }}
+            onNavigateToShop={handleNavigateToShop}
           />
         ) : (
           /* TRẠNG THÁI 1: KHÁCH VÃNG LAI (GUEST) HOẶC CHẾ ĐỘ XEM TRƯỚC (PREVIEW) */
@@ -691,6 +729,7 @@ function MainShopApp() {
                   const el = document.getElementById('products-section');
                   if (el) el.scrollIntoView({ behavior: 'smooth' });
                 }}
+                onNavigateToShop={handleNavigateToShop}
               />
             )}
 
@@ -908,6 +947,7 @@ function MainShopApp() {
                       onToggleWishlist={id => handleToggleWishlist(id)}
                       disabledBuy={isPreview}
                       onDisabledBuyClick={() => showToast('Bạn đang xem cửa hàng dưới góc nhìn của khách — chức năng mua hàng bị vô hiệu hóa', 'info')}
+                      onNavigateToShop={handleNavigateToShop}
                     />
                   ))}
                 </div>
@@ -1129,6 +1169,7 @@ function MainShopApp() {
         disabledBuy={isPreview}
         onDisabledBuyClick={() => showToast('Bạn đang xem cửa hàng dưới góc nhìn của khách — chức năng mua hàng bị vô hiệu hóa', 'info')}
         onSelectProduct={(p) => setDetailProduct(p)}
+        onNavigateToShop={handleNavigateToShop}
       />
 
       {/* Cart Drawer */}
@@ -1142,6 +1183,7 @@ function MainShopApp() {
         onUpdateQty={handleUpdateCartQty}
         onRemoveItem={handleRemoveCartItem}
         onClearCart={handleClearCart}
+        onNavigateToShop={handleNavigateToShop}
         onProceedToCheckout={() => {
           setIsCartOpen(false);
           setDirectCheckoutItem(undefined);
@@ -1169,6 +1211,22 @@ function MainShopApp() {
         promptMessage={authModal.promptMessage}
         onClose={() => setAuthModal({ open: false, role: 'buyer' })}
         onSuccess={handleAuthSuccess}
+      />
+
+      {/* Buyer Floating Chat Dock */}
+      {user?.role !== 'seller' && (
+        <BuyerChatDock onNavigateToShop={handleNavigateToShop} />
+      )}
+
+      {/* Shop Setup Wizard Modal */}
+      <ShopSetupWizard
+        isOpen={showShopSetupWizard}
+        onClose={() => setShowShopSetupWizard(false)}
+        onComplete={() => {
+          setShowShopSetupWizard(false);
+          setCurrentView('seller');
+          window.history.pushState({}, '', '/seller');
+        }}
       />
     </div>
   );

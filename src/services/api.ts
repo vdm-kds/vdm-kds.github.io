@@ -66,6 +66,46 @@ export const api = {
   clearCart: () =>
     db.clearCart(),
 
+  // --- SHOPS (MULTI-SHOP MARKETPLACE) ---
+  getShops: () =>
+    db.getShops(),
+
+  getShopBySlug: (slug: string) =>
+    db.getShopBySlug(slug),
+
+  getShopById: (id: number) =>
+    db.getShopById(id),
+
+  getShopByOwnerUserId: (userId: number) =>
+    db.getShopByOwnerUserId(userId),
+
+  createShop: (payload: { name: string; slug?: string; description?: string; avatar?: string; cover_color?: string; cover_image?: string; pickup_address?: string; phone?: string }) =>
+    db.createShop(payload),
+
+  updateShop: (shopId: number, payload: Partial<any>) =>
+    db.updateShop(shopId, payload),
+
+  toggleFollowShop: (shopId: number) =>
+    db.toggleFollowShop(shopId),
+
+  getFollowedShops: () =>
+    db.getFollowedShops(),
+
+  saveShopVoucher: (code: string, shopId: number) =>
+    db.saveShopVoucher(code, shopId),
+
+  getSavedShopVouchers: (shopId?: number) =>
+    db.getSavedShopVouchers(shopId),
+
+  listProductsByShop: (shopId: number) =>
+    db.listProductsByShop(shopId),
+
+  listCouponsByShop: (shopId: number) =>
+    db.listCouponsByShop(shopId),
+
+  searchShops: (q: string) =>
+    db.searchShops(q),
+
   // --- ORDERS (BUYER) ---
   getOrders: (status?: string) =>
     db.getMyOrders(status),
@@ -83,6 +123,7 @@ export const api = {
     card_type?: string;
     direct_items?: Array<{ product_id: number; quantity: number; offer_id?: number }>;
     coupon_code?: string;
+    shop_coupons?: Record<number, string>;
   }) => {
     let items = orderData.direct_items;
     if (!items || items.length === 0) {
@@ -102,7 +143,8 @@ export const api = {
         cvv: '',
         card_type: orderData.card_type
       },
-      coupon_code: orderData.coupon_code
+      coupon_code: orderData.coupon_code,
+      shop_coupons: orderData.shop_coupons
     });
   },
 
@@ -209,8 +251,8 @@ export const api = {
   switchBuyer: () =>
     db.switchBuyer(),
 
-  switchSeller: () =>
-    db.switchSeller(),
+  switchSeller: (username?: string) =>
+    db.switchSeller(username),
 
   resetDemo: () =>
     db.resetDemo(),
@@ -284,53 +326,59 @@ export const api = {
   buyerRejectCounter: (id: number) =>
     db.rejectCounterOffer(id),
 
-  // --- CHAT ---
+  // --- CHAT (MULTI-SHOP SHOPEE STYLE) ---
   getChatConversations: () =>
     db.getChatConversations(),
 
-  startChat: async (payload: { product_id?: number; order_id?: number; initial_message?: string }) => {
-    let convId: number | undefined;
+  startShopChat: (
+    shopId: number,
+    context?: {
+      type: 'product' | 'order';
+      product_id?: number;
+      order_code?: string;
+      initial_message?: string;
+    }
+  ) => db.startShopChat(shopId, context),
 
-    if (payload.initial_message) {
-      const res = await db.sendChatMessage({
-        product_id: payload.product_id,
-        order_code: payload.order_id ? String(payload.order_id) : undefined,
-        content: payload.initial_message
-      });
-      convId = res.conversation.id;
-    } else {
-      const convs = await db.getChatConversations();
-      let conv = convs.conversations.find((c) => {
-        if (payload.order_id && c.order_id === payload.order_id) return true;
-        if (payload.product_id && c.product_id === payload.product_id) return true;
-        return false;
-      });
-
-      if (!conv) {
-        const res = await db.sendChatMessage({
-          product_id: payload.product_id,
-          order_code: payload.order_id ? String(payload.order_id) : undefined,
-          content: 'Xin chào shop, mình quan tâm đến món đồ này!'
-        });
-        convId = res.conversation.id;
-      } else {
-        convId = conv.id;
-      }
+  startChat: async (payload: { shop_id?: number; product_id?: number; order_id?: number | string; initial_message?: string }) => {
+    let targetShopId = payload.shop_id;
+    if (!targetShopId && payload.product_id) {
+      const prodRes = await db.getProduct(payload.product_id);
+      targetShopId = prodRes.product.shop_id;
+    }
+    if (!targetShopId && payload.order_id) {
+      const ordRes = await db.getOrder(payload.order_id);
+      targetShopId = ordRes.order.shop_id;
     }
 
-    const detail = await db.getChatDetail(convId!);
+    if (!targetShopId) targetShopId = 1;
+
+    const res = await db.startShopChat(targetShopId, {
+      type: payload.product_id ? 'product' : (payload.order_id ? 'order' : 'product'),
+      product_id: payload.product_id,
+      order_code: payload.order_id ? String(payload.order_id) : undefined,
+      initial_message: payload.initial_message
+    });
+
     return {
-      conversation: detail.conversation,
-      messages: detail.messages,
-      is_new: false
+      conversation: res.conversation,
+      messages: res.conversation.messages || [],
+      is_new: res.created
     };
   },
 
   getChatDetail: (id: number) =>
     db.getChatDetail(id),
 
-  sendChatMessage: (id: number, content: string) =>
-    db.sendChatMessage({ conversation_id: id, content }),
+  sendChatMessage: (idOrPayload: number | { conversation_id?: number; shop_id?: number; content: string; context_card?: any }, content?: string) => {
+    if (typeof idOrPayload === 'number') {
+      return db.sendChatMessage({ conversation_id: idOrPayload, content: content || '' });
+    }
+    return db.sendChatMessage(idOrPayload);
+  },
+
+  markChatRead: (id: number) =>
+    db.markChatRead(id),
 
   // --- RETURNS & REFUNDS ---
   getMyReturns: () =>

@@ -1,5 +1,25 @@
 export type UserRole = 'buyer' | 'seller';
 
+export interface Shop {
+  id: number;
+  owner_user_id: number;
+  name: string;
+  slug: string;
+  avatar?: string;
+  cover_image?: string;
+  cover_color: string;
+  description: string;
+  pickup_address: string;
+  phone: string;
+  created_at: string;
+  follower_ids: number[];
+  rating_avg?: number;
+  review_count?: number;
+  response_rate?: number;
+  joined_text?: string;
+  product_count?: number;
+}
+
 export interface User {
   id: number;
   role: UserRole;
@@ -31,7 +51,10 @@ export interface ProductFlaw {
 
 export interface Product {
   id: number;
+  shop_id: number;
   seller_id?: number;
+  shop_name?: string;
+  shop_slug?: string;
   name: string;
   category: string;
   price: number;
@@ -56,6 +79,7 @@ export interface Product {
 
 export interface Review {
   id: number;
+  shop_id?: number;
   order_id: number;
   product_id: number;
   product_name?: string;
@@ -99,7 +123,9 @@ export interface ReviewsResponse {
 
 export interface Coupon {
   id: number;
+  shop_id: number;
   seller_id?: number;
+  shop_name?: string;
   code: string;
   type: 'percent' | 'fixed' | 'shipping';
   value: number;
@@ -113,6 +139,9 @@ export interface Coupon {
 
 export interface CartItem {
   id: number;
+  shop_id: number;
+  shop_name?: string;
+  shop_slug?: string;
   product_id: number;
   product_name?: string;
   product_image?: string;
@@ -177,6 +206,8 @@ export type ReturnStatus = 'pending' | 'approved' | 'rejected' | 'shipping_back'
 
 export interface ReturnRequest {
   id: number;
+  shop_id: number;
+  shop_name?: string;
   order_id: number;
   order_code?: string;
   buyer_id: number;
@@ -198,6 +229,9 @@ export interface ReturnRequest {
 
 export interface Order {
   id: number;
+  shop_id: number;
+  shop_name?: string;
+  shop_slug?: string;
   code: string;
   buyer_id: number;
   user_id?: number;
@@ -238,6 +272,8 @@ export type OfferStatus = 'pending' | 'accepted' | 'rejected' | 'countered' | 'e
 
 export interface Offer {
   id: number;
+  shop_id: number;
+  shop_name?: string;
   buyer_id: number;
   user_id?: number;
   seller_id?: number;
@@ -259,6 +295,21 @@ export interface Offer {
   updated_at?: string;
 }
 
+export interface ChatMessageContext {
+  type: 'product' | 'order';
+  id?: number;
+  product_id?: number;
+  order_code?: string;
+  title: string;
+  subtitle?: string;
+  image?: string;
+  image_url?: string;
+  price?: number;
+  status?: string;
+  status_text?: string;
+  code?: string;
+}
+
 export interface ChatMessage {
   id: number;
   conversation_id: number;
@@ -266,13 +317,18 @@ export interface ChatMessage {
   sender_id: number;
   content: string;
   is_read: number | boolean;
+  context_card?: ChatMessageContext;
   created_at: string;
 }
 
 export interface ChatConversation {
   id: number;
+  shop_id: number;
   buyer_id: number;
   seller_id?: number;
+  shop_name?: string;
+  shop_slug?: string;
+  shop_avatar?: string;
   buyer_name?: string;
   buyer_phone?: string;
   product_id?: number;

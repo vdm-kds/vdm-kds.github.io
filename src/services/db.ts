@@ -1,12 +1,33 @@
-import { Product, Order, User, CartItem, Coupon, Offer, ChatConversation, ChatMessage, ReturnRequest, ReturnStatus, Review, NotificationItem, SellerStats, Address, ShipmentEvent } from '../types';
+import { Product, Order, User, CartItem, Coupon, Offer, ChatConversation, ChatMessage, ChatMessageContext, ReturnRequest, ReturnStatus, Review, NotificationItem, SellerStats, Address, ShipmentEvent, Shop } from '../types';
 
 const DB_KEY = 'dcct_db';
 const SESSION_KEY = 'dcct_session';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 // Simulated realistic network delay
 export const delay = (ms?: number) =>
   new Promise((res) => setTimeout(res, ms ?? (150 + Math.random() * 150)));
+
+export function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/[^a-z0-9\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-');
+}
+
+export function createShopAvatarSvg(name: string, bg: string = '#08482D', fg: string = '#FAF7F2'): string {
+  const words = name.split(' ').filter(Boolean);
+  const initials = (words.length > 1 ? words[0][0] + words[1][0] : name.slice(0, 2)).toUpperCase();
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+    <rect width="200" height="200" fill="${bg}" rx="100"/>
+    <text x="100" y="118" font-family="'Plus Jakarta Sans', sans-serif" font-size="70" font-weight="800" fill="${fg}" text-anchor="middle" dominant-baseline="middle">${initials}</text>
+  </svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
 
 // SVG Placeholder generator for products and defects
 export function createSvgPlaceholder(title: string, category: string, bg: string = '#08482D', fg: string = '#FAF7F2', tag: string = 'ẢNH GỐC 1'): string {
@@ -200,6 +221,7 @@ export interface DCCTDatabase {
   version: number;
   users: StoredUser[];
   addresses: Address[];
+  shops: Shop[];
   products: Product[];
   coupons: Coupon[];
   cart_items: { id: number; user_id: number; product_id: number; quantity: number; created_at: string }[];
@@ -212,6 +234,7 @@ export interface DCCTDatabase {
   reviews: Review[];
   notifications: NotificationItem[];
   wishlist: { user_id: number; product_id: number; created_at: string }[];
+  saved_vouchers?: { user_id: number; coupon_code: string; shop_id: number }[];
   presentation_mode: boolean;
 }
 
@@ -287,6 +310,8 @@ export async function hashPassword(username: string, password: string): Promise<
 function createInitialDatabase(): DCCTDatabase {
   const ADMIN_HASH = '6191a72694365846e663b40df7cb85bb190ec7097e0ce49d8bb2aacbd3c37778';
   const BUYER_HASH = '9122c7069e60a1a744d681c1e5f60786a216e9105a2e2060d5a8ebe3d974fee7';
+  const GOC_SACH_NHAC_HASH = '75aa9cc141b811875290e16b6261685547aaf3686a4f75e8e0e37ddc03015fc8';
+  const RETRO_TECH_HASH = '89b8e95dd91fd76ae4168e8ccd90a445a265061fa2d7d4926966212ec9427e40';
 
   const users: StoredUser[] = [
     {
@@ -295,8 +320,10 @@ function createInitialDatabase(): DCCTDatabase {
       username: 'admin',
       phone: '0901234567',
       password_hash: ADMIN_HASH,
-      full_name: 'Chủ Tiệm Còn Thương',
-      is_owner: true
+      full_name: 'Đồ Cũ Còn Thương',
+      shop_name: 'Đồ Cũ Còn Thương',
+      is_owner: true,
+      created_at: '2026-07-15T08:00:00.000Z'
     },
     {
       id: 2,
@@ -305,7 +332,84 @@ function createInitialDatabase(): DCCTDatabase {
       phone: '0987654321',
       password_hash: BUYER_HASH,
       full_name: 'Nguyễn Văn A',
-      is_owner: true
+      is_owner: true,
+      created_at: '2026-08-01T08:00:00.000Z'
+    },
+    {
+      id: 3,
+      role: 'seller',
+      username: 'goc_sach_nhac',
+      phone: '0902345678',
+      password_hash: GOC_SACH_NHAC_HASH,
+      full_name: 'Góc Sách & Nhạc',
+      shop_name: 'Góc Sách & Nhạc',
+      is_owner: true,
+      created_at: '2026-08-10T09:30:00.000Z'
+    },
+    {
+      id: 4,
+      role: 'seller',
+      username: 'retro_tech',
+      phone: '0903456789',
+      password_hash: RETRO_TECH_HASH,
+      full_name: 'Retro Tech',
+      shop_name: 'Retro Tech',
+      is_owner: true,
+      created_at: '2026-08-01T10:00:00.000Z'
+    }
+  ];
+
+  const shops: Shop[] = [
+    {
+      id: 1,
+      owner_user_id: 1,
+      name: 'Đồ Cũ Còn Thương',
+      slug: 'do-cu-con-thuong',
+      cover_color: '#08482D',
+      avatar: createShopAvatarSvg('Đồ Cũ Còn Thương', '#08482D'),
+      description: 'Tiệm đồ second-hand có câu chuyện: thời trang, phụ kiện, đồ gia dụng đã kiểm định.',
+      pickup_address: '128 Đường Hai Bà Trưng, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh',
+      phone: '0901234567',
+      created_at: '2026-07-15T08:00:00.000Z',
+      follower_ids: [2],
+      rating_avg: 4.9,
+      review_count: 48,
+      response_rate: 99,
+      joined_text: '3 tháng trước'
+    },
+    {
+      id: 2,
+      owner_user_id: 3,
+      name: 'Góc Sách & Nhạc',
+      slug: 'goc-sach-nhac',
+      cover_color: '#7A4E2D',
+      avatar: createShopAvatarSvg('Góc Sách & Nhạc', '#7A4E2D'),
+      description: 'Sách cũ còn thơm mùi giấy và nhạc cụ đã qua sử dụng, chỉnh âm kỹ trước khi giao.',
+      pickup_address: '45 Đường Đinh Tiên Hoàng, Phường Đa Kao, Quận 1, TP. Hồ Chí Minh',
+      phone: '0902345678',
+      created_at: '2026-08-10T09:30:00.000Z',
+      follower_ids: [],
+      rating_avg: 5.0,
+      review_count: 24,
+      response_rate: 96,
+      joined_text: '2 tháng trước'
+    },
+    {
+      id: 3,
+      owner_user_id: 4,
+      name: 'Retro Tech',
+      slug: 'retro-tech',
+      cover_color: '#2F4B6B',
+      avatar: createShopAvatarSvg('Retro Tech', '#2F4B6B'),
+      description: 'Đồ công nghệ cũ đã test kỹ: máy ảnh film, điện thoại, tai nghe, bàn phím cơ.',
+      pickup_address: '89 Đường Cách Mạng Tháng 8, Phường 7, Quận 3, TP. Hồ Chí Minh',
+      phone: '0903456789',
+      created_at: '2026-08-01T10:00:00.000Z',
+      follower_ids: [2],
+      rating_avg: 4.8,
+      review_count: 36,
+      response_rate: 98,
+      joined_text: '2 tháng trước'
     }
   ];
 
@@ -320,8 +424,28 @@ function createInitialDatabase(): DCCTDatabase {
     }
   ];
 
+  const PRODUCT_SHOP_MAPPING: Record<string, { shop_id: number; shop_name: string; shop_slug: string; seller_id: number }> = {
+    'Áo khoác denim cũ size L': { shop_id: 1, shop_name: 'Đồ Cũ Còn Thương', shop_slug: 'do-cu-con-thuong', seller_id: 1 },
+    'Túi xách da thật vintage': { shop_id: 1, shop_name: 'Đồ Cũ Còn Thương', shop_slug: 'do-cu-con-thuong', seller_id: 1 },
+    'Đồng hồ Casio A168 vintage': { shop_id: 1, shop_name: 'Đồ Cũ Còn Thương', shop_slug: 'do-cu-con-thuong', seller_id: 1 },
+    'Nồi chiên không dầu Philips 4.1L': { shop_id: 1, shop_name: 'Đồ Cũ Còn Thương', shop_slug: 'do-cu-con-thuong', seller_id: 1 },
+    'Sách "Nhà giả kim" bản cũ': { shop_id: 2, shop_name: 'Góc Sách & Nhạc', shop_slug: 'goc-sach-nhac', seller_id: 3 },
+    'Đàn guitar acoustic Yamaha F310': { shop_id: 2, shop_name: 'Góc Sách & Nhạc', shop_slug: 'goc-sach-nhac', seller_id: 3 },
+    'Máy ảnh film Canon AE-1': { shop_id: 3, shop_name: 'Retro Tech', shop_slug: 'retro-tech', seller_id: 4 },
+    'iPhone 11 64GB': { shop_id: 3, shop_name: 'Retro Tech', shop_slug: 'retro-tech', seller_id: 4 },
+    'Tai nghe Sony WH-1000XM3': { shop_id: 3, shop_name: 'Retro Tech', shop_slug: 'retro-tech', seller_id: 4 },
+    'Bàn phím cơ Keychron K2': { shop_id: 3, shop_name: 'Retro Tech', shop_slug: 'retro-tech', seller_id: 4 }
+  };
+
   const products: Product[] = INITIAL_PRODUCTS_SEED.map((item, idx) => {
     const id = idx + 1;
+    const mapping = PRODUCT_SHOP_MAPPING[item.name] || {
+      shop_id: 1,
+      shop_name: 'Đồ Cũ Còn Thương',
+      shop_slug: 'do-cu-con-thuong',
+      seller_id: 1
+    };
+
     const img1 = createSvgPlaceholder(item.name, item.category, item.bg, '#FAF7F2', 'MẶT TRƯỚC');
     const img2 = createSvgPlaceholder(item.name, item.category, item.bg, '#FAF7F2', 'MẶT SAU');
     const img3 = createSvgPlaceholder(item.name, item.category, item.bg, '#FAF7F2', 'CẬN CẢNH');
@@ -335,7 +459,10 @@ function createInitialDatabase(): DCCTDatabase {
 
     return {
       id,
-      seller_id: 1,
+      shop_id: mapping.shop_id,
+      seller_id: mapping.seller_id,
+      shop_name: mapping.shop_name,
+      shop_slug: mapping.shop_slug,
       name: item.name,
       category: item.category,
       price: item.price,
@@ -360,35 +487,72 @@ function createInitialDatabase(): DCCTDatabase {
   const coupons: Coupon[] = [
     {
       id: 1,
+      shop_id: 1,
       seller_id: 1,
+      shop_name: 'Đồ Cũ Còn Thương',
       code: 'DOCU10',
       type: 'percent',
       value: 10,
       max_discount: 100000,
       min_order_amount: 300000,
       is_active: true,
-      usage_count: 0
+      usage_count: 0,
+      description: 'Giảm 10% tối đa 100.000đ cho đơn từ 300.000đ'
     },
     {
       id: 2,
+      shop_id: 1,
       seller_id: 1,
+      shop_name: 'Đồ Cũ Còn Thương',
       code: 'FREESHIP',
       type: 'shipping',
       value: 100,
       max_discount: 30000,
       min_order_amount: 0,
       is_active: true,
-      usage_count: 0
+      usage_count: 0,
+      description: 'Miễn phí vận chuyển tối đa 30.000đ'
+    },
+    {
+      id: 3,
+      shop_id: 2,
+      seller_id: 3,
+      shop_name: 'Góc Sách & Nhạc',
+      code: 'SACHHAY',
+      type: 'fixed',
+      value: 15000,
+      max_discount: 15000,
+      min_order_amount: 100000,
+      is_active: true,
+      usage_count: 0,
+      description: 'Giảm 15.000đ cho đơn từ 100.000đ'
+    },
+    {
+      id: 4,
+      shop_id: 3,
+      seller_id: 4,
+      shop_name: 'Retro Tech',
+      code: 'TECH50',
+      type: 'fixed',
+      value: 50000,
+      max_discount: 50000,
+      min_order_amount: 1000000,
+      is_active: true,
+      usage_count: 0,
+      description: 'Giảm 50.000đ cho đơn từ 1.000.000đ'
     }
   ];
 
   // 1 Initial completed order for user 2 to test review & return immediately
   const sampleOrder: Order = {
     id: 1,
+    shop_id: 3,
+    seller_id: 4,
+    shop_name: 'Retro Tech',
+    shop_slug: 'retro-tech',
     code: 'DCCT-20261024-9988',
     buyer_id: 2,
     user_id: 2,
-    seller_id: 1,
     status: 'completed',
     payment_method: 'card',
     payment_status: 'paid',
@@ -403,9 +567,9 @@ function createInitialDatabase(): DCCTDatabase {
     items_count: 1,
     subtotal: 4500000,
     shipping_fee: 0,
-    discount_amount: 100000,
-    total: 4400000,
-    coupon_code: 'DOCU10',
+    discount_amount: 50000,
+    total: 4450000,
+    coupon_code: 'TECH50',
     created_at: new Date(Date.now() - 3 * 86400000).toISOString(),
     completed_at: new Date(Date.now() - 1 * 86400000).toISOString(),
     updated_at: new Date(Date.now() - 1 * 86400000).toISOString(),
@@ -413,10 +577,10 @@ function createInitialDatabase(): DCCTDatabase {
       {
         id: 1,
         order_id: 1,
-        product_id: 3, // iPhone 11
+        product_id: 8, // iPhone 11
         product_name: 'iPhone 11 64GB',
-        product_image: products[2].image_url,
-        image_url: products[2].image_url,
+        product_image: products[7]?.image_url || '',
+        image_url: products[7]?.image_url || '',
         price: 4500000,
         original_price: 8000000,
         quantity: 1,
@@ -428,7 +592,7 @@ function createInitialDatabase(): DCCTDatabase {
         id: 1,
         order_id: 1,
         status: 'Đã tạo đơn hàng',
-        location: 'Hệ thống Đồ Cũ Còn Thương',
+        location: 'Retro Tech Hub',
         note: 'Đơn hàng đã được thanh toán và chuyển đến người bán',
         created_at: new Date(Date.now() - 3 * 86400000).toISOString()
       },
@@ -457,7 +621,7 @@ function createInitialDatabase(): DCCTDatabase {
       user_id: 2,
       role: 'buyer',
       title: 'Đơn hàng hoàn tất',
-      message: 'Đơn hàng #DCCT-20261024-9988 đã giao thành công. Hãy đánh giá món đồ nhé!',
+      message: 'Đơn hàng #DCCT-20261024-9988 của Retro Tech đã giao thành công. Hãy đánh giá món đồ nhé!',
       order_id: 1,
       is_read: false,
       created_at: new Date(Date.now() - 86400000).toISOString()
@@ -468,6 +632,7 @@ function createInitialDatabase(): DCCTDatabase {
     version: DB_VERSION,
     users,
     addresses,
+    shops,
     products,
     coupons,
     cart_items: [],
@@ -480,6 +645,7 @@ function createInitialDatabase(): DCCTDatabase {
     reviews: [],
     notifications,
     wishlist: [],
+    saved_vouchers: [],
     presentation_mode: false
   };
 }
@@ -529,21 +695,15 @@ export function getDb(): DCCTDatabase {
 
   try {
     const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object') {
+    if (!parsed || typeof parsed !== 'object' || typeof parsed.version !== 'number' || parsed.version < DB_VERSION || !Array.isArray(parsed.shops) || parsed.shops.length === 0) {
       const initial = createInitialDatabase();
       localStorage.setItem(DB_KEY, JSON.stringify(initial));
       return initial;
     }
 
-    // In-place migration & self-healing without deleting user messages, orders, or offers
     let modified = false;
-    if (typeof parsed.version !== 'number' || parsed.version < DB_VERSION) {
-      parsed.version = DB_VERSION;
-      modified = true;
-    }
-
     const arrayKeys: (keyof DCCTDatabase)[] = [
-      'users', 'addresses', 'products', 'coupons', 'cart_items',
+      'users', 'addresses', 'shops', 'products', 'coupons', 'cart_items',
       'orders', 'shipment_events', 'offers', 'chat_conversations',
       'chat_messages', 'return_requests', 'reviews', 'notifications', 'wishlist'
     ];
@@ -864,11 +1024,15 @@ export const db = {
     return { message: 'Đã chuyển sang vai Khách Mua Chủ Tiệm', token, user: safeUser };
   },
 
-  async switchSeller(): Promise<{ message: string; token: string; user: User }> {
+  async switchSeller(targetUsername: string = 'admin'): Promise<{ message: string; token: string; user: User }> {
     await delay(100);
     const database = getDb();
-    const seller = database.users.find((u) => u.role === 'seller' && (u.username === 'admin' || u.is_owner));
-    if (!seller) throw new Error('Không tìm thấy tài khoản người bán chủ');
+    const seller = database.users.find(
+      (u) => u.role === 'seller' && (u.username === targetUsername || (targetUsername === 'admin' && (u.username === 'admin' || u.is_owner)))
+    );
+    if (!seller) throw new Error('Không tìm thấy tài khoản người bán');
+
+    const shop = database.shops.find((s) => s.owner_user_id === seller.id);
 
     const safeUser: User = {
       id: seller.id,
@@ -876,10 +1040,11 @@ export const db = {
       username: seller.username,
       full_name: seller.full_name,
       phone: seller.phone,
+      shop_name: shop?.name || seller.shop_name,
       is_owner: true
     };
     const token = setCurrentSession(safeUser);
-    return { message: 'Đã chuyển sang vai Chủ Tiệm Quản Trị', token, user: safeUser };
+    return { message: `Đã chuyển sang vai ${shop?.name || seller.full_name}`, token, user: safeUser };
   },
 
   async resetDemo(): Promise<{ message: string }> {
@@ -906,6 +1071,281 @@ export const db = {
     };
   },
 
+  // --- SHOPS HELPER ---
+  checkSellerShopOwnership(session: any, database: DCCTDatabase, targetShopId?: number): Shop {
+    if (!session || !session.user || session.user.role !== 'seller') {
+      throw new Error('Vui lòng đăng nhập tài khoản người bán');
+    }
+    const sellerShop = database.shops.find((s) => s.owner_user_id === session.user.id);
+    if (!sellerShop) {
+      throw new Error('Bạn chưa thiết lập shop');
+    }
+    if (targetShopId !== undefined && sellerShop.id !== targetShopId) {
+      throw new Error('Bạn không có quyền thao tác dữ liệu của shop khác');
+    }
+    return sellerShop;
+  },
+
+  // --- SHOPS DOMAIN API ---
+  async getShops(): Promise<{ shops: Shop[] }> {
+    await delay(60);
+    const database = getDb();
+    const populated = database.shops.map((s) => {
+      const prods = database.products.filter((p) => p.shop_id === s.id);
+      return {
+        ...s,
+        product_count: prods.length
+      };
+    });
+    return { shops: populated };
+  },
+
+  async getShopBySlug(slug: string): Promise<{ shop: Shop; products: Product[]; coupons: Coupon[] }> {
+    await delay(80);
+    const database = getDb();
+    const shop = database.shops.find((s) => s.slug === slug);
+    if (!shop) throw new Error('Không tìm thấy shop này');
+
+    const products = database.products.filter((p) => p.shop_id === shop.id).map(p => ({
+      ...p,
+      shop_name: shop.name,
+      shop_slug: shop.slug
+    }));
+    const coupons = database.coupons.filter((c) => c.shop_id === shop.id && c.is_active);
+
+    return {
+      shop: {
+        ...shop,
+        product_count: products.length
+      },
+      products,
+      coupons
+    };
+  },
+
+  async getShopById(id: number): Promise<{ shop: Shop }> {
+    await delay(50);
+    const database = getDb();
+    const shop = database.shops.find((s) => s.id === Number(id));
+    if (!shop) throw new Error('Không tìm thấy shop');
+    const prods = database.products.filter((p) => p.shop_id === shop.id);
+    return { shop: { ...shop, product_count: prods.length } };
+  },
+
+  async getShopByOwnerUserId(userId: number): Promise<{ shop: Shop | null }> {
+    await delay(50);
+    const database = getDb();
+    const shop = database.shops.find((s) => s.owner_user_id === Number(userId));
+    if (!shop) return { shop: null };
+    const prods = database.products.filter((p) => p.shop_id === shop.id);
+    return { shop: { ...shop, product_count: prods.length } };
+  },
+
+  async createShop(payload: {
+    name: string;
+    slug?: string;
+    description?: string;
+    avatar?: string;
+    cover_image?: string;
+    cover_color?: string;
+    pickup_address?: string;
+    phone?: string;
+  }): Promise<{ shop: Shop; message: string }> {
+    await delay(120);
+    const session = getCurrentSession();
+    if (!session || !session.user || session.user.role !== 'seller') {
+      throw new Error('Vui lòng đăng nhập tài khoản người bán');
+    }
+    const database = getDb();
+    const existingShop = database.shops.find((s) => s.owner_user_id === session.user.id);
+    if (existingShop) {
+      throw new Error('Tài khoản này đã có shop');
+    }
+
+    const name = payload.name.trim();
+    if (!name) throw new Error('Vui lòng nhập tên shop');
+
+    let targetSlug = (payload.slug || slugify(name)).trim();
+    if (!targetSlug) targetSlug = `shop-${Date.now()}`;
+
+    if (database.shops.some((s) => s.slug === targetSlug)) {
+      throw new Error('Đường dẫn shop đã tồn tại, vui lòng chọn đường dẫn khác');
+    }
+
+    const coverColor = payload.cover_color || '#08482D';
+    const newShopId = (database.shops.reduce((max, s) => Math.max(max, s.id), 0) || 0) + 1;
+    const newShop: Shop = {
+      id: newShopId,
+      owner_user_id: session.user.id,
+      name,
+      slug: targetSlug,
+      description: payload.description?.trim() || '',
+      avatar: payload.avatar || createShopAvatarSvg(name, coverColor),
+      cover_image: payload.cover_image,
+      cover_color: coverColor,
+      pickup_address: (payload.pickup_address || '').trim(),
+      phone: (payload.phone || session.user.phone || '').trim(),
+      created_at: new Date().toISOString(),
+      follower_ids: [],
+      rating_avg: 5.0,
+      review_count: 0,
+      response_rate: 100,
+      joined_text: 'Vừa tham gia',
+      product_count: 0
+    };
+
+    database.shops.push(newShop);
+
+    // Update user shop_name
+    const user = database.users.find((u) => u.id === session.user.id);
+    if (user) {
+      user.shop_name = name;
+      session.user.shop_name = name;
+      setCurrentSession(session.user);
+    }
+
+    saveDb(database);
+    return { shop: newShop, message: 'Thiết lập shop thành công!' };
+  },
+
+  async updateShop(shopId: number, payload: Partial<Shop>): Promise<{ shop: Shop; message: string }> {
+    await delay(100);
+    const session = getCurrentSession();
+    const database = getDb();
+    const shop = database.shops.find((s) => s.id === Number(shopId));
+    if (!shop) throw new Error('Không tìm thấy shop');
+
+    if (!session || !session.user || (session.user.role === 'seller' && shop.owner_user_id !== session.user.id)) {
+      throw new Error('Bạn không có quyền thao tác dữ liệu của shop khác');
+    }
+
+    if (payload.slug && payload.slug !== shop.slug) {
+      const cleanSlug = slugify(payload.slug);
+      if (database.shops.some((s) => s.id !== shop.id && s.slug === cleanSlug)) {
+        throw new Error('Đường dẫn shop đã tồn tại');
+      }
+      shop.slug = cleanSlug;
+    }
+
+    if (payload.name) {
+      shop.name = payload.name.trim();
+      const user = database.users.find((u) => u.id === shop.owner_user_id);
+      if (user) user.shop_name = shop.name;
+    }
+    if (payload.description !== undefined) shop.description = payload.description.trim();
+    if (payload.avatar !== undefined) shop.avatar = payload.avatar;
+    if (payload.cover_image !== undefined) shop.cover_image = payload.cover_image;
+    if (payload.cover_color !== undefined) shop.cover_color = payload.cover_color;
+    if (payload.pickup_address !== undefined) shop.pickup_address = payload.pickup_address.trim();
+    if (payload.phone !== undefined) shop.phone = payload.phone.trim();
+
+    saveDb(database);
+    return { shop, message: 'Đã cập nhật thông tin shop thành công' };
+  },
+
+  async toggleFollowShop(shopId: number): Promise<{ is_following: boolean; follower_count: number; message: string }> {
+    await delay(80);
+    const session = getCurrentSession();
+    if (!session || !session.user || session.user.role !== 'buyer') {
+      throw new Error('Vui lòng đăng nhập tài khoản người mua để theo dõi shop');
+    }
+    const database = getDb();
+    const shop = database.shops.find((s) => s.id === Number(shopId));
+    if (!shop) throw new Error('Không tìm thấy shop');
+
+    if (shop.owner_user_id === session.user.id) {
+      throw new Error('Bạn không thể theo dõi chính shop của mình');
+    }
+
+    shop.follower_ids = shop.follower_ids || [];
+    const idx = shop.follower_ids.indexOf(session.user.id);
+    let isFollowing = false;
+
+    if (idx >= 0) {
+      shop.follower_ids.splice(idx, 1);
+      isFollowing = false;
+    } else {
+      shop.follower_ids.push(session.user.id);
+      isFollowing = true;
+    }
+
+    saveDb(database);
+    return {
+      is_following: isFollowing,
+      follower_count: shop.follower_ids.length,
+      message: isFollowing ? `Đã theo dõi ${shop.name}` : `Đã bỏ theo dõi ${shop.name}`
+    };
+  },
+
+  async getFollowedShops(): Promise<{ shops: Shop[] }> {
+    await delay(60);
+    const session = getCurrentSession();
+    if (!session || !session.user) return { shops: [] };
+    const database = getDb();
+    const followed = database.shops.filter((s) => (s.follower_ids || []).includes(session.user.id));
+    return {
+      shops: followed.map((s) => ({
+        ...s,
+        product_count: database.products.filter((p) => p.shop_id === s.id).length
+      }))
+    };
+  },
+
+  async saveShopVoucher(couponCode: string, shopId: number): Promise<{ message: string; saved: boolean }> {
+    await delay(50);
+    const session = getCurrentSession();
+    if (!session || !session.user) throw new Error('Vui lòng đăng nhập để lưu mã');
+    const database = getDb();
+    database.saved_vouchers = database.saved_vouchers || [];
+    const code = couponCode.toUpperCase().trim();
+
+    const exists = database.saved_vouchers.some(
+      (v) => v.user_id === session.user.id && v.coupon_code === code && v.shop_id === shopId
+    );
+    if (exists) {
+      return { message: 'Mã giảm giá đã có trong ví của bạn', saved: true };
+    }
+
+    database.saved_vouchers.push({
+      user_id: session.user.id,
+      coupon_code: code,
+      shop_id: shopId
+    });
+    saveDb(database);
+    return { message: 'Đã lưu mã giảm giá vào ví', saved: true };
+  },
+
+  async getSavedShopVouchers(shopId?: number): Promise<{ vouchers: string[] }> {
+    await delay(40);
+    const session = getCurrentSession();
+    if (!session || !session.user) return { vouchers: [] };
+    const database = getDb();
+    let list = (database.saved_vouchers || []).filter((v) => v.user_id === session.user.id);
+    if (shopId) {
+      list = list.filter((v) => v.shop_id === shopId);
+    }
+    return { vouchers: list.map((v) => v.coupon_code) };
+  },
+
+  async listProductsByShop(shopId: number): Promise<{ products: Product[] }> {
+    await delay(50);
+    const database = getDb();
+    const shop = database.shops.find((s) => s.id === Number(shopId));
+    const list = database.products.filter((p) => p.shop_id === Number(shopId)).map((p) => ({
+      ...p,
+      shop_name: shop?.name || p.shop_name,
+      shop_slug: shop?.slug || p.shop_slug
+    }));
+    return { products: list };
+  },
+
+  async listCouponsByShop(shopId: number): Promise<{ coupons: Coupon[] }> {
+    await delay(40);
+    const database = getDb();
+    const list = database.coupons.filter((c) => c.shop_id === Number(shopId) && c.is_active);
+    return { coupons: list };
+  },
+
   // --- PRODUCTS ---
   async getProducts(params?: {
     category?: string;
@@ -915,11 +1355,15 @@ export const db = {
     max_price?: number;
     min_condition?: number;
     in_stock?: boolean;
+    shop_id?: number;
   }): Promise<{ products: Product[] }> {
     await delay();
     const database = getDb();
     let list = [...database.products];
 
+    if (params?.shop_id) {
+      list = list.filter((p) => p.shop_id === Number(params.shop_id));
+    }
     if (params?.category && params.category !== 'Tất cả') {
       list = list.filter((p) => p.category === params.category);
     }
@@ -929,7 +1373,8 @@ export const db = {
         (p) =>
           p.name.toLowerCase().includes(q) ||
           p.condition_detail.toLowerCase().includes(q) ||
-          p.category.toLowerCase().includes(q)
+          p.category.toLowerCase().includes(q) ||
+          (p.shop_name && p.shop_name.toLowerCase().includes(q))
       );
     }
     if (params?.min_price !== undefined && !isNaN(params.min_price)) {
@@ -956,7 +1401,16 @@ export const db = {
       list.sort((a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime());
     }
 
-    return { products: list };
+    const populated = list.map((p) => {
+      const shop = database.shops.find((s) => s.id === p.shop_id);
+      return {
+        ...p,
+        shop_name: p.shop_name || shop?.name || 'Đồ Cũ Còn Thương',
+        shop_slug: p.shop_slug || shop?.slug || 'do-cu-con-thuong'
+      };
+    });
+
+    return { products: populated };
   },
 
   async getProduct(id: number): Promise<{ product: Product }> {
@@ -964,19 +1418,30 @@ export const db = {
     const database = getDb();
     const found = database.products.find((p) => p.id === Number(id));
     if (!found) throw new Error('Không tìm thấy sản phẩm');
-    return { product: found };
+
+    const shop = database.shops.find((s) => s.id === found.shop_id);
+    return {
+      product: {
+        ...found,
+        shop_name: found.shop_name || shop?.name || 'Đồ Cũ Còn Thương',
+        shop_slug: found.shop_slug || shop?.slug || 'do-cu-con-thuong'
+      }
+    };
   },
 
   async createProduct(data: Partial<Product>): Promise<{ product: Product }> {
     await delay();
     const database = getDb();
     const session = getCurrentSession();
-    const sellerId = session?.user?.role === 'seller' ? session.user.id : 1;
+    const sellerShop = this.checkSellerShopOwnership(session, database);
 
     const newId = (database.products.reduce((max, p) => Math.max(max, p.id), 0) || 0) + 1;
     const newProd: Product = {
       id: newId,
-      seller_id: sellerId,
+      shop_id: sellerShop.id,
+      seller_id: session!.user.id,
+      shop_name: sellerShop.name,
+      shop_slug: sellerShop.slug,
       name: data.name || 'Sản phẩm mới',
       category: data.category || 'Thời trang',
       price: Number(data.price) || 100000,
@@ -1005,8 +1470,11 @@ export const db = {
   async updateProduct(id: number, data: Partial<Product>): Promise<{ product: Product }> {
     await delay();
     const database = getDb();
+    const session = getCurrentSession();
     const idx = database.products.findIndex((p) => p.id === Number(id));
     if (idx === -1) throw new Error('Không tìm thấy sản phẩm');
+
+    this.checkSellerShopOwnership(session, database, database.products[idx].shop_id);
 
     database.products[idx] = { ...database.products[idx], ...data };
     saveDb(database);
@@ -1016,30 +1484,53 @@ export const db = {
   async deleteProduct(id: number): Promise<{ message: string }> {
     await delay();
     const database = getDb();
+    const session = getCurrentSession();
+    const prod = database.products.find((p) => p.id === Number(id));
+    if (!prod) throw new Error('Không tìm thấy sản phẩm');
+
+    this.checkSellerShopOwnership(session, database, prod.shop_id);
+
     database.products = database.products.filter((p) => p.id !== Number(id));
     saveDb(database);
     return { message: 'Đã xóa sản phẩm thành công' };
   },
 
   // --- CART ---
-  async getCart(): Promise<{ items: CartItem[]; subtotal: number; shipping_fee: number; total: number; item_count: number }> {
+  async getCart(): Promise<{
+    items: CartItem[];
+    subtotal: number;
+    shipping_fee: number;
+    total: number;
+    item_count: number;
+    shops: Array<{
+      shop_id: number;
+      shop_name: string;
+      shop_slug: string;
+      items: CartItem[];
+      subtotal: number;
+      shipping_fee: number;
+      total: number;
+    }>;
+  }> {
     await delay(80);
     const session = getCurrentSession();
     if (!session || !session.user || session.user.role !== 'buyer') {
-      return { items: [], subtotal: 0, shipping_fee: 0, total: 0, item_count: 0 };
+      return { items: [], subtotal: 0, shipping_fee: 0, total: 0, item_count: 0, shops: [] };
     }
     const database = getDb();
     const userCart = database.cart_items.filter((c) => c.user_id === session.user.id);
 
     const items: CartItem[] = [];
-    let subtotal = 0;
-
     for (const c of userCart) {
       const prod = database.products.find((p) => p.id === c.product_id);
       if (prod) {
+        const shop = database.shops.find((s) => s.id === prod.shop_id);
         items.push({
           id: c.id,
           product_id: prod.id,
+          shop_id: prod.shop_id || 1,
+          shop_name: prod.shop_name || shop?.name || 'Đồ Cũ Còn Thương',
+          shop_slug: prod.shop_slug || shop?.slug || 'do-cu-con-thuong',
           name: prod.name,
           product_name: prod.name,
           category: prod.category,
@@ -1052,19 +1543,57 @@ export const db = {
           quantity: c.quantity,
           stock: prod.stock
         });
-        subtotal += prod.price * c.quantity;
       }
     }
 
-    const shipping_fee = subtotal >= 1000000 || subtotal === 0 ? 0 : 30000;
-    const total = subtotal + shipping_fee;
+    // Group items by shop
+    const shopMap = new Map<number, CartItem[]>();
+    for (const it of items) {
+      const sId = it.shop_id;
+      if (!shopMap.has(sId)) {
+        shopMap.set(sId, []);
+      }
+      shopMap.get(sId)!.push(it);
+    }
+
+    const shopBreakdown: Array<{
+      shop_id: number;
+      shop_name: string;
+      shop_slug: string;
+      items: CartItem[];
+      subtotal: number;
+      shipping_fee: number;
+      total: number;
+    }> = [];
+
+    let grandSubtotal = 0;
+    let grandShippingFee = 0;
+
+    shopMap.forEach((shopItems, sId) => {
+      const shopObj = database.shops.find((s) => s.id === sId);
+      const sSubtotal = shopItems.reduce((sum, i) => sum + i.price * i.quantity, 0);
+      const sShipping = sSubtotal >= 1000000 || sSubtotal === 0 ? 0 : 30000;
+      grandSubtotal += sSubtotal;
+      grandShippingFee += sShipping;
+
+      shopBreakdown.push({
+        shop_id: sId,
+        shop_name: shopItems[0]?.shop_name || shopObj?.name || 'Đồ Cũ Còn Thương',
+        shop_slug: shopItems[0]?.shop_slug || shopObj?.slug || 'do-cu-con-thuong',
+        items: shopItems,
+        subtotal: sSubtotal,
+        shipping_fee: sShipping,
+        total: sSubtotal + sShipping
+      });
+    });
 
     return {
       items,
-      subtotal,
-      shipping_fee,
-      total,
-      item_count: items.reduce((acc, i) => acc + i.quantity, 0)
+      subtotal: grandSubtotal,
+      shipping_fee: grandShippingFee,
+      total: grandSubtotal + grandShippingFee,
+      item_count: items.reduce((acc, i) => acc + i.quantity, 0),
+      shops: shopBreakdown
     };
   },
 
@@ -1082,6 +1611,12 @@ export const db = {
     const prod = database.products.find((p) => p.id === Number(productId));
     if (!prod) throw new Error('Không tìm thấy sản phẩm');
     if (prod.stock <= 0) throw new Error('Sản phẩm đã hết hàng');
+
+    // Rule: Buyer cannot buy from their own shop
+    const shop = database.shops.find((s) => s.id === prod.shop_id);
+    if (shop && shop.owner_user_id === session.user.id) {
+      throw new Error('Bạn không thể tự mua sản phẩm của chính shop mình');
+    }
 
     const existing = database.cart_items.find(
       (c) => c.user_id === session.user.id && c.product_id === prod.id
@@ -1141,11 +1676,15 @@ export const db = {
   },
 
   // --- COUPONS ---
-  async validateCoupon(code: string, subtotal: number, shippingFee?: number): Promise<{ valid: boolean; discount_amount: number; coupon: Coupon; message: string }> {
+  async validateCoupon(code: string, subtotal: number, shippingFee?: number, shopId?: number): Promise<{ valid: boolean; discount_amount: number; coupon: Coupon; message: string }> {
     await delay();
     const cleanCode = (code || '').toUpperCase().trim();
     const database = getDb();
-    const cpn = database.coupons.find((c) => c.code.toUpperCase() === cleanCode && c.is_active);
+    let cpn = database.coupons.find((c) => c.code.toUpperCase() === cleanCode && c.is_active);
+
+    if (shopId && cpn && cpn.shop_id !== shopId) {
+      throw new Error('Mã giảm giá này không thuộc về shop này');
+    }
 
     if (!cpn) {
       throw new Error('Mã giảm giá không tồn tại hoặc đã hết hạn');
@@ -1179,7 +1718,7 @@ export const db = {
     };
   },
 
-  // --- ORDERS ---
+  // --- ORDERS (MULTI-SHOP SUPPORT) ---
   async createOrder(payload: {
     items: { product_id: number; quantity: number }[];
     recipient_name: string;
@@ -1189,7 +1728,8 @@ export const db = {
     payment_method: 'cod' | 'card';
     card_info?: { number: string; expiry: string; cvv: string; card_type?: string };
     coupon_code?: string;
-  }): Promise<{ message: string; order: Order }> {
+    shop_coupons?: Record<number, string>;
+  }): Promise<{ message: string; order: Order; orders: Order[]; total_amount: number }> {
     await delay();
     const session = getCurrentSession();
     if (!session || !session.user || session.user.role !== 'buyer') {
@@ -1208,88 +1748,140 @@ export const db = {
       throw new Error('Vui lòng điền đầy đủ thông tin giao hàng');
     }
 
-    let subtotal = 0;
-    const orderItems: any[] = [];
-
+    // Group items by shop_id
+    const shopItemsMap = new Map<number, Array<{ product_id: number; quantity: number }>>();
     for (const it of payload.items) {
       const prod = database.products.find((p) => p.id === it.product_id);
       if (!prod) throw new Error(`Sản phẩm #${it.product_id} không tồn tại`);
       if (prod.stock < it.quantity) throw new Error(`Sản phẩm "${prod.name}" không đủ số lượng tồn kho`);
 
-      // Decrease stock
-      prod.stock = Math.max(0, prod.stock - it.quantity);
+      const sId = prod.shop_id || 1;
+      const shopObj = database.shops.find((s) => s.id === sId);
+      if (shopObj && shopObj.owner_user_id === session.user.id) {
+        throw new Error('Bạn không thể tự mua sản phẩm của chính shop mình');
+      }
 
-      const lineTotal = prod.price * it.quantity;
-      subtotal += lineTotal;
-      orderItems.push({
-        id: (database.orders.length * 10) + orderItems.length + 1,
-        order_id: 0,
-        product_id: prod.id,
-        product_name: prod.name,
-        product_image: prod.image_url,
-        image_url: prod.image_url,
-        price: prod.price,
-        original_price: prod.original_price,
-        quantity: it.quantity,
-        condition_pct: prod.condition_pct
+      if (!shopItemsMap.has(sId)) {
+        shopItemsMap.set(sId, []);
+      }
+      shopItemsMap.get(sId)!.push(it);
+    }
+
+    const createdOrders: Order[] = [];
+    let grandTotal = 0;
+
+    for (const [shopId, sItems] of shopItemsMap.entries()) {
+      const shopObj = database.shops.find((s) => s.id === shopId);
+      let sSubtotal = 0;
+      const orderItems: any[] = [];
+
+      for (const it of sItems) {
+        const prod = database.products.find((p) => p.id === it.product_id)!;
+        prod.stock = Math.max(0, prod.stock - it.quantity);
+
+        const lineTotal = prod.price * it.quantity;
+        sSubtotal += lineTotal;
+
+        orderItems.push({
+          id: (database.orders.length * 10) + orderItems.length + 1,
+          order_id: 0,
+          product_id: prod.id,
+          product_name: prod.name,
+          product_image: prod.image_url,
+          image_url: prod.image_url,
+          price: prod.price,
+          original_price: prod.original_price,
+          quantity: it.quantity,
+          condition_pct: prod.condition_pct
+        });
+      }
+
+      const sShippingFee = sSubtotal >= 1000000 ? 0 : 30000;
+      let sDiscount = 0;
+      const targetCouponCode = payload.shop_coupons?.[shopId] || payload.coupon_code;
+
+      if (targetCouponCode) {
+        try {
+          const valRes = await this.validateCoupon(targetCouponCode, sSubtotal, sShippingFee, shopId);
+          sDiscount = valRes.discount_amount;
+          const cpn = database.coupons.find((c) => c.code.toUpperCase() === targetCouponCode.toUpperCase() && c.shop_id === shopId);
+          if (cpn) cpn.usage_count = (cpn.usage_count || 0) + 1;
+        } catch {
+          // Ignore invalid coupon for this shop
+        }
+      }
+
+      const sTotal = Math.max(0, sSubtotal + sShippingFee - sDiscount);
+      grandTotal += sTotal;
+
+      const newOrderId = (database.orders.reduce((max, o) => Math.max(max, o.id), 0) || 0) + 1;
+      const orderCode = `DCCT-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+      const newOrder: Order = {
+        id: newOrderId,
+        shop_id: shopId,
+        seller_id: shopObj?.owner_user_id || 1,
+        shop_name: shopObj?.name || 'Đồ Cũ Còn Thương',
+        shop_slug: shopObj?.slug || 'do-cu-con-thuong',
+        code: orderCode,
+        buyer_id: session.user.id,
+        user_id: session.user.id,
+        status: 'pending',
+        payment_method: payload.payment_method,
+        payment_status: payload.payment_method === 'card' ? 'paid' : 'pending',
+        card_type: payload.payment_method === 'card' ? (payload.card_info?.card_type || 'Thẻ quốc tế') : undefined,
+        buyer_name: session.user.full_name,
+        recipient_name: payload.recipient_name.trim(),
+        phone: payload.phone.trim(),
+        address: payload.address.trim(),
+        note: payload.note?.trim(),
+        items_count: orderItems.length,
+        subtotal: sSubtotal,
+        shipping_fee: sShippingFee,
+        discount_amount: sDiscount,
+        total: sTotal,
+        coupon_code: targetCouponCode,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        items: orderItems.map((i) => ({ ...i, order_id: newOrderId })),
+        shipment_events: [
+          {
+            id: (database.shipment_events.reduce((max, e) => Math.max(max, e.id), 0) || 0) + 1,
+            order_id: newOrderId,
+            status: 'Đã tạo đơn hàng',
+            location: shopObj?.name || 'Hệ thống Đồ Cũ Còn Thương',
+            note: 'Đơn hàng đã được ghi nhận và gửi đến shop xử lý',
+            created_at: new Date().toISOString()
+          }
+        ]
+      };
+
+      database.orders.unshift(newOrder);
+      createdOrders.push(newOrder);
+
+      // Create notifications for buyer and seller of this shop
+      database.notifications.unshift({
+        id: (database.notifications.reduce((max, n) => Math.max(max, n.id), 0) || 0) + 1,
+        user_id: session.user.id,
+        role: 'buyer',
+        title: 'Đặt hàng thành công',
+        message: `Đơn hàng #${orderCode} tại ${shopObj?.name} trị giá ${sTotal.toLocaleString()}đ đã được gửi tới shop.`,
+        order_id: newOrderId,
+        is_read: false,
+        created_at: new Date().toISOString()
+      });
+
+      database.notifications.unshift({
+        id: (database.notifications.reduce((max, n) => Math.max(max, n.id), 0) || 0) + 2,
+        user_id: shopObj?.owner_user_id || 1,
+        role: 'seller',
+        title: 'Đơn hàng mới chờ duyệt',
+        message: `Khách hàng ${payload.recipient_name} vừa đặt đơn #${orderCode}.`,
+        order_id: newOrderId,
+        is_read: false,
+        created_at: new Date().toISOString()
       });
     }
-
-    const shipping_fee = subtotal >= 1000000 ? 0 : 30000;
-    let discount_amount = 0;
-    if (payload.coupon_code) {
-      try {
-        const valRes = await db.validateCoupon(payload.coupon_code, subtotal, shipping_fee);
-        discount_amount = valRes.discount_amount;
-        const cpn = database.coupons.find((c) => c.code.toUpperCase() === payload.coupon_code?.toUpperCase());
-        if (cpn) cpn.usage_count = (cpn.usage_count || 0) + 1;
-      } catch {
-        // ignore invalid coupon
-      }
-    }
-
-    const total = Math.max(0, subtotal + shipping_fee - discount_amount);
-
-    const newOrderId = (database.orders.reduce((max, o) => Math.max(max, o.id), 0) || 0) + 1;
-    const orderCode = `DCCT-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`;
-
-    const newOrder: Order = {
-      id: newOrderId,
-      code: orderCode,
-      buyer_id: session.user.id,
-      user_id: session.user.id,
-      seller_id: 1,
-      status: 'pending',
-      payment_method: payload.payment_method,
-      payment_status: payload.payment_method === 'card' ? 'paid' : 'pending',
-      card_type: payload.payment_method === 'card' ? (payload.card_info?.card_type || 'Thẻ quốc tế') : undefined,
-      buyer_name: session.user.full_name,
-      recipient_name: payload.recipient_name.trim(),
-      phone: payload.phone.trim(),
-      address: payload.address.trim(),
-      note: payload.note?.trim(),
-      items_count: orderItems.length,
-      subtotal,
-      shipping_fee,
-      discount_amount,
-      total,
-      coupon_code: payload.coupon_code,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      items: orderItems.map((i) => ({ ...i, order_id: newOrderId })),
-      shipment_events: [
-        {
-          id: (database.shipment_events.reduce((max, e) => Math.max(max, e.id), 0) || 0) + 1,
-          order_id: newOrderId,
-          status: 'Đã tạo đơn hàng',
-          location: 'Hệ thống Đồ Cũ Còn Thương',
-          note: 'Đơn hàng đã được ghi nhận và gửi đến người bán',
-          created_at: new Date().toISOString()
-        }
-      ]
-    };
-
-    database.orders.unshift(newOrder);
 
     // Remove ordered items from cart
     const orderedPids = new Set(payload.items.map((i) => i.product_id));
@@ -1297,31 +1889,13 @@ export const db = {
       (c) => c.user_id !== session.user.id || !orderedPids.has(c.product_id)
     );
 
-    // Create notifications for buyer and seller
-    database.notifications.unshift({
-      id: (database.notifications.reduce((max, n) => Math.max(max, n.id), 0) || 0) + 1,
-      user_id: session.user.id,
-      role: 'buyer',
-      title: 'Đặt hàng thành công',
-      message: `Đơn hàng #${orderCode} trị giá ${total.toLocaleString()}đ đã được gửi tới tiệm.`,
-      order_id: newOrderId,
-      is_read: false,
-      created_at: new Date().toISOString()
-    });
-
-    database.notifications.unshift({
-      id: (database.notifications.reduce((max, n) => Math.max(max, n.id), 0) || 0) + 2,
-      user_id: 1, // seller
-      role: 'seller',
-      title: 'Đơn hàng mới chờ duyệt',
-      message: `Khách hàng ${payload.recipient_name} vừa đặt đơn #${orderCode}.`,
-      order_id: newOrderId,
-      is_read: false,
-      created_at: new Date().toISOString()
-    });
-
     saveDb(database);
-    return { message: 'Đặt hàng thành công', order: newOrder };
+    return {
+      message: 'Đặt hàng thành công',
+      order: createdOrders[0],
+      orders: createdOrders,
+      total_amount: grandTotal
+    };
   },
 
   async getMyOrders(status?: string): Promise<{ orders: Order[] }> {
@@ -1402,8 +1976,11 @@ export const db = {
   // --- SELLER ORDERS & STATS ---
   async getSellerStats(): Promise<{ stats: SellerStats }> {
     await delay();
+    const session = getCurrentSession();
     const database = getDb();
-    const orders = database.orders;
+    const sellerShop = this.checkSellerShopOwnership(session, database);
+
+    const orders = database.orders.filter((o) => o.shop_id === sellerShop.id);
 
     const total_revenue = orders
       .filter((o) => o.payment_status === 'paid' && o.status !== 'cancelled')
@@ -1424,7 +2001,7 @@ export const db = {
       }
     }
 
-    const low_stock_count = database.products.filter((p) => p.stock <= 1).length;
+    const low_stock_count = database.products.filter((p) => p.shop_id === sellerShop.id && p.stock <= 1).length;
 
     return {
       stats: {
@@ -1439,8 +2016,11 @@ export const db = {
 
   async getSellerOrders(status?: string): Promise<{ orders: Order[] }> {
     await delay();
+    const session = getCurrentSession();
     const database = getDb();
-    let orders = [...database.orders];
+    const sellerShop = this.checkSellerShopOwnership(session, database);
+
+    let orders = database.orders.filter((o) => o.shop_id === sellerShop.id);
     if (status && status !== 'all') {
       orders = orders.filter((o) => o.status === status);
     }
@@ -1449,9 +2029,12 @@ export const db = {
 
   async updateOrderStatus(orderId: number, target_status: string, note?: string, cancel_reason?: string): Promise<{ message: string; order: Order }> {
     await delay();
+    const session = getCurrentSession();
     const database = getDb();
     const ord = database.orders.find((o) => o.id === Number(orderId));
     if (!ord) throw new Error('Không tìm thấy đơn hàng');
+
+    const sellerShop = this.checkSellerShopOwnership(session, database, ord.shop_id);
 
     ord.status = target_status as any;
     if (cancel_reason) ord.cancel_reason = cancel_reason;
@@ -1477,7 +2060,7 @@ export const db = {
       id: (database.shipment_events.reduce((max, e) => Math.max(max, e.id), 0) || 0) + 1,
       order_id: ord.id,
       status: statusMap[target_status] || target_status,
-      location: 'Kho Tiệm Đồ Cũ Còn Thương',
+      location: `Kho ${sellerShop.name}`,
       note: note || `Đơn hàng chuyển trạng thái sang ${target_status}`,
       created_at: new Date().toISOString()
     });
@@ -1488,9 +2071,12 @@ export const db = {
 
   async assignCarrier(orderId: number, carrier: string): Promise<{ tracking_code: string; order: Order }> {
     await delay();
+    const session = getCurrentSession();
     const database = getDb();
     const ord = database.orders.find((o) => o.id === Number(orderId));
     if (!ord) throw new Error('Không tìm thấy đơn hàng');
+
+    const sellerShop = this.checkSellerShopOwnership(session, database, ord.shop_id);
 
     const carrierPrefixMap: Record<string, string> = {
       'Giao Hàng Nhanh': 'GHN',
@@ -1511,7 +2097,7 @@ export const db = {
       id: (database.shipment_events.reduce((max, e) => Math.max(max, e.id), 0) || 0) + 1,
       order_id: ord.id,
       status: 'Đã gán đối tác vận chuyển',
-      location: 'Kho Tiệm Đồ Cũ Còn Thương',
+      location: `Kho ${sellerShop.name}`,
       note: `Đã phân công ${carrier}. Mã vận đơn: ${tracking_code}`,
       created_at: new Date().toISOString()
     });
@@ -1522,9 +2108,12 @@ export const db = {
 
   async addShipmentEvent(orderId: number, payload: { status: string; location: string; note?: string }): Promise<{ message: string; event: ShipmentEvent }> {
     await delay();
+    const session = getCurrentSession();
     const database = getDb();
     const ord = database.orders.find((o) => o.id === Number(orderId));
     if (!ord) throw new Error('Không tìm thấy đơn hàng');
+
+    this.checkSellerShopOwnership(session, database, ord.shop_id);
 
     const newEvt: ShipmentEvent = {
       id: (database.shipment_events.reduce((max, e) => Math.max(max, e.id), 0) || 0) + 1,
@@ -1553,9 +2142,12 @@ export const db = {
 
   async advanceShipmentStep(orderId: number, step: number): Promise<{ message: string; order: Order }> {
     await delay();
+    const session = getCurrentSession();
     const database = getDb();
     const ord = database.orders.find((o) => o.id === Number(orderId));
     if (!ord) throw new Error('Không tìm thấy đơn hàng');
+
+    const sellerShop = this.checkSellerShopOwnership(session, database, ord.shop_id);
 
     ord.shipment_events = ord.shipment_events || [];
     const eventId = (database.shipment_events.reduce((max, e) => Math.max(max, e.id), 0) || 0) + 1;
@@ -1566,7 +2158,7 @@ export const db = {
         id: eventId,
         order_id: ord.id,
         status: 'Đã bàn giao cho đơn vị vận chuyển',
-        location: 'Kho Tân Bình, TP.HCM',
+        location: sellerShop.pickup_address || 'Kho Tân Bình, TP.HCM',
         note: 'Kiện hàng đã bọc chống sốc và bàn giao cho bưu tá',
         created_at: new Date().toISOString()
       });
@@ -1611,11 +2203,14 @@ export const db = {
 
   async bulkConfirmOrders(orderIds: number[]): Promise<{ message: string; confirmed_count: number }> {
     await delay();
+    const session = getCurrentSession();
     const database = getDb();
+    const sellerShop = this.checkSellerShopOwnership(session, database);
+
     let count = 0;
     for (const id of orderIds) {
       const ord = database.orders.find((o) => o.id === Number(id));
-      if (ord && ord.status === 'pending') {
+      if (ord && ord.shop_id === sellerShop.id && ord.status === 'pending') {
         ord.status = 'confirmed';
         count++;
       }
@@ -1647,14 +2242,21 @@ export const db = {
       throw new Error('Mức giá trả phải thấp hơn giá niêm yết của sản phẩm');
     }
 
+    const shop = database.shops.find((s) => s.id === prod.shop_id);
+    if (shop && shop.owner_user_id === session.user.id) {
+      throw new Error('Bạn không thể trả giá sản phẩm của chính shop mình');
+    }
+
     const newOfferId = (database.offers.reduce((max, o) => Math.max(max, o.id), 0) || 0) + 1;
     const expiresAt = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
 
     const newOffer: Offer = {
       id: newOfferId,
+      shop_id: prod.shop_id || 1,
+      shop_name: shop?.name || prod.shop_name || 'Đồ Cũ Còn Thương',
       user_id: session.user.id,
       buyer_id: session.user.id,
-      seller_id: prod.seller_id || 1,
+      seller_id: shop?.owner_user_id || prod.seller_id || 1,
       product_id: prod.id,
       product_name: prod.name,
       product_image: prod.image_url,
@@ -1670,10 +2272,10 @@ export const db = {
 
     database.offers.unshift(newOffer);
 
-    // Notify seller
+    // Notify seller of this shop
     database.notifications.unshift({
       id: (database.notifications.reduce((max, n) => Math.max(max, n.id), 0) || 0) + 1,
-      user_id: 1,
+      user_id: shop?.owner_user_id || 1,
       role: 'seller',
       title: 'Lời trả giá mới',
       message: `Khách hàng ${session.user.full_name} trả giá ${offeredPrice.toLocaleString()}đ cho "${prod.name}".`,
@@ -1700,15 +2302,20 @@ export const db = {
 
   async getSellerOffers(): Promise<{ offers: Offer[] }> {
     await delay();
+    const session = getCurrentSession();
     const database = getDb();
-    return { offers: database.offers };
+    const sellerShop = this.checkSellerShopOwnership(session, database);
+    return { offers: database.offers.filter((o) => o.shop_id === sellerShop.id) };
   },
 
   async acceptOffer(offerId: number): Promise<{ message: string; offer: Offer }> {
     await delay();
+    const session = getCurrentSession();
     const database = getDb();
     const off = database.offers.find((o) => o.id === Number(offerId));
     if (!off) throw new Error('Không tìm thấy lời trả giá');
+
+    this.checkSellerShopOwnership(session, database, off.shop_id);
 
     off.status = 'accepted';
 
@@ -1729,9 +2336,12 @@ export const db = {
 
   async counterOffer(offerId: number, counterPrice: number, sellerNote?: string): Promise<{ message: string; offer: Offer }> {
     await delay();
+    const session = getCurrentSession();
     const database = getDb();
     const off = database.offers.find((o) => o.id === Number(offerId));
     if (!off) throw new Error('Không tìm thấy lời trả giá');
+
+    this.checkSellerShopOwnership(session, database, off.shop_id);
 
     off.status = 'countered';
     off.counter_price = Number(counterPrice);
@@ -1754,9 +2364,12 @@ export const db = {
 
   async rejectOffer(offerId: number, reason?: string): Promise<{ message: string; offer: Offer }> {
     await delay();
+    const session = getCurrentSession();
     const database = getDb();
     const off = database.offers.find((o) => o.id === Number(offerId));
     if (!off) throw new Error('Không tìm thấy lời trả giá');
+
+    this.checkSellerShopOwnership(session, database, off.shop_id);
 
     off.status = 'rejected';
     off.seller_note = reason?.trim();
@@ -1801,24 +2414,147 @@ export const db = {
     return { message: 'Đã từ chối mức giá thương lượng' };
   },
 
-  // --- CHAT / NHẮN TIN (LỖI 3) ---
+  // --- CHAT / NHẮN TIN THEO SHOP (MULTI-SHOP SHOPEE-STYLE) ---
+  async startShopChat(
+    shopId: number,
+    context?: {
+      type: 'product' | 'order';
+      product_id?: number;
+      order_code?: string;
+      initial_message?: string;
+    }
+  ): Promise<{ conversation: ChatConversation; created: boolean }> {
+    await delay(50);
+    const session = getCurrentSession();
+    if (!session || !session.user) {
+      throw new Error('Vui lòng đăng nhập để chat với shop');
+    }
+    const database = getDb();
+    const shop = database.shops.find((s) => s.id === Number(shopId));
+    if (!shop) throw new Error('Không tìm thấy shop');
+
+    if (shop.owner_user_id === session.user.id) {
+      throw new Error('Bạn không thể tự chat với shop của chính mình');
+    }
+
+    let conv = database.chat_conversations.find(
+      (c) => c.buyer_id === session.user.id && c.shop_id === shop.id
+    );
+
+    let isNew = false;
+    if (!conv) {
+      isNew = true;
+      const newConvId = (database.chat_conversations.reduce((max, c) => Math.max(max, c.id), 0) || 0) + 1;
+      conv = {
+        id: newConvId,
+        buyer_id: session.user.id,
+        seller_id: shop.owner_user_id,
+        shop_id: shop.id,
+        shop_name: shop.name,
+        shop_slug: shop.slug,
+        shop_avatar: shop.avatar,
+        buyer_name: session.user.full_name,
+        buyer_phone: session.user.phone,
+        last_message: context?.type === 'product' ? 'Đang hỏi về sản phẩm' : (context?.type === 'order' ? 'Đang hỏi về đơn hàng' : 'Xin chào shop!'),
+        last_message_at: new Date().toISOString(),
+        buyer_unread: 0,
+        seller_unread: 1,
+        created_at: new Date().toISOString(),
+        messages: []
+      };
+      database.chat_conversations.unshift(conv);
+    }
+
+    // If context is passed, add context card message
+    if (context) {
+      let contextCard: ChatMessageContext | undefined;
+      let contextContent = '';
+
+      if (context.type === 'product' && context.product_id) {
+        const prod = database.products.find((p) => p.id === context.product_id);
+        if (prod) {
+          contextCard = {
+            type: 'product',
+            product_id: prod.id,
+            title: prod.name,
+            image_url: prod.image_url,
+            price: prod.price
+          };
+          contextContent = `Đang hỏi về: ${prod.name}`;
+          conv.product_id = prod.id;
+          conv.product_name = prod.name;
+          conv.product_image = prod.image_url;
+          conv.product_price = prod.price;
+        }
+      } else if (context.type === 'order' && context.order_code) {
+        const ord = database.orders.find((o) => o.code === context.order_code || o.id === Number(context.order_code));
+        if (ord) {
+          contextCard = {
+            type: 'order',
+            order_code: ord.code,
+            title: `Đơn hàng #${ord.code}`,
+            price: ord.total,
+            status_text: ord.status === 'completed' ? 'Đã hoàn thành' : ord.status === 'shipping' ? 'Đang giao' : 'Đang xử lý'
+          };
+          contextContent = `Đang hỏi về đơn hàng #${ord.code} · ${ord.total.toLocaleString()}đ`;
+          conv.order_code = ord.code;
+        }
+      }
+
+      if (contextCard) {
+        const newMsgId = (database.chat_messages.reduce((max, m) => Math.max(max, m.id), 0) || 0) + 1;
+        const msg: ChatMessage = {
+          id: newMsgId,
+          conversation_id: conv.id,
+          sender_role: 'buyer',
+          sender_id: session.user.id,
+          content: context.initial_message || contextContent,
+          context_card: contextCard,
+          is_read: false,
+          created_at: new Date().toISOString()
+        };
+        database.chat_messages.push(msg);
+        conv.last_message = msg.content;
+        conv.last_message_at = msg.created_at;
+        conv.seller_unread = (conv.seller_unread || 0) + 1;
+      }
+    }
+
+    saveDb(database);
+    const msgs = database.chat_messages.filter((m) => m.conversation_id === conv!.id);
+    return {
+      conversation: { ...conv, messages: msgs },
+      created: isNew
+    };
+  },
+
   async getChatConversations(): Promise<{ conversations: ChatConversation[] }> {
-    await delay(80);
+    await delay(60);
     const database = getDb();
     const session = getCurrentSession();
-    let convs = [...database.chat_conversations];
+    if (!session || !session.user) return { conversations: [] };
 
-    if (session?.user?.role === 'buyer') {
-      convs = convs.filter((c) => c.buyer_id === session.user.id);
+    let convs: ChatConversation[] = [];
+
+    if (session.user.role === 'buyer') {
+      convs = database.chat_conversations.filter((c) => c.buyer_id === session.user.id);
+    } else {
+      // Seller: only chats belonging to seller's shop
+      const sellerShop = this.checkSellerShopOwnership(session, database);
+      convs = database.chat_conversations.filter((c) => c.shop_id === sellerShop.id);
     }
 
     const populated = convs.map((c) => {
       const msgs = database.chat_messages.filter((m) => m.conversation_id === c.id);
+      const shopObj = database.shops.find((s) => s.id === c.shop_id);
       return {
         ...c,
+        shop_name: c.shop_name || shopObj?.name || 'Shop',
+        shop_slug: c.shop_slug || shopObj?.slug || '',
+        shop_avatar: c.shop_avatar || shopObj?.avatar || '',
         messages: msgs
       };
-    });
+    }).sort((a, b) => new Date(b.last_message_at || 0).getTime() - new Date(a.last_message_at || 0).getTime());
 
     return { conversations: populated };
   },
@@ -1831,7 +2567,7 @@ export const db = {
 
     const msgs = database.chat_messages.filter((m) => m.conversation_id === conv.id);
 
-    // mark read
+    // Mark read
     const session = getCurrentSession();
     if (session?.user?.role === 'seller') {
       conv.seller_unread = 0;
@@ -1840,14 +2576,30 @@ export const db = {
     }
     saveDb(database);
 
+    const shopObj = database.shops.find((s) => s.id === conv.shop_id);
+    const populatedConv = {
+      ...conv,
+      shop_name: conv.shop_name || shopObj?.name || 'Shop',
+      shop_slug: conv.shop_slug || shopObj?.slug || '',
+      shop_avatar: conv.shop_avatar || shopObj?.avatar || '',
+      messages: msgs
+    };
+
     return {
-      conversation: { ...conv, messages: msgs },
+      conversation: populatedConv,
       messages: msgs
     };
   },
 
-  async sendChatMessage(payload: { conversation_id?: number; product_id?: number; order_code?: string; content: string }): Promise<{ message: ChatMessage; conversation: ChatConversation }> {
-    await delay(100);
+  async sendChatMessage(payload: {
+    conversation_id?: number;
+    shop_id?: number;
+    product_id?: number;
+    order_code?: string;
+    content: string;
+    context_card?: ChatMessageContext;
+  }): Promise<{ message: ChatMessage; conversation: ChatConversation }> {
+    await delay(80);
     const session = getCurrentSession();
     if (!session || !session.user) {
       throw new Error('Chưa gửi được, bạn thử lại nhé');
@@ -1857,8 +2609,10 @@ export const db = {
       throw new Error('Cửa hàng đang tạm dừng nhận đơn trong buổi thuyết trình');
     }
 
-    const content = payload.content.trim();
-    if (!content) throw new Error('Nội dung không được để trống');
+    const content = (payload.content || '').trim();
+    if (!content && !payload.context_card) {
+      throw new Error('Nội dung không được để trống');
+    }
 
     const senderRole = session.user.role === 'seller' ? 'seller' : 'buyer';
     let conv: ChatConversation | undefined;
@@ -1867,41 +2621,30 @@ export const db = {
       conv = database.chat_conversations.find((c) => c.id === Number(payload.conversation_id));
     }
 
-    if (!conv && session.user.role === 'buyer') {
-      // Find or create conversation for this buyer + product
-      conv = database.chat_conversations.find(
-        (c) => c.buyer_id === session.user.id && (payload.product_id ? c.product_id === payload.product_id : true)
-      );
-
-      if (!conv) {
-        const prod = payload.product_id ? database.products.find((p) => p.id === payload.product_id) : undefined;
-        const newConvId = (database.chat_conversations.reduce((max, c) => Math.max(max, c.id), 0) || 0) + 1;
-        conv = {
-          id: newConvId,
-          buyer_id: session.user.id,
-          seller_id: 1,
-          buyer_name: session.user.full_name,
-          buyer_phone: session.user.phone,
-          product_id: prod?.id,
-          product_name: prod?.name,
-          product_price: prod?.price,
-          product_image: prod?.image_url,
-          order_code: payload.order_code,
-          last_message: content,
-          last_message_at: new Date().toISOString(),
-          buyer_unread: 0,
-          seller_unread: 1,
-          created_at: new Date().toISOString(),
-          messages: []
-        };
-        if (conv) {
-          database.chat_conversations.unshift(conv);
-        }
-      }
+    if (!conv && payload.shop_id && senderRole === 'buyer') {
+      const res = await this.startShopChat(payload.shop_id, payload.product_id ? {
+        type: 'product',
+        product_id: payload.product_id
+      } : (payload.order_code ? {
+        type: 'order',
+        order_code: payload.order_code
+      } : undefined));
+      conv = database.chat_conversations.find((c) => c.id === res.conversation.id);
     }
 
     if (!conv) {
       throw new Error('Chưa gửi được, bạn thử lại nhé');
+    }
+
+    // If buyer, verify not chatting with own shop
+    const targetShop = database.shops.find((s) => s.id === conv?.shop_id);
+    if (senderRole === 'buyer' && targetShop && targetShop.owner_user_id === session.user.id) {
+      throw new Error('Bạn không thể tự chat với shop của chính mình');
+    }
+
+    // If seller, verify ownership
+    if (senderRole === 'seller') {
+      this.checkSellerShopOwnership(session, database, conv.shop_id);
     }
 
     const newMsgId = (database.chat_messages.reduce((max, m) => Math.max(max, m.id), 0) || 0) + 1;
@@ -1910,14 +2653,15 @@ export const db = {
       conversation_id: conv.id,
       sender_role: senderRole,
       sender_id: session.user.id,
-      content,
+      content: content || 'Đã gửi thông tin',
+      context_card: payload.context_card,
       is_read: false,
       created_at: new Date().toISOString()
     };
 
     database.chat_messages.push(newMsg);
 
-    conv.last_message = content;
+    conv.last_message = content || (payload.context_card ? payload.context_card.title : 'Đã gửi thông tin');
     conv.last_message_at = newMsg.created_at;
     if (senderRole === 'buyer') {
       conv.seller_unread = (conv.seller_unread || 0) + 1;
@@ -1926,7 +2670,25 @@ export const db = {
     }
 
     saveDb(database);
-    return { message: newMsg, conversation: conv };
+    const msgs = database.chat_messages.filter((m) => m.conversation_id === conv!.id);
+    return { message: newMsg, conversation: { ...conv, messages: msgs } };
+  },
+
+  async markChatRead(conversationId: number): Promise<{ message: string }> {
+    await delay(30);
+    const session = getCurrentSession();
+    if (!session || !session.user) return { message: 'Xong' };
+    const database = getDb();
+    const conv = database.chat_conversations.find((c) => c.id === Number(conversationId));
+    if (conv) {
+      if (session.user.role === 'seller') {
+        conv.seller_unread = 0;
+      } else {
+        conv.buyer_unread = 0;
+      }
+      saveDb(database);
+    }
+    return { message: 'Đã đánh dấu đã đọc' };
   },
 
   // --- REVIEWS / ĐÁNH GIÁ ---
@@ -1965,7 +2727,7 @@ export const db = {
     };
   },
 
-  async getShopReviews(): Promise<{
+  async getShopReviews(shopId?: number): Promise<{
     reviews: Review[];
     recent_reviews: Review[];
     total_reviews: number;
@@ -1976,9 +2738,13 @@ export const db = {
     const database = getDb();
     const session = getCurrentSession();
 
-    const list = database.reviews.filter(
+    let list = database.reviews.filter(
       (r) => !r.is_hidden || (session?.user && r.user_id === session.user.id)
     );
+
+    if (shopId) {
+      list = list.filter((r) => r.shop_id === Number(shopId));
+    }
 
     const total = list.length;
     const avg = total > 0 ? Number((list.reduce((acc, r) => acc + r.rating, 0) / total).toFixed(1)) : 5.0;
@@ -1991,7 +2757,7 @@ export const db = {
 
     return {
       reviews: list,
-      recent_reviews: list.slice(0, 3),
+      recent_reviews: list.slice(0, 5),
       total_reviews: total,
       average_rating: avg,
       distribution: dist
@@ -2000,8 +2766,11 @@ export const db = {
 
   async getSellerReviews(): Promise<{ reviews: Review[]; total_reviews: number; average_rating: number; unreplied_count: number }> {
     await delay();
+    const session = getCurrentSession();
     const database = getDb();
-    const list = database.reviews;
+    const sellerShop = this.checkSellerShopOwnership(session, database);
+
+    const list = database.reviews.filter((r) => r.shop_id === sellerShop.id);
     const total = list.length;
     const avg = total > 0 ? Number((list.reduce((acc, r) => acc + r.rating, 0) / total).toFixed(1)) : 5.0;
     const unreplied = list.filter((r) => !r.seller_reply).length;
@@ -2058,11 +2827,14 @@ export const db = {
     }
 
     const ord = database.orders.find((o) => o.id === Number(payload.order_id));
+    const targetShopId = prod.shop_id || ord?.shop_id || 1;
+    const shopObj = database.shops.find((s) => s.id === targetShopId);
 
     const newRevId = (database.reviews.reduce((max, r) => Math.max(max, r.id), 0) || 0) + 1;
     const authorName = payload.is_anonymous ? 'Người mua ẩn danh' : session.user.full_name;
     const newRev: Review = {
       id: newRevId,
+      shop_id: targetShopId,
       order_id: Number(payload.order_id),
       product_id: Number(payload.product_id),
       user_id: session.user.id,
@@ -2087,10 +2859,10 @@ export const db = {
 
     database.reviews.unshift(newRev);
 
-    // Notify seller
+    // Notify seller of this shop
     database.notifications.unshift({
       id: (database.notifications.reduce((max, n) => Math.max(max, n.id), 0) || 0) + 1,
-      user_id: 1,
+      user_id: shopObj?.owner_user_id || 1,
       role: 'seller',
       title: 'Đánh giá mới cho sản phẩm',
       message: `${newRev.buyer_name} vừa đánh giá ${newRev.rating}★ cho "${prod.name}".`,
@@ -2161,9 +2933,12 @@ export const db = {
 
   async replyReview(reviewId: number, reply: string): Promise<{ message: string; review: Review }> {
     await delay();
+    const session = getCurrentSession();
     const database = getDb();
     const rev = database.reviews.find((r) => r.id === Number(reviewId));
     if (!rev) throw new Error('Không tìm thấy đánh giá');
+
+    this.checkSellerShopOwnership(session, database, rev.shop_id);
 
     rev.seller_reply = reply.trim();
     rev.seller_reply_at = new Date().toISOString();
@@ -2215,9 +2990,12 @@ export const db = {
 
     const firstItem = ord.items?.[0];
     const newId = (database.return_requests.reduce((max, r) => Math.max(max, r.id), 0) || 0) + 1;
+    const shopObj = database.shops.find((s) => s.id === ord.shop_id);
+
     const newReq: ReturnRequest = {
       id: newId,
       order_id: ord.id,
+      shop_id: ord.shop_id,
       order_code: ord.code,
       buyer_id: session.user.id,
       buyer_name: session.user.full_name,
@@ -2236,10 +3014,10 @@ export const db = {
 
     database.return_requests.unshift(newReq);
 
-    // Notify seller
+    // Notify seller of this shop
     database.notifications.unshift({
       id: (database.notifications.reduce((max, n) => Math.max(max, n.id), 0) || 0) + 1,
-      user_id: 1,
+      user_id: shopObj?.owner_user_id || 1,
       role: 'seller',
       title: 'Yêu cầu đổi trả mới',
       message: `Khách ${session.user.full_name} yêu cầu trả đơn #${ord.code}.`,
@@ -2261,22 +3039,35 @@ export const db = {
 
   async getSellerReturns(): Promise<{ return_requests: ReturnRequest[] }> {
     await delay();
+    const session = getCurrentSession();
     const database = getDb();
-    return { return_requests: database.return_requests };
+    const sellerShop = this.checkSellerShopOwnership(session, database);
+
+    const filtered = database.return_requests.filter((r) => {
+      if (r.shop_id) return r.shop_id === sellerShop.id;
+      const ord = database.orders.find((o) => o.id === r.order_id);
+      return ord && ord.shop_id === sellerShop.id;
+    });
+
+    return { return_requests: filtered };
   },
 
   async updateReturnStatus(id: number, payload: { status: string; seller_note?: string }): Promise<{ message: string; return_request: ReturnRequest }> {
     await delay();
+    const session = getCurrentSession();
     const database = getDb();
     const ret = database.return_requests.find((r) => r.id === Number(id));
     if (!ret) throw new Error('Không tìm thấy yêu cầu trả hàng');
+
+    const ord = database.orders.find((o) => o.id === ret.order_id);
+    const shopId = ret.shop_id || ord?.shop_id || 1;
+    this.checkSellerShopOwnership(session, database, shopId);
 
     ret.status = payload.status as ReturnStatus;
     if (payload.seller_note) ret.seller_note = payload.seller_note;
 
     if (payload.status === 'refunded') {
       // restore stock
-      const ord = database.orders.find((o) => o.id === ret.order_id);
       if (ord) {
         for (const it of ord.items || []) {
           const prod = database.products.find((p) => p.id === it.product_id);
@@ -2361,22 +3152,28 @@ export const db = {
   // --- SELLER COUPONS ---
   async getSellerCoupons(): Promise<{ coupons: Coupon[] }> {
     await delay();
+    const session = getCurrentSession();
     const database = getDb();
-    return { coupons: database.coupons };
+    const sellerShop = this.checkSellerShopOwnership(session, database);
+    return { coupons: database.coupons.filter((c) => c.shop_id === sellerShop.id) };
   },
 
   async createCoupon(data: { code: string; type: string; value: number; max_discount?: number; min_order_amount?: number }): Promise<{ coupon: Coupon }> {
     await delay();
+    const session = getCurrentSession();
     const database = getDb();
+    const sellerShop = this.checkSellerShopOwnership(session, database);
+
     const cleanCode = data.code.toUpperCase().trim();
-    if (database.coupons.some((c) => c.code === cleanCode)) {
-      throw new Error('Mã giảm giá này đã tồn tại');
+    if (database.coupons.some((c) => c.code === cleanCode && c.shop_id === sellerShop.id)) {
+      throw new Error('Mã giảm giá này đã tồn tại trong shop của bạn');
     }
 
     const newId = (database.coupons.reduce((max, c) => Math.max(max, c.id), 0) || 0) + 1;
     const newCpn: Coupon = {
       id: newId,
-      seller_id: 1,
+      shop_id: sellerShop.id,
+      seller_id: sellerShop.owner_user_id,
       code: cleanCode,
       type: data.type as any,
       value: Number(data.value),
@@ -2393,9 +3190,13 @@ export const db = {
 
   async toggleCoupon(id: number): Promise<{ message: string; is_active: boolean }> {
     await delay();
+    const session = getCurrentSession();
     const database = getDb();
     const cpn = database.coupons.find((c) => c.id === Number(id));
     if (!cpn) throw new Error('Không tìm thấy mã');
+
+    this.checkSellerShopOwnership(session, database, cpn.shop_id);
+
     cpn.is_active = !cpn.is_active;
     saveDb(database);
     return {
@@ -2406,7 +3207,13 @@ export const db = {
 
   async deleteCoupon(id: number): Promise<{ message: string }> {
     await delay();
+    const session = getCurrentSession();
     const database = getDb();
+    const cpn = database.coupons.find((c) => c.id === Number(id));
+    if (!cpn) throw new Error('Không tìm thấy mã');
+
+    this.checkSellerShopOwnership(session, database, cpn.shop_id);
+
     database.coupons = database.coupons.filter((c) => c.id !== Number(id));
     saveDb(database);
     return { message: 'Đã xóa mã giảm giá' };
@@ -2586,21 +3393,39 @@ export const db = {
     return { success: true };
   },
 
+  // --- SEARCH SHOPS ---
+  async searchShops(q: string): Promise<{ shops: Shop[] }> {
+    await delay(30);
+    const database = getDb();
+    const query = (q || '').toLowerCase().trim();
+    if (!query) return { shops: [] };
+    const matches = database.shops.filter(
+      (s) => s.name.toLowerCase().includes(query) || (s.description && s.description.toLowerCase().includes(query)) || s.slug.toLowerCase().includes(query)
+    );
+    return { shops: matches };
+  },
+
   // --- SHIPMENT FAST FORWARD & KANBAN HANDOVER ---
   async getEligibleShipmentOrders(): Promise<{ orders: Order[] }> {
     await delay(50);
+    const session = getCurrentSession();
     const database = getDb();
+    const sellerShop = this.checkSellerShopOwnership(session, database);
+
     const eligible = database.orders.filter(
-      (o) => o.status === 'confirmed' || o.status === 'shipping' || o.status === 'delivered' || o.status === 'pending'
+      (o) => o.shop_id === sellerShop.id && (o.status === 'confirmed' || o.status === 'shipping' || o.status === 'delivered' || o.status === 'pending')
     );
     return { orders: eligible };
   },
 
   async handoverOrder(orderId: number, handoverData: { carrier: string; location?: string; note?: string }): Promise<{ message: string; order: Order; shipment_events: ShipmentEvent[] }> {
     await delay();
+    const session = getCurrentSession();
     const database = getDb();
     const ord = database.orders.find((o) => o.id === Number(orderId));
     if (!ord) throw new Error('Không tìm thấy đơn hàng');
+
+    const sellerShop = this.checkSellerShopOwnership(session, database, ord.shop_id);
 
     ord.carrier = handoverData.carrier;
     if (!ord.tracking_code) {
@@ -2620,7 +3445,7 @@ export const db = {
       id: (database.shipment_events.reduce((max, e) => Math.max(max, e.id), 0) || 0) + 1,
       order_id: ord.id,
       status: 'Đã bàn giao cho đơn vị vận chuyển',
-      location: handoverData.location || 'Kho Tiệm Đồ Cũ Còn Thương',
+      location: handoverData.location || sellerShop.pickup_address || `Kho ${sellerShop.name}`,
       note: handoverData.note || `Đã bàn giao kiện hàng cho đối tác ${handoverData.carrier}`,
       created_at: new Date().toISOString()
     };
@@ -2646,12 +3471,14 @@ export const db = {
 
   async bulkHandoverOrders(orderIds: number[], carrier: string): Promise<{ message: string; handover_count: number }> {
     await delay();
+    const session = getCurrentSession();
     const database = getDb();
+    const sellerShop = this.checkSellerShopOwnership(session, database);
     let count = 0;
 
     for (const id of orderIds) {
       const ord = database.orders.find((o) => o.id === Number(id));
-      if (ord) {
+      if (ord && ord.shop_id === sellerShop.id) {
         ord.carrier = carrier;
         if (!ord.tracking_code) {
           ord.tracking_code = `GHN-${Math.floor(100000 + Math.random() * 900000)}VN`;
@@ -2662,7 +3489,7 @@ export const db = {
           id: (database.shipment_events.reduce((max, e) => Math.max(max, e.id), 0) || 0) + 1,
           order_id: ord.id,
           status: 'Đã bàn giao cho đơn vị vận chuyển',
-          location: 'Kho Tiệm Đồ Cũ Còn Thương',
+          location: sellerShop.pickup_address || `Kho ${sellerShop.name}`,
           note: `Đã bàn giao hàng loạt cho ${carrier}`,
           created_at: new Date().toISOString()
         });

@@ -5,14 +5,14 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { NotificationBell } from './NotificationBell';
-import { Product } from '../types';
+import { Product, Shop } from '../types';
 import { api } from '../services/api';
 import { formatVND } from '../utils/format';
 import { Button } from './Button';
 
 interface HeaderProps {
-  currentView: 'home' | 'orders' | 'seller' | 'account' | 'preview' | 'checkout' | '404';
-  onNavigate: (view: 'home' | 'orders' | 'seller' | 'account' | 'checkout') => void;
+  currentView: any;
+  onNavigate: (view: any) => void;
   onOpenCart: () => void;
   onOpenAuth: (role: 'buyer' | 'seller', isRegister?: boolean) => void;
   onSelectOrder?: (orderId: number) => void;
@@ -20,6 +20,7 @@ interface HeaderProps {
   searchQuery?: string;
   onSearchChange?: (val: string) => void;
   onSearchSubmit?: () => void;
+  onNavigateToShop?: (slug: string) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -31,7 +32,8 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectProduct,
   searchQuery = '',
   onSearchChange,
-  onSearchSubmit
+  onSearchSubmit,
+  onNavigateToShop
 }) => {
   const { user, logout, cartCount, quickLogin } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -39,6 +41,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   // Autocomplete live search state
   const [suggestions, setSuggestions] = useState<Product[]>([]);
+  const [shopSuggestions, setShopSuggestions] = useState<Shop[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement>(null);
@@ -47,6 +50,7 @@ export const Header: React.FC<HeaderProps> = ({
   useEffect(() => {
     if (!searchQuery.trim() || searchQuery.trim().length < 1) {
       setSuggestions([]);
+      setShopSuggestions([]);
       setShowSuggestions(false);
       return;
     }
@@ -54,8 +58,12 @@ export const Header: React.FC<HeaderProps> = ({
     const timer = setTimeout(async () => {
       setIsSearching(true);
       try {
-        const res = await api.getAutocomplete(searchQuery.trim());
-        setSuggestions((res.suggestions || []) as any);
+        const [prodRes, shopRes] = await Promise.all([
+          api.getAutocomplete(searchQuery.trim()),
+          api.searchShops(searchQuery.trim())
+        ]);
+        setSuggestions((prodRes.suggestions || []) as any);
+        setShopSuggestions(shopRes.shops || []);
         setShowSuggestions(true);
       } catch (err) {
         // Silent autocomplete failure
@@ -141,44 +149,99 @@ export const Header: React.FC<HeaderProps> = ({
               )}
 
               {/* Autocomplete Dropdown Popover */}
-              {showSuggestions && suggestions.length > 0 && (
+              {showSuggestions && (suggestions.length > 0 || shopSuggestions.length > 0) && (
                 <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-[#E2E8D8] rounded-2xl shadow-lg overflow-hidden z-50 animate-in fade-in slide-in-from-top-1">
-                  <div className="p-2 border-b border-[#E2E8D8] bg-[#F5F8EF] flex items-center justify-between text-[11px] text-[#5E5E61] font-medium">
-                    <span className="flex items-center gap-1">
-                      <Sparkles className="w-3 h-3 text-[#08482D]" />
-                      Gợi ý tìm kiếm ({suggestions.length})
-                    </span>
-                    <span>Bấm để xem chi tiết</span>
-                  </div>
-                  <div className="divide-y divide-[#E2E8D8]/50 max-h-72 overflow-y-auto">
-                    {suggestions.map((p) => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => handleSelectSuggestion(p)}
-                        className="w-full p-2.5 flex items-center gap-3 text-left hover:bg-[#F5F8EF] transition-colors group"
-                      >
-                        <img
-                          src={p.image_url}
-                          alt={p.name}
-                          className="w-10 h-10 rounded-xl object-cover border border-[#E2E8D8] shrink-0"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-[#101410] group-hover:text-[#08482D] truncate">
-                            {p.name}
-                          </p>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-[10px] font-mono font-bold text-[#C2522D]">
-                              {formatVND(p.price)}
-                            </span>
-                            <span className="text-[10px] text-[#08482D] bg-[#DAE7C7] px-1.5 py-0.2 rounded-sm font-mono">
-                              Mới {p.condition_pct}%
-                            </span>
+                  {/* Shop suggestions if any */}
+                  {shopSuggestions.length > 0 && (
+                    <div className="p-2 border-b border-[#E2E8D8] bg-[#F5F8EF]/60">
+                      <div className="text-[10px] uppercase font-bold text-[#5E5E61] tracking-wider mb-1.5 flex items-center gap-1 px-1">
+                        <Store className="w-3 h-3 text-[#08482D]" />
+                        Shop liên quan ({shopSuggestions.length})
+                      </div>
+                      <div className="space-y-1">
+                        {shopSuggestions.map((s) => (
+                          <div
+                            key={s.id}
+                            className="flex items-center justify-between p-2 rounded-xl bg-white border border-[#E2E8D8]/70 hover:border-[#08482D] transition-colors"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div
+                                className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0 overflow-hidden"
+                                style={{ backgroundColor: s.cover_color || '#08482D' }}
+                              >
+                                {s.avatar ? (
+                                  <img src={s.avatar} alt={s.name} className="w-full h-full object-cover" />
+                                ) : (
+                                  s.name.charAt(0)
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-xs font-semibold text-[#101410] truncate">{s.name}</p>
+                                <p className="text-[10px] text-[#5E5E61] truncate">{s.description || `@${s.slug}`}</p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowSuggestions(false);
+                                if (onNavigateToShop) onNavigateToShop(s.slug);
+                              }}
+                              className="px-2.5 py-1 text-[11px] font-semibold text-[#08482D] bg-[#DAE7C7]/50 hover:bg-[#DAE7C7] rounded-lg shrink-0 transition-colors"
+                            >
+                              Ghé shop
+                            </button>
                           </div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Product suggestions */}
+                  {suggestions.length > 0 && (
+                    <div>
+                      <div className="p-2 border-b border-[#E2E8D8] bg-[#F5F8EF] flex items-center justify-between text-[11px] text-[#5E5E61] font-medium">
+                        <span className="flex items-center gap-1">
+                          <Sparkles className="w-3 h-3 text-[#08482D]" />
+                          Gợi ý sản phẩm ({suggestions.length})
+                        </span>
+                        <span>Bấm để xem</span>
+                      </div>
+                      <div className="divide-y divide-[#E2E8D8]/50 max-h-60 overflow-y-auto">
+                        {suggestions.map((p) => (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => handleSelectSuggestion(p)}
+                            className="w-full p-2.5 flex items-center gap-3 text-left hover:bg-[#F5F8EF] transition-colors group"
+                          >
+                            <img
+                              src={p.image_url}
+                              alt={p.name}
+                              className="w-10 h-10 rounded-xl object-cover border border-[#E2E8D8] shrink-0"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-semibold text-[#101410] group-hover:text-[#08482D] truncate">
+                                {p.name}
+                              </p>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className="text-[10px] font-mono font-bold text-[#C2522D]">
+                                  {formatVND(p.price)}
+                                </span>
+                                <span className="text-[10px] text-[#08482D] bg-[#DAE7C7] px-1.5 py-0.2 rounded-sm font-mono">
+                                  Mới {p.condition_pct}%
+                                </span>
+                                {p.shop_name && (
+                                  <span className="text-[10px] text-[#5E5E61] truncate">
+                                    • {p.shop_name}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

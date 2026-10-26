@@ -139,11 +139,17 @@ export function DemoController({ onRoleSwitched, onDataReset, onPresentationMode
   };
 
   const handleSwitchSeller = async () => {
+    await handleSwitchSellerShop('admin');
+  };
+
+  const handleSwitchSellerShop = async (username: string) => {
     setSwitching(true);
     try {
-      logout();
-      await login('admin', 'admin123', 'seller');
+      const res = await api.switchSeller(username);
+      setStoredToken(res.token);
+      await refreshUser();
       setIsOpen(false);
+      showToast(`Đã chuyển vai sang shop: ${res.user.full_name}`, 'success');
       if (onRoleSwitched) onRoleSwitched('seller');
     } catch (err: any) {
       showToast(err.message || 'Lỗi chuyển vai người bán', 'error');
@@ -312,33 +318,51 @@ export function DemoController({ onRoleSwitched, onDataReset, onPresentationMode
                 )}
               </button>
 
-              {/* 2. Vào vai Người bán chủ */}
-              <button
-                onClick={handleSwitchSeller}
-                disabled={switching}
-                className={`w-full p-2.5 rounded-2xl border flex items-center justify-between transition-all ${
-                  user?.role === 'seller'
-                    ? 'bg-[#08482D]/10 border-[#08482D] font-bold'
-                    : 'bg-white border-[#E2E8D8] hover:border-[#08482D] hover:bg-[#F5F8EF]'
-                }`}
-              >
-                <div className="flex items-center gap-2.5 text-left">
-                  <div className="w-8 h-8 rounded-xl bg-[#08482D] text-white flex items-center justify-center">
-                    <Shield className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <div className="font-bold text-xs text-[#101410]">
-                      Vào vai Người bán (Seller)
-                    </div>
-                    <div className="text-[10px] text-[#5E5E61]">
-                      Tài khoản quản trị chủ tiệm
-                    </div>
-                  </div>
-                </div>
-                {user?.role === 'seller' && (
-                  <Check className="w-4 h-4 text-[#08482D]" />
-                )}
-              </button>
+              {/* 2. Vào vai Người bán (Chọn 1 trong 3 shop chủ) */}
+              <div className="space-y-1.5 pt-1">
+                <span className="text-[10px] font-bold text-[#5E5E61] uppercase tracking-wider block px-1">
+                  Vào vai Người bán (3 Shop Chủ)
+                </span>
+                {[
+                  { username: 'admin', name: 'Đồ Cũ Còn Thương', desc: 'Thời trang, phụ kiện, gia dụng', color: '#08482D' },
+                  { username: 'goc_sach_nhac', name: 'Góc Sách & Nhạc', desc: 'Sách xưa, guitar, nhạc cụ', color: '#7A4E2D' },
+                  { username: 'retro_tech', name: 'Retro Tech', desc: 'Máy ảnh film, iPhone, tai nghe, phím cơ', color: '#2F4B6B' }
+                ].map((s) => {
+                  const isCurrent = user?.role === 'seller' && user?.username === s.username;
+                  return (
+                    <button
+                      key={s.username}
+                      onClick={() => handleSwitchSellerShop(s.username)}
+                      disabled={switching}
+                      className={`w-full p-2.5 rounded-2xl border flex items-center justify-between transition-all text-left ${
+                        isCurrent
+                          ? 'bg-[#DAE7C7]/50 border-[#08482D] font-bold shadow-2xs'
+                          : 'bg-white border-[#E2E8D8] hover:border-[#08482D] hover:bg-[#F5F8EF]'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div
+                          className="w-8 h-8 rounded-xl text-white flex items-center justify-center font-bold text-xs shrink-0"
+                          style={{ backgroundColor: s.color }}
+                        >
+                          {s.name.charAt(0)}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="font-bold text-xs text-[#101410] truncate">
+                            {s.name}
+                          </div>
+                          <div className="text-[10px] text-[#5E5E61] truncate">
+                            @{s.username} • {s.desc}
+                          </div>
+                        </div>
+                      </div>
+                      {isCurrent && (
+                        <Check className="w-4 h-4 text-[#08482D] shrink-0 ml-2" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
 
               {/* 3. Xem như Khách vãng lai */}
               <button
