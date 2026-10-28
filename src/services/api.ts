@@ -1,5 +1,7 @@
-import { db, getCurrentSession, setCurrentSession, clearCurrentSession } from './db';
+import { db, getCurrentSession, setCurrentSession, clearCurrentSession, createVintageProductSvg, isLegacyOrEmptyImage, createShopAvatarSvg } from './db';
 import { Product, CartItem, Order, User, SellerStats, Address, ReturnRequest, Review, NotificationItem, Offer, ChatConversation, ChatMessage, Coupon } from '../types';
+
+export { createVintageProductSvg, isLegacyOrEmptyImage, createShopAvatarSvg };
 
 export function getStoredToken(): string | null {
   const session = getCurrentSession();
@@ -198,8 +200,11 @@ export const api = {
     db.uploadFile(dataUrl, type),
 
   // --- COUPONS ---
-  validateCoupon: (code: string, subtotal: number, shipping_fee?: number) =>
-    db.validateCoupon(code, subtotal),
+  calculateCheckout: (cart: any, couponsByShop?: Record<number, string>) =>
+    db.calculateCheckout(cart, couponsByShop),
+
+  validateCoupon: (code: string, subtotal: number, shipping_fee?: number, shop_id?: number) =>
+    db.validateCoupon(code, subtotal, shipping_fee, shop_id),
 
   getPublicCoupons: () =>
     db.getPublicCoupons(),
@@ -248,6 +253,9 @@ export const api = {
     db.toggleWishlist(productId),
 
   // --- DEMO CONTROLLER ---
+  switchRole: (targetUserId: number) =>
+    db.switchRole(targetUserId),
+
   switchBuyer: () =>
     db.switchBuyer(),
 
@@ -325,6 +333,12 @@ export const api = {
 
   buyerRejectCounter: (id: number) =>
     db.rejectCounterOffer(id),
+
+  cancelOffer: (id: number) =>
+    db.cancelOffer(id),
+
+  getMyOfferForProduct: (productId: number) =>
+    db.getMyOfferForProduct(productId),
 
   // --- CHAT (MULTI-SHOP SHOPEE STYLE) ---
   getChatConversations: () =>

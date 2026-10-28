@@ -352,7 +352,7 @@ export function ReviewModal({
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#DAE7C7]/60 bg-[#F5F8EF]/80 shrink-0">
           <div>
-            <h3 className="font-serif text-xl font-bold text-[#08482D]">
+            <h3 className="text-xl font-bold text-[#08482D]">
               {initialReview ? 'Chỉnh sửa đánh giá sản phẩm' : 'Đánh giá sản phẩm'}
             </h3>
             <p className="text-xs text-[#5E5E61] mt-0.5">

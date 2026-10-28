@@ -8,6 +8,7 @@ import { api } from '../services/api';
 import { formatVND } from '../utils/format';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { ProductImage } from './ProductImage';
 
 interface BuyerChatDockProps {
   onNavigateToShop?: (slug: string) => void;
@@ -94,6 +95,13 @@ export const BuyerChatDock: React.FC<BuyerChatDockProps> = ({ onNavigateToShop }
 
   // Listen to global open chat event
   useEffect(() => {
+    const handleCloseOverlays = () => {
+      setIsOpen(false);
+      setSelectedConvId(null);
+    };
+    window.addEventListener('close-all-overlays', handleCloseOverlays);
+    window.addEventListener('close-buyer-chat', handleCloseOverlays);
+
     const handleOpenChat = async (e: Event) => {
       const customEvent = e as CustomEvent<{
         shopId?: number;
@@ -140,7 +148,11 @@ export const BuyerChatDock: React.FC<BuyerChatDockProps> = ({ onNavigateToShop }
     };
 
     window.addEventListener('open-buyer-chat', handleOpenChat);
-    return () => window.removeEventListener('open-buyer-chat', handleOpenChat);
+    return () => {
+      window.removeEventListener('open-buyer-chat', handleOpenChat);
+      window.removeEventListener('close-all-overlays', handleCloseOverlays);
+      window.removeEventListener('close-buyer-chat', handleCloseOverlays);
+    };
   }, [user]);
 
   // Send message
@@ -191,7 +203,7 @@ export const BuyerChatDock: React.FC<BuyerChatDockProps> = ({ onNavigateToShop }
               setSelectedConvId(conversations[0].id);
             }
           }}
-          className="fixed bottom-6 right-6 z-40 bg-[#08482D] hover:bg-[#08482D]/90 text-white rounded-full p-3.5 shadow-xl flex items-center gap-2.5 transition-all hover:scale-105 group border-2 border-white"
+          className="fixed bottom-6 right-4 sm:right-6 z-40 bg-[#08482D] hover:bg-[#08482D]/90 text-white rounded-full p-3.5 shadow-xl flex items-center gap-2.5 transition-all hover:scale-105 group border-2 border-white cursor-pointer"
           title="Mở hộp tin nhắn với các shop"
         >
           <div className="relative">
@@ -210,19 +222,19 @@ export const BuyerChatDock: React.FC<BuyerChatDockProps> = ({ onNavigateToShop }
 
       {/* Shopee-style 2-Column Chat Dock Drawer */}
       {isOpen && (
-        <div className="fixed inset-0 sm:inset-auto sm:bottom-6 sm:right-6 z-50 w-full sm:w-[680px] sm:h-[520px] h-full bg-white rounded-none sm:rounded-3xl shadow-2xl border border-stone-200 flex flex-col overflow-hidden animate-in fade-in duration-200">
+        <div className="fixed inset-0 md:inset-auto md:bottom-6 md:right-6 z-50 w-full md:w-[720px] md:max-w-[calc(100vw-32px)] h-full md:h-[560px] md:max-h-[calc(100vh-120px)] bg-white rounded-none md:rounded-3xl shadow-2xl border border-stone-200 flex flex-col overflow-hidden animate-in fade-in duration-200">
           {/* Main 2-Column Area */}
-          <div className="flex-1 flex overflow-hidden">
+          <div className="flex-1 flex overflow-hidden min-w-0 w-full">
             {/* COLUMN 1: SHOP CONVERSATIONS LIST */}
             <div 
-              className={`w-full sm:w-[260px] border-r border-stone-200 bg-stone-50 flex flex-col ${
-                mobileView === 'chat' ? 'hidden sm:flex' : 'flex'
+              className={`w-full md:w-[260px] md:min-w-[260px] md:max-w-[260px] border-r border-stone-200 bg-stone-50 flex flex-col min-w-0 ${
+                mobileView === 'chat' ? 'hidden md:flex' : 'flex'
               }`}
             >
               {/* Header List */}
               <div className="p-3.5 bg-white border-b border-stone-200 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="font-bold text-sm text-[#08482D] font-serif">Tin nhắn</span>
+                  <span className="font-bold text-sm text-[#08482D]">Tin nhắn</span>
                   {totalUnread > 0 && (
                     <span className="bg-[#C2522D] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
                       {totalUnread}
@@ -231,7 +243,8 @@ export const BuyerChatDock: React.FC<BuyerChatDockProps> = ({ onNavigateToShop }
                 </div>
                 <button
                   onClick={() => setIsOpen(false)}
-                  className="p-1 text-stone-400 hover:text-stone-700 sm:hidden"
+                  className="p-1.5 text-stone-400 hover:text-stone-700 md:hidden rounded-lg hover:bg-stone-100 cursor-pointer"
+                  aria-label="Đóng chat"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -303,31 +316,33 @@ export const BuyerChatDock: React.FC<BuyerChatDockProps> = ({ onNavigateToShop }
 
             {/* COLUMN 2: ACTIVE CONVERSATION THREAD */}
             <div 
-              className={`flex-1 flex flex-col bg-white ${
-                mobileView === 'list' ? 'hidden sm:flex' : 'flex'
+              className={`flex-1 flex flex-col bg-white min-w-0 w-full ${
+                mobileView === 'list' ? 'hidden md:flex' : 'flex'
               }`}
             >
               {currentConv ? (
                 <>
                   {/* Thread Header */}
-                  <div className="p-3.5 border-b border-stone-200 flex items-center justify-between bg-white shadow-xs">
-                    <div className="flex items-center gap-2.5">
+                  <div className="p-3 sm:p-3.5 border-b border-stone-200 flex items-center justify-between bg-white shadow-xs min-w-0 w-full">
+                    <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1 mr-2">
                       <button
                         onClick={() => setMobileView('list')}
-                        className="p-1 text-stone-600 hover:text-stone-900 sm:hidden"
+                        className="p-1.5 -ml-1 text-stone-600 hover:text-stone-900 md:hidden shrink-0 rounded-lg hover:bg-stone-100 cursor-pointer"
+                        title="Quay lại danh sách"
+                        aria-label="Quay lại"
                       >
                         <ArrowLeft className="w-5 h-5" />
                       </button>
 
                       <img
-                        src={currentConv.shop_avatar}
+                        src={currentConv.shop_avatar || 'https://images.unsplash.com/photo-1544816155-12df9643f363?w=100'}
                         alt=""
-                        className="w-9 h-9 rounded-full object-cover border border-stone-200"
+                        className="w-9 h-9 rounded-full object-cover border border-stone-200 shrink-0"
                       />
 
-                      <div>
-                        <div className="flex items-center gap-1.5">
-                          <p className="font-bold text-xs sm:text-sm text-stone-900">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <p className="font-bold text-xs sm:text-sm text-stone-900 truncate">
                             {currentConv.shop_name}
                           </p>
                           {currentConv.shop_slug && onNavigateToShop && (
@@ -336,34 +351,35 @@ export const BuyerChatDock: React.FC<BuyerChatDockProps> = ({ onNavigateToShop }
                                 onNavigateToShop(currentConv.shop_slug!);
                                 setIsOpen(false);
                               }}
-                              className="text-[10px] text-[#08482D] hover:underline inline-flex items-center gap-0.5 font-semibold"
+                              className="text-[10px] text-[#08482D] hover:underline inline-flex items-center gap-0.5 font-semibold shrink-0"
                             >
                               Ghé shop <ExternalLink className="w-2.5 h-2.5" />
                             </button>
                           )}
                         </div>
-                        <div className="flex items-center gap-1 text-[10px] text-emerald-600">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                          <span>Thường trả lời trong vài phút</span>
+                        <div className="flex items-center gap-1 text-[10px] text-emerald-600 truncate">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                          <span className="truncate">Thường trả lời trong vài phút</span>
                         </div>
                       </div>
                     </div>
 
                     <button
                       onClick={() => setIsOpen(false)}
-                      className="p-1.5 text-stone-400 hover:text-stone-700 rounded-lg hover:bg-stone-100 transition-colors"
+                      className="p-1.5 text-stone-400 hover:text-stone-700 rounded-lg hover:bg-stone-100 transition-colors shrink-0 cursor-pointer"
                       title="Thu nhỏ"
+                      aria-label="Đóng"
                     >
-                      <X className="w-4 h-4" />
+                      <X className="w-5 h-5" />
                     </button>
                   </div>
 
                   {/* Messages list */}
-                  <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-[#F5F8EF]/40">
+                  <div className="flex-1 p-3 sm:p-4 overflow-y-auto space-y-3 bg-[#F5F8EF]/40 min-w-0 w-full">
                     {/* Safety notice */}
-                    <div className="bg-[#DAE7C7]/40 border border-[#08482D]/15 rounded-xl p-2.5 text-[11px] text-stone-700 flex items-center gap-2">
+                    <div className="bg-[#DAE7C7]/40 border border-[#08482D]/15 rounded-xl p-2.5 text-[11px] text-stone-700 flex items-center gap-2 min-w-0">
                       <ShieldCheck className="w-4 h-4 text-[#08482D] flex-shrink-0" />
-                      <span>Giao dịch an toàn qua Đồ Cũ Còn Thương. Tránh chia sẻ số tài khoản cá nhân ra ngoài.</span>
+                      <span className="min-w-0 leading-tight">Giao dịch an toàn qua Đồ Cũ Còn Thương. Tránh chia sẻ số tài khoản cá nhân ra ngoài.</span>
                     </div>
 
                     {loading ? (
@@ -373,25 +389,36 @@ export const BuyerChatDock: React.FC<BuyerChatDockProps> = ({ onNavigateToShop }
                     ) : (
                       activeMessages.map(msg => {
                         const isBuyer = msg.sender_role === 'buyer';
+                        const isContextMsg = msg.type === 'context' || (!msg.content && !!msg.context_card);
                         return (
                           <div
                             key={msg.id}
-                            className={`flex flex-col ${isBuyer ? 'items-end' : 'items-start'}`}
+                            className={`flex flex-col min-w-0 ${isBuyer ? 'items-end' : 'items-start'}`}
                           >
                             {/* Context Card Attachment if present */}
                             {msg.context_card && (
-                              <div className={`mb-1.5 p-2.5 rounded-xl border max-w-xs shadow-xs text-xs ${
-                                isBuyer ? 'bg-emerald-50 border-emerald-200' : 'bg-stone-50 border-stone-200'
-                              }`}>
-                                <div className="flex items-center gap-2.5">
+                              <div 
+                                onClick={() => {
+                                  if (msg.context_card?.product_id) {
+                                    window.history.pushState(null, '', `/product/${msg.context_card.product_id}`);
+                                    window.dispatchEvent(new PopStateEvent('popstate'));
+                                  }
+                                }}
+                                className={`mb-1.5 p-2.5 rounded-xl border max-w-[85%] sm:max-w-xs shadow-xs text-xs cursor-pointer hover:border-[#08482D] transition-colors min-w-0 ${
+                                  isBuyer ? 'bg-emerald-50 border-emerald-200' : 'bg-stone-50 border-stone-200'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2.5 min-w-0">
                                   {msg.context_card.image_url || msg.context_card.image ? (
-                                    <img
+                                    <ProductImage
                                       src={msg.context_card.image_url || msg.context_card.image}
                                       alt=""
-                                      className="w-12 h-12 rounded-lg object-cover border border-stone-200"
+                                      productName={msg.context_card.title}
+                                      className="w-12 h-12 rounded-lg shrink-0"
+                                      imgClassName="w-full h-full object-cover border border-stone-200"
                                     />
                                   ) : (
-                                    <Package className="w-8 h-8 text-stone-400" />
+                                    <Package className="w-8 h-8 text-stone-400 shrink-0" />
                                   )}
                                   <div className="min-w-0 flex-1">
                                     <span className="text-[10px] font-bold uppercase tracking-wider text-stone-500 block">
@@ -410,16 +437,18 @@ export const BuyerChatDock: React.FC<BuyerChatDockProps> = ({ onNavigateToShop }
                               </div>
                             )}
 
-                            {/* Message bubble */}
-                            <div
-                              className={`max-w-[80%] rounded-2xl px-3.5 py-2 text-xs leading-relaxed shadow-xs ${
-                                isBuyer
-                                  ? 'bg-[#08482D] text-white rounded-tr-none'
-                                  : 'bg-white text-stone-800 border border-stone-200 rounded-tl-none'
-                              }`}
-                            >
-                              {msg.content}
-                            </div>
+                            {/* Message bubble (only for real text messages) */}
+                            {!isContextMsg && msg.content && (
+                              <div
+                                className={`max-w-[75%] rounded-2xl px-3.5 py-2 text-xs leading-relaxed shadow-xs [overflow-wrap:anywhere] break-words ${
+                                  isBuyer
+                                    ? 'bg-[#08482D] text-white rounded-tr-none'
+                                    : 'bg-white text-stone-800 border border-stone-200 rounded-tl-none'
+                                }`}
+                              >
+                                {msg.content}
+                              </div>
+                            )}
                             <span className="text-[9px] text-stone-400 mt-0.5 px-1">
                               {new Date(msg.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
                             </span>
@@ -431,13 +460,13 @@ export const BuyerChatDock: React.FC<BuyerChatDockProps> = ({ onNavigateToShop }
                   </div>
 
                   {/* Quick questions chips */}
-                  <div className="px-3 py-1.5 bg-white border-t border-stone-100 flex items-center gap-1.5 overflow-x-auto scrollbar-none text-[11px]">
+                  <div className="px-3 py-1.5 bg-white border-t border-stone-100 flex items-center gap-1.5 overflow-x-auto no-scrollbar scrollbar-none text-[11px] min-w-0 w-full">
                     {QUICK_QUESTIONS.map(q => (
                       <button
                         key={q}
                         onClick={() => handleSendMessage(q)}
                         disabled={sending}
-                        className="px-2.5 py-1 rounded-full bg-stone-100 hover:bg-[#DAE7C7] text-stone-700 whitespace-nowrap transition-colors flex-shrink-0"
+                        className="px-2.5 py-1 rounded-full bg-stone-100 hover:bg-[#DAE7C7] text-stone-700 whitespace-nowrap transition-colors flex-shrink-0 cursor-pointer"
                       >
                         {q}
                       </button>
@@ -450,19 +479,19 @@ export const BuyerChatDock: React.FC<BuyerChatDockProps> = ({ onNavigateToShop }
                       e.preventDefault();
                       handleSendMessage();
                     }}
-                    className="p-3 bg-white border-t border-stone-200 flex items-center gap-2"
+                    className="p-2.5 sm:p-3 bg-white border-t border-stone-200 flex items-center gap-2 min-w-0 w-full"
                   >
                     <input
                       type="text"
                       value={inputText}
                       onChange={(e) => setInputText(e.target.value)}
                       placeholder={`Nhắn tin cho ${currentConv.shop_name}...`}
-                      className="flex-1 px-3.5 py-2 text-xs bg-stone-100 rounded-xl focus:bg-white focus:outline-none focus:border-[#08482D] border border-transparent"
+                      className="flex-1 min-w-0 px-3.5 py-2 text-xs bg-stone-100 rounded-xl focus:bg-white focus:outline-none focus:border-[#08482D] border border-transparent"
                     />
                     <button
                       type="submit"
                       disabled={sending || !inputText.trim()}
-                      className="p-2 bg-[#08482D] text-white rounded-xl hover:bg-[#08482D]/90 disabled:opacity-40 transition-all flex-shrink-0"
+                      className="p-2.5 bg-[#08482D] text-white rounded-xl hover:bg-[#08482D]/90 disabled:opacity-40 transition-all shrink-0 cursor-pointer"
                     >
                       <Send className="w-4 h-4" />
                     </button>

@@ -1,14 +1,15 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   CreditCard, Building2, Truck, ShieldAlert, CheckCircle2, Lock, 
-  AlertTriangle, ArrowRight, ArrowLeft, Tag, ShoppingBag, Sparkles
+  AlertTriangle, ArrowRight, ArrowLeft, Tag, ShoppingBag, Sparkles, X
 } from 'lucide-react';
-import { Product, CartItem, Order, PaymentMethod } from '../types';
+import { Product, CartItem, Order, PaymentMethod, Coupon, CheckoutCalculation } from '../types';
 import { formatVND, validateLuhn } from '../utils/format';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { Button } from './Button';
+import { ProductImage } from './ProductImage';
 
 interface CheckoutViewProps {
   items: CartItem[];
@@ -17,14 +18,11 @@ interface CheckoutViewProps {
   total: number;
   directItem?: { product: Product; quantity: number };
   onBackToCart: () => void;
-  onSuccess: (order: Order) => void;
+  onSuccess: (order: Order, allOrders?: Order[]) => void;
 }
 
 export const CheckoutView: React.FC<CheckoutViewProps> = ({
   items,
-  subtotal,
-  shippingFee,
-  total,
   directItem,
   onBackToCart,
   onSuccess
@@ -50,12 +48,14 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
   const [napasBank, setNapasBank] = useState('Vietcombank');
   const [napasReleaseDate, setNapasReleaseDate] = useState('06/25');
 
-  // Discount Coupon State
-  const [couponInput, setCouponInput] = useState('');
-  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; description?: string } | null>(null);
-  const [discountAmount, setDiscountAmount] = useState(0);
-  const [isValidatingCoupon, setIsValidatingCoupon] = useState(false);
-  const [couponError, setCouponError] = useState('');
+  // Per-shop discount coupons: shop_id -> code
+  const [couponsByShop, setCouponsByShop] = useState<Record<number, string>>({});
+  const [couponInputs, setCouponInputs] = useState<Record<number, string>>({});
+  const [couponErrors, setCouponErrors] = useState<Record<number, string>>({});
+  const [validatingShops, setValidatingShops] = useState<Record<number, boolean>>({});
+
+  // Available coupons suggestions by shop
+  const [shopCoupons, setShopCoupons] = useState<Record<number, Coupon[]>>({});
 
   // 6-box OTP state
   const [showOtpModal, setShowOtpModal] = useState(false);
@@ -64,23 +64,28 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  // Calculate order items and totals
-  const currentItems: CartItem[] = directItem ? [{
-    id: 0,
-    product_id: directItem.product.id,
-    quantity: directItem.quantity,
-    name: directItem.product.name,
-    category: directItem.product.category,
-    price: directItem.product.price,
-    original_price: directItem.product.original_price,
-    condition_pct: directItem.product.condition_pct,
-    condition_detail: directItem.product.condition_detail,
-    stock: directItem.product.stock,
-    image_url: directItem.product.image_url,
-    shop_id: directItem.product.shop_id || 1,
-    shop_name: directItem.product.shop_name,
-    shop_slug: directItem.product.shop_slug
-  }] : items;
+  // Calculate order items
+  const currentItems: CartItem[] = useMemo(() => {
+    if (directItem) {
+      return [{
+        id: 0,
+        product_id: directItem.product.id,
+        quantity: directItem.quantity,
+        name: directItem.product.name,
+        category: directItem.product.category,
+        price: directItem.product.price,
+        original_price: directItem.product.original_price,
+        condition_pct: directItem.product.condition_pct,
+        condition_detail: directItem.product.condition_detail,
+        stock: directItem.product.stock,
+        image_url: directItem.product.image_url,
+        shop_id: directItem.product.shop_id || 1,
+        shop_name: directItem.product.shop_name,
+        shop_slug: directItem.product.shop_slug
+      }];
+    }
+    return items;
+  }, [directItem, items]);
 
   // Empty cart guard
   useEffect(() => {
@@ -89,66 +94,66 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
     }
   }, [items, directItem, onBackToCart]);
 
-  // Group items by shop
-  const shopGroups = currentItems.reduce<Record<number, { shop_id: number; shop_name: string; shop_slug: string; items: typeof currentItems; subtotal: number; shippingFee: number }>>((acc, item) => {
-    const sId = item.shop_id || 1;
-    if (!acc[sId]) {
-      acc[sId] = {
-        shop_id: sId,
-        shop_name: item.shop_name || 'Đồ Cũ Còn Thương',
-        shop_slug: item.shop_slug || 'do-cu-con-thuong',
-        items: [],
-        subtotal: 0,
-        shippingFee: 0
-      };
+  // Single source of truth: calculateCheckout
+  const checkoutCalc: CheckoutCalculation = useMemo(() => {
+    return api.calculateCheckout(currentItems, couponsByShop);
+  }, [currentItems, couponsByShop]);
+
+  // Fetch shop coupons for suggestion
+  useEffect(() => {
+    const fetchShopCoupons = async () => {
+      const shopIds = Array.from(new Set(currentItems.map(it => it.shop_id || 1)));
+      const map: Record<number, Coupon[]> = {};
+      for (const sId of shopIds) {
+        try {
+          const res = await api.listCouponsByShop(sId);
+          map[sId] = res.coupons || [];
+        } catch {
+          map[sId] = [];
+        }
+      }
+      setShopCoupons(map);
+    };
+    if (currentItems.length > 0) {
+      fetchShopCoupons();
     }
-    acc[sId].items.push(item);
-    acc[sId].subtotal += item.price * item.quantity;
-    return acc;
-  }, {});
+  }, [currentItems]);
 
-  Object.values(shopGroups).forEach(group => {
-    group.shippingFee = group.subtotal >= 1000000 || group.subtotal === 0 ? 0 : 30000;
-  });
-
-  const shopList = Object.values(shopGroups);
-  const orderSubtotal = shopList.reduce((sum, g) => sum + g.subtotal, 0);
-  const orderShippingFee = shopList.reduce((sum, g) => sum + g.shippingFee, 0);
-  const orderTotal = Math.max(0, orderSubtotal + orderShippingFee - discountAmount);
-
-  // Apply Coupon Handler
-  const handleApplyCoupon = async (codeToApply?: string) => {
-    const code = (codeToApply || couponInput).trim().toUpperCase();
+  // Apply Coupon for a specific Shop
+  const handleApplyShopCoupon = async (shopId: number, codeToApply?: string) => {
+    const code = (codeToApply || couponInputs[shopId] || '').trim().toUpperCase();
     if (!code) {
-      setCouponError('Vui lòng nhập mã giảm giá');
+      setCouponErrors(prev => ({ ...prev, [shopId]: 'Vui lòng nhập mã giảm giá' }));
       return;
     }
 
-    setIsValidatingCoupon(true);
-    setCouponError('');
+    const shopBreakdown = checkoutCalc.shops.find(s => s.shop_id === shopId);
+    const shopSubtotal = shopBreakdown?.subtotal || 0;
+    const shopShipping = shopBreakdown?.shipping_fee || 0;
+
+    setValidatingShops(prev => ({ ...prev, [shopId]: true }));
+    setCouponErrors(prev => ({ ...prev, [shopId]: '' }));
+
     try {
-      const res = await api.validateCoupon(code, orderSubtotal, orderShippingFee);
-      setAppliedCoupon({
-        code: res.coupon.code,
-        description: res.coupon.description || ''
-      });
-      setDiscountAmount(res.discount_amount);
-      setCouponInput(res.coupon.code);
-      showToast(`Áp dụng mã ${res.coupon.code} thành công (-${res.discount_amount.toLocaleString('vi-VN')}đ)`, 'success');
+      const res = await api.validateCoupon(code, shopSubtotal, shopShipping, shopId);
+      setCouponsByShop(prev => ({ ...prev, [shopId]: res.coupon.code }));
+      setCouponInputs(prev => ({ ...prev, [shopId]: res.coupon.code }));
+      showToast(`Đã áp dụng mã ${res.coupon.code} cho ${shopBreakdown?.shop_name || 'shop'} (-${formatVND(res.discount_amount)})`, 'success');
     } catch (err: any) {
-      setCouponError(err.message || 'Mã không hợp lệ');
-      setAppliedCoupon(null);
-      setDiscountAmount(0);
+      setCouponErrors(prev => ({ ...prev, [shopId]: err.message || 'Mã không hợp lệ cho shop này' }));
     } finally {
-      setIsValidatingCoupon(false);
+      setValidatingShops(prev => ({ ...prev, [shopId]: false }));
     }
   };
 
-  const handleRemoveCoupon = () => {
-    setAppliedCoupon(null);
-    setDiscountAmount(0);
-    setCouponInput('');
-    setCouponError('');
+  const handleRemoveShopCoupon = (shopId: number) => {
+    setCouponsByShop(prev => {
+      const updated = { ...prev };
+      delete updated[shopId];
+      return updated;
+    });
+    setCouponInputs(prev => ({ ...prev, [shopId]: '' }));
+    setCouponErrors(prev => ({ ...prev, [shopId]: '' }));
   };
 
   // Điền thẻ test nhanh
@@ -237,7 +242,6 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
 
     const newBoxes = [...otpBoxes];
     if (val.length > 1) {
-      // Paste handling
       const digits = val.slice(0, 6).split('');
       digits.forEach((d, i) => {
         newBoxes[i] = d;
@@ -251,7 +255,6 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
     newBoxes[index] = val;
     setOtpBoxes(newBoxes);
 
-    // Auto advance to next box
     if (val && index < 5) {
       otpInputRefs.current[index + 1]?.focus();
     }
@@ -270,7 +273,6 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
       return;
     }
 
-    // Giả lập từ chối với thẻ test 4000 0000 0000 0002
     const cleanNum = cardNumber.replace(/\s+/g, '');
     if (cleanNum === '4000000000000002') {
       setOtpError('Ngân hàng từ chối giao dịch: Thẻ bị khóa hoặc không đủ hạn mức (Mã lỗi: 05_DECLINED)');
@@ -306,11 +308,11 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
         card_last4: cardLast4,
         card_type: cardType,
         direct_items: directItem ? [{ product_id: directItem.product.id, quantity: directItem.quantity }] : undefined,
-        coupon_code: appliedCoupon ? appliedCoupon.code : undefined
+        shop_coupons: couponsByShop
       });
 
       await refreshCartCount();
-      onSuccess(res.order);
+      onSuccess(res.order, res.orders);
     } catch (error: any) {
       showToast(error.message || 'Lỗi khi đặt hàng', 'error');
     } finally {
@@ -340,41 +342,27 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
         </div>
 
         <form onSubmit={handleValidateAndProceed} className="grid lg:grid-cols-12 gap-8 items-start">
-          {/* CỘT TRÁI (Desktop): Thông báo thử nghiệm, địa chỉ, phương thức, form thẻ */}
+          {/* CỘT TRÁI: Thông tin nhận hàng, phương thức, form thẻ */}
           <div className="lg:col-span-7 space-y-6">
-            {/* Tiêu đề trang */}
             <div>
-              <h1 className="text-2xl sm:text-3xl font-serif font-bold text-[#101410]">
+              <h1 className="text-2xl sm:text-3xl font-bold text-[#101410]">
                 Xác nhận & Đặt hàng
               </h1>
               <p className="text-xs sm:text-sm text-[#5E5E61] mt-1">
-                Hoàn tất thông tin giao nhận để tiệm đóng gói kiện hàng cẩn thận cho bạn
+                Vui lòng kiểm tra kỹ địa chỉ nhận hàng và hình thức thanh toán trước khi xác nhận.
               </p>
             </div>
 
-            {/* Thông báo môi trường thử nghiệm */}
-            <div className="p-4 rounded-2xl bg-white border border-[#E2E8D8] flex items-start gap-3 shadow-2xs">
-              <ShieldAlert className="w-5 h-5 shrink-0 mt-0.5 text-[#C2522D]" />
-              <div className="text-xs text-[#5E5E61] leading-relaxed">
-                <strong className="text-[#101410] font-bold block mb-0.5">Môi trường thử nghiệm an toàn:</strong>
-                Bạn có thể dùng thẻ Visa test <code className="bg-[#DAE7C7] px-1.5 py-0.5 rounded font-mono font-bold text-[#101410]">4111 1111 1111 1111</code>, mã OTP <code className="bg-[#DAE7C7] px-1.5 py-0.5 rounded font-mono font-bold text-[#101410]">123456</code>. Không có khoản trừ tiền thật nào phát sinh.
-              </div>
-            </div>
-
-            {/* 1. Địa chỉ giao hàng */}
+            {/* Khung nhập thông tin giao hàng */}
             <div className="bg-white p-5 sm:p-6 rounded-3xl border border-[#E2E8D8] space-y-4 shadow-2xs">
-              <div className="flex items-center gap-2 pb-2 border-b border-[#E2E8D8]">
-                <span className="w-6 h-6 rounded-full bg-[#08482D] text-white flex items-center justify-center font-bold text-xs shrink-0">
-                  1
-                </span>
-                <h2 className="text-sm sm:text-base font-bold text-[#101410]">
-                  Địa chỉ giao hàng
-                </h2>
-              </div>
+              <h3 className="font-bold text-sm sm:text-base text-[#101410] flex items-center gap-2">
+                <Truck className="w-4 h-4 text-[#08482D]" />
+                Địa chỉ nhận hàng
+              </h3>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-semibold text-[#5E5E61] block mb-1.5">
+                  <label className="text-xs font-semibold text-[#5E5E61] block mb-1">
                     Họ và tên người nhận <span className="text-[#C2522D]">*</span>
                   </label>
                   <input
@@ -382,66 +370,62 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                     required
                     value={recipientName}
                     onChange={(e) => setRecipientName(e.target.value)}
-                    placeholder="Ví dụ: Nguyễn Văn A"
-                    className="w-full bg-[#F5F8EF] border border-[#E2E8D8] rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-[#101410] focus:outline-none focus:border-[#08482D] focus:ring-1 focus:ring-[#08482D]"
+                    placeholder="VD: Nguyễn Văn A"
+                    className="w-full bg-[#F5F8EF] border border-[#E2E8D8] rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-[#101410] focus:outline-none focus:border-[#08482D]"
                   />
                 </div>
 
                 <div>
-                  <label className="text-xs font-semibold text-[#5E5E61] block mb-1.5">
-                    Số điện thoại nhận hàng <span className="text-[#C2522D]">*</span>
+                  <label className="text-xs font-semibold text-[#5E5E61] block mb-1">
+                    Số điện thoại liên hệ <span className="text-[#C2522D]">*</span>
                   </label>
                   <input
                     type="tel"
                     required
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    placeholder="Ví dụ: 0987654321"
-                    className="w-full bg-[#F5F8EF] border border-[#E2E8D8] rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-[#101410] focus:outline-none focus:border-[#08482D] focus:ring-1 focus:ring-[#08482D]"
+                    placeholder="VD: 0909 246 135"
+                    className="w-full bg-[#F5F8EF] border border-[#E2E8D8] rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-[#101410] focus:outline-none focus:border-[#08482D]"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-[#5E5E61] block mb-1.5">
-                  Địa chỉ chi tiết (Số nhà, đường, phường/xã, quận/huyện) <span className="text-[#C2522D]">*</span>
+                <label className="text-xs font-semibold text-[#5E5E61] block mb-1">
+                  Địa chỉ chi tiết (Số nhà, tên đường, phường/xã, quận/huyện, tỉnh/TP) <span className="text-[#C2522D]">*</span>
                 </label>
                 <input
                   type="text"
                   required
                   value={addressLine}
                   onChange={(e) => setAddressLine(e.target.value)}
-                  placeholder="Ví dụ: 128 Đường Hai Bà Trưng, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh"
-                  className="w-full bg-[#F5F8EF] border border-[#E2E8D8] rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-[#101410] focus:outline-none focus:border-[#08482D] focus:ring-1 focus:ring-[#08482D]"
+                  placeholder="VD: Số 123 Đường Lê Lợi, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh"
+                  className="w-full bg-[#F5F8EF] border border-[#E2E8D8] rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-[#101410] focus:outline-none focus:border-[#08482D]"
                 />
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-[#5E5E61] block mb-1.5">
-                  Ghi chú cho tiệm & đơn vị vận chuyển (tùy chọn)
+                <label className="text-xs font-semibold text-[#5E5E61] block mb-1">
+                  Ghi chú cho người bán / shipper (không bắt buộc)
                 </label>
                 <input
                   type="text"
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
-                  placeholder="Giao giờ hành chính, gọi trước khi đến..."
-                  className="w-full bg-[#F5F8EF] border border-[#E2E8D8] rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-[#101410] focus:outline-none focus:border-[#08482D] focus:ring-1 focus:ring-[#08482D]"
+                  placeholder="VD: Giao hàng vào giờ hành chính, gọi trước khi đến 15 phút..."
+                  className="w-full bg-[#F5F8EF] border border-[#E2E8D8] rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-[#101410] focus:outline-none focus:border-[#08482D]"
                 />
               </div>
             </div>
 
-            {/* 2. Phương thức thanh toán */}
+            {/* Chọn phương thức thanh toán */}
             <div className="bg-white p-5 sm:p-6 rounded-3xl border border-[#E2E8D8] space-y-5 shadow-2xs">
-              <div className="flex items-center gap-2 pb-2 border-b border-[#E2E8D8]">
-                <span className="w-6 h-6 rounded-full bg-[#08482D] text-white flex items-center justify-center font-bold text-xs shrink-0">
-                  2
-                </span>
-                <h2 className="text-sm sm:text-base font-bold text-[#101410]">
-                  Phương thức thanh toán
-                </h2>
-              </div>
+              <h3 className="font-bold text-sm sm:text-base text-[#101410] flex items-center gap-2">
+                <CreditCard className="w-4 h-4 text-[#08482D]" />
+                Phương thức thanh toán
+              </h3>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
                 <button
                   type="button"
                   onClick={() => setPaymentMethod('card')}
@@ -451,8 +435,8 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                       : 'border-[#E2E8D8] bg-[#F5F8EF] text-[#5E5E61] hover:text-[#101410] hover:bg-[#DAE7C7]/30'
                   }`}
                 >
-                  <CreditCard className="w-5 h-5 text-[#C2522D] shrink-0" />
-                  <span className="text-xs sm:text-sm">Visa / Mastercard</span>
+                  <CreditCard className="w-5 h-5 text-[#08482D] shrink-0" />
+                  <span className="text-xs sm:text-sm">Thẻ Quốc Tế (Visa/Master)</span>
                 </button>
 
                 <button
@@ -485,7 +469,6 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
               {/* Form thẻ quốc tế + Virtual Card Preview */}
               {paymentMethod === 'card' && (
                 <div className="space-y-5 pt-2">
-                  {/* Thẻ ngân hàng ảo: rộng tối đa 360px, tỉ lệ 1.586:1, căn giữa, không tràn khung */}
                   <div className="w-full max-w-[360px] mx-auto">
                     <div
                       className={`relative w-full aspect-[1.586/1] rounded-2xl p-4 sm:p-5 text-white transition-transform duration-500 shadow-md ${
@@ -497,7 +480,6 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                         transform: isCardFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)'
                       }}
                     >
-                      {/* Front Face */}
                       {!isCardFlipped ? (
                         <div className="h-full flex flex-col justify-between select-none">
                           <div className="flex items-center justify-between">
@@ -527,7 +509,6 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                           </div>
                         </div>
                       ) : (
-                        /* Back Face (CVV focus) */
                         <div className="h-full flex flex-col justify-between py-1 select-none" style={{ transform: 'rotateY(180deg)' }}>
                           <div className="w-full h-7 bg-black/80 -mx-4 mt-2" />
                           <div className="flex items-center justify-end pr-4">
@@ -544,7 +525,6 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                     </div>
                   </div>
 
-                  {/* Quick Test Buttons */}
                   <div className="flex items-center justify-center gap-2 pt-1 flex-wrap">
                     <button
                       type="button"
@@ -562,7 +542,6 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                     </button>
                   </div>
 
-                  {/* Card input fields */}
                   <div className="space-y-4">
                     <div>
                       <label className="text-xs font-semibold text-[#5E5E61] block mb-1">
@@ -580,7 +559,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
 
                     <div>
                       <label className="text-xs font-semibold text-[#5E5E61] block mb-1">
-                        Tên chủ thẻ (in hoa không dấu) <span className="text-[#C2522D]">*</span>
+                        Tên in trên thẻ (không dấu) <span className="text-[#C2522D]">*</span>
                       </label>
                       <input
                         type="text"
@@ -588,22 +567,22 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                         value={cardHolder}
                         onChange={(e) => setCardHolder(e.target.value.toUpperCase())}
                         placeholder="NGUYEN VAN A"
-                        className="w-full bg-[#F5F8EF] border border-[#E2E8D8] rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-mono text-[#101410] focus:outline-none focus:border-[#08482D]"
+                        className="w-full bg-[#F5F8EF] border border-[#E2E8D8] rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-mono text-[#101410] uppercase focus:outline-none focus:border-[#08482D]"
                       />
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="text-xs font-semibold text-[#5E5E61] block mb-1">
-                          Hạn thẻ (MM/YY) <span className="text-[#C2522D]">*</span>
+                          Hạn sử dụng (MM/YY) <span className="text-[#C2522D]">*</span>
                         </label>
                         <input
                           type="text"
                           required
-                          maxLength={5}
                           value={cardExpiry}
                           onChange={(e) => setCardExpiry(e.target.value)}
                           placeholder="12/28"
+                          maxLength={5}
                           className="w-full bg-[#F5F8EF] border border-[#E2E8D8] rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-mono text-[#101410] focus:outline-none focus:border-[#08482D]"
                         />
                       </div>
@@ -615,12 +594,12 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                         <input
                           type="password"
                           required
-                          maxLength={3}
                           value={cardCvv}
                           onFocus={() => setIsCardFlipped(true)}
                           onBlur={() => setIsCardFlipped(false)}
                           onChange={(e) => setCardCvv(e.target.value)}
                           placeholder="123"
+                          maxLength={4}
                           className="w-full bg-[#F5F8EF] border border-[#E2E8D8] rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-mono text-[#101410] focus:outline-none focus:border-[#08482D]"
                         />
                       </div>
@@ -632,27 +611,44 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
               {/* Form thẻ ATM NAPAS */}
               {paymentMethod === 'napas' && (
                 <div className="space-y-4 pt-2">
-                  <div>
-                    <label className="text-xs font-semibold text-[#5E5E61] block mb-1">
-                      Ngân hàng phát hành
-                    </label>
-                    <select
-                      value={napasBank}
-                      onChange={(e) => setNapasBank(e.target.value)}
-                      className="w-full bg-[#F5F8EF] border border-[#E2E8D8] rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-[#101410] focus:outline-none focus:border-[#08482D]"
-                    >
-                      <option value="Vietcombank">Vietcombank</option>
-                      <option value="Techcombank">Techcombank</option>
-                      <option value="MB Bank">MB Bank</option>
-                      <option value="ACB">ACB</option>
-                      <option value="BIDV">BIDV</option>
-                      <option value="VietinBank">VietinBank</option>
-                    </select>
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-semibold text-[#5E5E61] block mb-1">
+                        Ngân hàng phát hành
+                      </label>
+                      <select
+                        value={napasBank}
+                        onChange={(e) => setNapasBank(e.target.value)}
+                        className="w-full bg-[#F5F8EF] border border-[#E2E8D8] rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-[#101410] focus:outline-none focus:border-[#08482D]"
+                      >
+                        <option value="Vietcombank">Vietcombank</option>
+                        <option value="Techcombank">Techcombank</option>
+                        <option value="MBBank">MBBank (Quân Đội)</option>
+                        <option value="BIDV">BIDV</option>
+                        <option value="VietinBank">VietinBank</option>
+                        <option value="ACB">ACB Á Châu</option>
+                        <option value="TPBank">TPBank</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold text-[#5E5E61] block mb-1">
+                        Tháng/Năm phát hành
+                      </label>
+                      <input
+                        type="text"
+                        value={napasReleaseDate}
+                        onChange={(e) => setNapasReleaseDate(e.target.value)}
+                        placeholder="06/25"
+                        maxLength={5}
+                        className="w-full bg-[#F5F8EF] border border-[#E2E8D8] rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-mono text-[#101410] focus:outline-none focus:border-[#08482D]"
+                      />
+                    </div>
                   </div>
 
                   <div>
                     <label className="text-xs font-semibold text-[#5E5E61] block mb-1">
-                      Số thẻ ATM nội địa (bắt đầu 9704...) <span className="text-[#C2522D]">*</span>
+                      Số thẻ ATM (in dập nổi trên mặt trước thẻ) <span className="text-[#C2522D]">*</span>
                     </label>
                     <input
                       type="text"
@@ -666,19 +662,24 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                 </div>
               )}
 
-              {/* COD Notice */}
+              {/* Thông báo thanh toán COD */}
               {paymentMethod === 'cod' && (
-                <div className="p-4 bg-[#DAE7C7]/40 border border-[#DAE7C7] rounded-2xl text-xs text-[#5E5E61] leading-relaxed">
-                  Bạn sẽ thanh toán tiền mặt trực tiếp cho nhân viên giao hàng khi nhận kiện hàng. Số tiền thu hộ COD đúng bằng tổng thanh toán là <strong className="text-[#101410] font-bold font-mono">{formatVND(orderTotal)}</strong>.
+                <div className="p-4 rounded-2xl bg-[#DAE7C7]/40 border border-[#DAE7C7] text-xs text-[#08482D] space-y-1">
+                  <div className="font-bold flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-[#08482D]" />
+                    <span>Thanh toán tiền mặt khi shipper giao hàng</span>
+                  </div>
+                  <p className="text-[11px] leading-relaxed opacity-90">
+                    Bạn được đồng kiểm gói hàng (kiểm tra ngoại quan và đúng mã đồ cũ trước khi thanh toán).
+                  </p>
                 </div>
               )}
             </div>
           </div>
 
-          {/* CỘT PHẢI (Desktop, rộng 400px, dính khi cuộn top-24): Kiện hàng, mã giảm giá, tổng tiền, nút xác nhận */}
-          <div className="lg:col-span-5 lg:w-[400px] lg:shrink-0 lg:sticky lg:top-24 space-y-6">
+          {/* CỘT PHẢI: Kiện hàng theo từng Shop + Mã giảm giá theo từng shop + Chi phí tổng cộng */}
+          <div className="lg:col-span-5 space-y-6">
             <div className="bg-white p-5 sm:p-6 rounded-3xl border border-[#E2E8D8] space-y-5 shadow-2xs">
-              {/* Header kiện hàng */}
               <div className="flex items-center justify-between pb-3 border-b border-[#E2E8D8]">
                 <h3 className="font-bold text-sm sm:text-base text-[#101410] flex items-center gap-2">
                   <ShoppingBag className="w-4 h-4 text-[#08482D]" />
@@ -686,166 +687,173 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                 </h3>
               </div>
 
-              {/* Danh sách món hàng theo từng Shop */}
-              <div className="max-h-72 overflow-y-auto divide-y divide-[#E2E8D8]/60 pr-1 space-y-3">
-                {shopList.map((group) => (
-                  <div key={group.shop_id} className="pt-2 first:pt-0">
-                    <div className="flex items-center justify-between text-xs font-bold text-[#08482D] mb-1.5 bg-[#F5F8EF] px-2.5 py-1 rounded-lg">
-                      <span className="truncate">{group.shop_name}</span>
-                      <span className="font-mono text-[11px] text-[#5E5E61] font-normal">
-                        Ship: {group.shippingFee === 0 ? 'Free' : formatVND(group.shippingFee)}
-                      </span>
-                    </div>
-                    <div className="space-y-2">
-                      {group.items.map((item, idx) => (
-                        <div key={idx} className="flex items-center gap-3 py-1">
-                          <img
-                            src={item.image_url}
-                            alt={item.name}
-                            referrerPolicy="no-referrer"
-                            className="w-10 h-10 rounded-xl object-cover bg-[#DAE7C7] border border-[#E2E8D8] shrink-0"
-                            onError={(e) => {
-                              (e.target as HTMLElement).style.display = 'none';
-                            }}
-                          />
-                          <div className="flex-1 min-w-0">
-                            <h4 className="text-xs font-bold text-[#101410] truncate">
-                              {item.name}
-                            </h4>
-                            <p className="text-[11px] text-[#5E5E61]">
-                              SL: {item.quantity} · Mới: {item.condition_pct}%
-                            </p>
+              {/* Danh sách nhóm theo từng Shop với mã giảm giá riêng */}
+              <div className="space-y-4">
+                {checkoutCalc.shops.map((group) => {
+                  const availableShopCoupons = shopCoupons[group.shop_id] || [];
+                  const inputVal = couponInputs[group.shop_id] || '';
+                  const isValidating = !!validatingShops[group.shop_id];
+                  const errorMsg = couponErrors[group.shop_id];
+
+                  return (
+                    <div key={group.shop_id} className="p-4 rounded-2xl border border-[#E2E8D8] bg-[#F5F8EF]/50 space-y-3">
+                      {/* Tiêu đề Shop */}
+                      <div className="flex items-center justify-between text-xs font-bold text-[#08482D] pb-2 border-b border-[#E2E8D8]/70">
+                        <span className="font-bold text-sm text-[#08482D]">{group.shop_name}</span>
+                        <span className="font-mono text-[11px] text-[#5E5E61] font-normal">
+                          Phí ship: {group.shipping_fee === 0 ? <strong className="text-[#08482D]">Miễn phí</strong> : formatVND(group.shipping_fee)}
+                        </span>
+                      </div>
+
+                      {/* Danh sách món hàng của shop */}
+                      <div className="space-y-2">
+                        {group.items.map((item, idx) => (
+                          <div key={idx} className="flex items-center gap-3 py-1">
+                            <ProductImage
+                              src={item.image_url}
+                              alt={item.name}
+                              category={item.category}
+                              productName={item.name}
+                              conditionPct={item.condition_pct}
+                              className="w-10 h-10 rounded-xl object-cover bg-[#DAE7C7] border border-[#E2E8D8] shrink-0"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <h4 className="text-xs font-bold text-[#101410] truncate">
+                                {item.name}
+                              </h4>
+                              <p className="text-[11px] text-[#5E5E61]">
+                                SL: {item.quantity} · Mới: {item.condition_pct}%
+                              </p>
+                            </div>
+                            <span className="font-mono text-xs font-bold text-[#08482D] shrink-0">
+                              {formatVND(item.price * item.quantity)}
+                            </span>
                           </div>
-                          <span className="font-mono text-xs font-bold text-[#08482D] shrink-0">
-                            {formatVND(item.price * item.quantity)}
-                          </span>
+                        ))}
+                      </div>
+
+                      {/* Ô mã giảm giá riêng của shop này (Requirement A3) */}
+                      <div className="pt-2 border-t border-[#E2E8D8]/70 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[11px] font-bold text-[#101410] uppercase tracking-wider flex items-center gap-1">
+                            <Tag className="w-3 h-3 text-[#08482D]" />
+                            Mã giảm giá của {group.shop_name}
+                          </label>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
 
-              {/* Mã giảm giá */}
-              <div className="border-t border-[#E2E8D8] pt-4 space-y-2.5">
-                <label className="block text-xs font-bold text-[#101410] uppercase tracking-wider">
-                  Mã giảm giá shop / hệ thống
-                </label>
-                {!appliedCoupon ? (
-                  <div className="space-y-2">
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={couponInput}
-                        onChange={e => {
-                          setCouponInput(e.target.value.toUpperCase());
-                          setCouponError('');
-                        }}
-                        placeholder="VD: DOCU10, SACHHAY, TECH50"
-                        className="flex-1 px-3.5 py-2 bg-[#F5F8EF] border border-[#E2E8D8] rounded-xl text-xs font-mono uppercase text-[#101410] focus:outline-none focus:border-[#08482D]"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handleApplyCoupon()}
-                        disabled={isValidatingCoupon || !couponInput.trim()}
-                        className="px-4 py-2 bg-[#08482D] text-white rounded-xl text-xs font-bold hover:bg-[#063A24] transition-colors disabled:opacity-50 cursor-pointer"
-                      >
-                        {isValidatingCoupon ? 'Kiểm tra...' : 'Áp dụng'}
-                      </button>
-                    </div>
+                        {group.applied_coupon ? (
+                          <div className="p-2.5 bg-[#DAE7C7]/60 rounded-xl border border-[#DAE7C7] flex items-center justify-between text-xs">
+                            <div>
+                              <div className="font-mono font-bold text-[#08482D] flex items-center gap-1">
+                                ✓ {group.applied_coupon.code} (-{formatVND(group.discount_amount)})
+                              </div>
+                              <div className="text-[10px] text-[#5E5E61] mt-0.5">
+                                {group.applied_coupon.description}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveShopCoupon(group.shop_id)}
+                              className="text-xs font-bold text-[#B33F33] hover:underline ml-2 cursor-pointer"
+                            >
+                              Gỡ bỏ
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="space-y-1.5">
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                value={inputVal}
+                                onChange={e => {
+                                  const val = e.target.value.toUpperCase();
+                                  setCouponInputs(prev => ({ ...prev, [group.shop_id]: val }));
+                                  setCouponErrors(prev => ({ ...prev, [group.shop_id]: '' }));
+                                }}
+                                placeholder={`Nhập mã của ${group.shop_name}`}
+                                className="flex-1 px-3 py-1.5 bg-white border border-[#E2E8D8] rounded-xl text-xs font-mono uppercase text-[#101410] focus:outline-none focus:border-[#08482D]"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleApplyShopCoupon(group.shop_id)}
+                                disabled={isValidating || !inputVal.trim()}
+                                className="px-3 py-1.5 bg-[#08482D] text-white rounded-xl text-xs font-bold hover:bg-[#063A24] transition-colors disabled:opacity-50 cursor-pointer"
+                              >
+                                {isValidating ? '...' : 'Áp dụng'}
+                              </button>
+                            </div>
 
-                    {/* Quick suggestion buttons */}
-                    <div className="flex items-center gap-1.5 text-[11px] text-[#5E5E61] flex-wrap">
-                      <span>Gợi ý:</span>
-                      <button
-                        type="button"
-                        onClick={() => handleApplyCoupon('DOCU10')}
-                        className="font-mono px-2 py-0.5 rounded-lg bg-[#DAE7C7]/50 border border-[#DAE7C7] hover:border-[#08482D] font-bold text-[#08482D] cursor-pointer"
-                      >
-                        DOCU10
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleApplyCoupon('SACHHAY')}
-                        className="font-mono px-2 py-0.5 rounded-lg bg-[#DAE7C7]/50 border border-[#DAE7C7] hover:border-[#08482D] font-bold text-[#08482D] cursor-pointer"
-                      >
-                        SACHHAY
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleApplyCoupon('TECH50')}
-                        className="font-mono px-2 py-0.5 rounded-lg bg-[#DAE7C7]/50 border border-[#DAE7C7] hover:border-[#08482D] font-bold text-[#08482D] cursor-pointer"
-                      >
-                        TECH50
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleApplyCoupon('FREESHIP')}
-                        className="font-mono px-2 py-0.5 rounded-lg bg-[#DAE7C7]/50 border border-[#DAE7C7] hover:border-[#08482D] font-bold text-[#08482D] cursor-pointer"
-                      >
-                        FREESHIP
-                      </button>
-                    </div>
+                            {/* Gợi ý mã của đúng shop này (Requirement A3: mã không thuộc shop thì không hiển thị) */}
+                            {availableShopCoupons.length > 0 && (
+                              <div className="flex items-center gap-1.5 text-[10px] text-[#5E5E61] flex-wrap">
+                                <span>Gợi ý:</span>
+                                {availableShopCoupons.map((cpn) => (
+                                  <button
+                                    key={cpn.id}
+                                    type="button"
+                                    onClick={() => handleApplyShopCoupon(group.shop_id, cpn.code)}
+                                    className="font-mono px-2 py-0.5 rounded-lg bg-white border border-[#DAE7C7] hover:border-[#08482D] font-bold text-[#08482D] cursor-pointer"
+                                    title={cpn.description}
+                                  >
+                                    {cpn.code}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
 
-                    {couponError && (
-                      <p className="text-xs text-[#B33F33] font-medium leading-relaxed">
-                        ✕ {couponError}
-                      </p>
-                    )}
-                  </div>
-                ) : (
-                  <div className="p-3 bg-[#DAE7C7]/50 rounded-2xl border border-[#DAE7C7] flex items-center justify-between text-xs">
-                    <div>
-                      <div className="font-mono font-bold text-[#08482D] flex items-center gap-1">
-                        ✓ Đã áp dụng: {appliedCoupon.code}
+                            {errorMsg && (
+                              <p className="text-[11px] text-[#B33F33] font-medium leading-tight">
+                                ✕ {errorMsg}
+                              </p>
+                            )}
+                          </div>
+                        )}
                       </div>
-                      <div className="text-[11px] text-[#5E5E61] mt-0.5">
-                        {appliedCoupon.description}
+
+                      {/* Tạm tính phần hàng của shop */}
+                      <div className="pt-2 border-t border-[#E2E8D8]/60 flex items-center justify-between text-xs font-medium text-[#5E5E61]">
+                        <span>Tổng tiền phần shop:</span>
+                        <span className="font-mono font-bold text-[#101410] text-sm">
+                          {formatVND(group.total)}
+                        </span>
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={handleRemoveCoupon}
-                      className="text-xs font-bold text-[#B33F33] hover:underline ml-2 cursor-pointer"
-                    >
-                      Gỡ bỏ
-                    </button>
-                  </div>
-                )}
+                  );
+                })}
               </div>
 
-              {/* Chi phí tổng cộng */}
+              {/* Chi phí tổng cộng tính từ calculateCheckout */}
               <div className="border-t border-[#E2E8D8] pt-4 space-y-2.5 text-xs sm:text-sm">
                 <div className="flex justify-between text-[#5E5E61]">
                   <span>Tạm tính tiền hàng</span>
-                  <span className="font-mono font-medium text-[#101410]">{formatVND(orderSubtotal)}</span>
+                  <span className="font-mono font-medium text-[#101410]">{formatVND(checkoutCalc.subtotal)}</span>
                 </div>
 
                 <div className="flex justify-between text-[#5E5E61]">
                   <span>Phí vận chuyển</span>
                   <span>
-                    {orderShippingFee === 0 ? (
+                    {checkoutCalc.shipping_fee === 0 ? (
                       <span className="font-sans font-medium text-[#08482D]">
-                        Miễn phí (đơn từ 1 triệu)
+                        Miễn phí
                       </span>
                     ) : (
                       <span className="font-mono font-medium text-[#101410]">
-                        {formatVND(orderShippingFee)}
+                        {formatVND(checkoutCalc.shipping_fee)}
                       </span>
                     )}
                   </span>
                 </div>
 
-                {discountAmount > 0 && (
+                {checkoutCalc.discount_amount > 0 && (
                   <div className="flex justify-between text-[#08482D] font-semibold">
-                    <span>Giảm giá ({appliedCoupon?.code})</span>
-                    <span className="font-mono">-{formatVND(discountAmount)}</span>
+                    <span>Tổng giảm giá voucher</span>
+                    <span className="font-mono">-{formatVND(checkoutCalc.discount_amount)}</span>
                   </div>
                 )}
 
                 <div className="border-t border-[#E2E8D8] pt-3 flex justify-between items-baseline font-bold">
-                  <span className="text-sm sm:text-base text-[#101410]">Tổng cộng</span>
-                  <span className="font-mono text-xl sm:text-2xl text-[#C2522D]">{formatVND(orderTotal)}</span>
+                  <span className="text-sm sm:text-base text-[#101410]">Tổng thanh toán</span>
+                  <span className="font-mono text-xl sm:text-2xl text-[#C2522D]">{formatVND(checkoutCalc.grand_total)}</span>
                 </div>
               </div>
 
@@ -869,93 +877,98 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
         </form>
       </div>
 
-      {/* MOBILE STICKY BOTTOM BAR: Hiển thị Tổng cộng và Nút xác nhận */}
+      {/* MOBILE STICKY BOTTOM BAR */}
       <div className="fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-[#E2E8D8] p-4 shadow-2xl lg:hidden">
         <div className="max-w-md mx-auto flex items-center justify-between gap-4">
           <div>
-            <span className="text-[11px] text-[#5E5E61] block leading-tight">Tổng cộng</span>
+            <span className="text-[11px] text-[#5E5E61] block leading-tight">Tổng thanh toán</span>
             <span className="font-mono text-lg font-bold text-[#C2522D] leading-tight block">
-              {formatVND(orderTotal)}
+              {formatVND(checkoutCalc.grand_total)}
             </span>
           </div>
 
           <Button
             type="button"
-            onClick={handleValidateAndProceed}
             variant="primary"
             size="md"
             loading={isSubmitting}
+            onClick={handleValidateAndProceed}
             icon={<Lock className="w-4 h-4 shrink-0" />}
-            iconRight={<ArrowRight className="w-4 h-4 shrink-0" />}
-            className="flex-1 font-bold text-xs sm:text-sm shadow-md"
+            className="font-bold text-xs"
           >
-            {paymentMethod === 'cod' ? 'Xác nhận đặt hàng COD' : 'Xác thực OTP & Thanh toán'}
+            {paymentMethod === 'cod' ? 'Đặt hàng' : 'Thanh toán'}
           </Button>
         </div>
       </div>
 
-      {/* 6-Box Auto-Advancing OTP Modal */}
+      {/* MODAL OTP 6 Ô CHO GIAO DỊCH THẺ TEST */}
       {showOtpModal && (
-        <div className="fixed inset-0 z-60 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-[#E2E8D8] rounded-3xl w-full max-w-sm p-6 shadow-2xl space-y-5 text-center max-h-[90vh] overflow-y-auto">
-            <div className="w-12 h-12 mx-auto rounded-2xl bg-[#08482D]/10 text-[#08482D] flex items-center justify-center">
-              <Lock className="w-6 h-6" />
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div 
+            className="w-full max-w-md bg-white rounded-3xl border border-[#DAE7C7] shadow-2xl p-6 sm:p-8 space-y-5 animate-in zoom-in-95"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-[#DAE7C7] text-[#08482D] flex items-center justify-center font-bold">
+                  🔒
+                </div>
+                <h3 className="font-bold text-base text-[#101410]">Xác thực giao dịch (3D-Secure OTP)</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowOtpModal(false)}
+                className="p-1.5 rounded-xl hover:bg-[#F5F8EF] text-[#5E5E61]"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            <div>
-              <h3 className="text-lg font-bold text-[#101410]">
-                Xác thực giao dịch (OTP)
-              </h3>
-              <p className="text-xs text-[#5E5E61] mt-1">
-                Nhập mã xác thực 6 số gửi đến điện thoại đăng ký
-              </p>
-              <div className="mt-2.5 inline-block px-3 py-1 bg-[#DAE7C7] text-[#08482D] text-xs font-mono font-bold rounded-lg">
-                Mã OTP thử nghiệm: 123456
+            <div className="text-xs text-[#5E5E61] space-y-1">
+              <p>Mã OTP đã được gửi đến số điện thoại đã đăng ký với ngân hàng.</p>
+              <div className="p-3 bg-[#FAF7F2] rounded-xl border border-[#E6DFD5] text-[11px] text-[#101410] font-mono">
+                Số tiền: <strong className="text-[#C2522D]">{formatVND(checkoutCalc.grand_total)}</strong>
+                <span className="block text-stone-500 mt-0.5">Mã OTP thử nghiệm: <strong>123456</strong></span>
               </div>
             </div>
 
-            {/* 6 Input Boxes */}
-            <div className="flex items-center justify-center gap-2">
-              {otpBoxes.map((val, idx) => (
+            {/* 6 ô OTP */}
+            <div className="flex justify-center gap-2 sm:gap-2.5">
+              {otpBoxes.map((digit, idx) => (
                 <input
                   key={idx}
                   ref={el => { otpInputRefs.current[idx] = el; }}
                   type="text"
-                  inputMode="numeric"
-                  maxLength={6}
-                  value={val}
-                  onChange={(e) => handleOtpBoxChange(idx, e.target.value)}
-                  onKeyDown={(e) => handleOtpKeyDown(idx, e)}
-                  className="w-10 h-12 text-center font-mono text-lg font-bold bg-[#F5F8EF] border-2 border-[#E2E8D8] rounded-xl text-[#101410] focus:outline-none focus:border-[#08482D] focus:ring-1 focus:ring-[#08482D] transition-all"
+                  maxLength={1}
+                  value={digit}
+                  onChange={e => handleOtpBoxChange(idx, e.target.value)}
+                  onKeyDown={e => handleOtpKeyDown(idx, e)}
+                  className="w-10 sm:w-12 h-12 sm:h-14 text-center font-mono text-xl sm:text-2xl font-bold rounded-2xl bg-[#F5F8EF] border border-[#DAE7C7] text-[#101410] focus:outline-none focus:border-[#08482D] focus:ring-2 focus:ring-[#08482D]/20 shadow-2xs"
                 />
               ))}
             </div>
 
             {otpError && (
-              <p className="text-xs text-[#B33F33] font-medium leading-relaxed">
-                {otpError}
+              <p className="text-xs text-[#B33F33] text-center font-medium">
+                ✕ {otpError}
               </p>
             )}
 
-            <div className="flex gap-3 pt-2">
-              <Button
+            <div className="space-y-2 pt-2">
+              <button
                 type="button"
-                variant="secondary"
-                size="md"
-                onClick={() => setShowOtpModal(false)}
-                className="flex-1 text-xs"
-              >
-                Hủy
-              </Button>
-              <Button
-                type="button"
-                variant="primary"
-                size="md"
                 onClick={handleVerifyOtpAndPay}
-                className="flex-1 text-xs"
+                className="w-full py-3 bg-[#08482D] hover:bg-[#063A24] text-white rounded-2xl text-xs font-bold transition-all shadow-md cursor-pointer"
               >
-                Xác nhận
-              </Button>
+                Xác nhận thanh toán {formatVND(checkoutCalc.grand_total)}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowOtpModal(false)}
+                className="w-full py-2 text-xs text-[#5E5E61] hover:text-[#101410]"
+              >
+                Hủy giao dịch
+              </button>
             </div>
           </div>
         </div>

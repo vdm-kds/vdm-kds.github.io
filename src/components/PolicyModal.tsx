@@ -154,7 +154,7 @@ export function PolicyModal({ type, isOpen, onClose }: PolicyModalProps) {
           <div className="space-y-2 font-medium">
             <div className="p-3 bg-[#F5F8EF] rounded-2xl border border-[#E2E8D8] space-y-1">
               <div>📍 <strong>Cửa hàng chính:</strong> 128 Đường Hai Bà Trưng, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh</div>
-              <div>📞 <strong>Hotline hỗ trợ:</strong> 0987 654 321 (8:00 – 21:00 hàng ngày)</div>
+              <div>📞 <strong>Hotline hỗ trợ:</strong> 0909 246 135 (8:00 – 21:00 hàng ngày)</div>
               <div>✉️ <strong>Hòm thư điện tử:</strong> docuconthuong@vintage.vn</div>
               <div>🕒 <strong>Giờ mở cửa đón khách:</strong> Thứ 2 – Chủ Nhật (9:00 – 20:30)</div>
             </div>

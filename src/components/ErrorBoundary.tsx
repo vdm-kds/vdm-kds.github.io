@@ -67,7 +67,7 @@ export class ErrorBoundary extends Component<Props, State> {
             </div>
 
             <div className="space-y-2">
-              <h2 className="text-xl sm:text-2xl font-serif font-bold text-[#08482D]">
+              <h2 className="text-xl sm:text-2xl font-bold text-[#08482D]">
                 Ối, có chút trục trặc
               </h2>
               <p className="text-xs sm:text-sm text-[#5E5E61] leading-relaxed">

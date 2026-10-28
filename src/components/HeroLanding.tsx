@@ -44,6 +44,7 @@ export const HeroLanding: React.FC<HeroLandingProps> = ({
   const [showCategoryMenu, setShowCategoryMenu] = useState(false);
   const [showGuideModal, setShowGuideModal] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mobileCategoryOpen, setMobileCategoryOpen] = useState(false);
 
   const categoryMenuRef = useRef<HTMLDivElement>(null);
 
@@ -213,33 +214,33 @@ export const HeroLanding: React.FC<HeroLandingProps> = ({
           </nav>
 
           {/* Action Buttons pinned to RIGHT (40px desktop, 16px mobile) */}
-          <div className="flex items-center gap-2 z-20">
-            <div className="hidden sm:flex items-center gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => onOpenAuth('buyer', false)}
-                className="w-[92px] h-[40px] text-xs font-semibold"
-              >
-                Đăng nhập
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => onOpenAuth('buyer', true)}
-                className="w-[97px] h-[40px] text-xs font-semibold"
-              >
-                Đăng ký
-              </Button>
-            </div>
+          <div className="flex items-center gap-1.5 sm:gap-2 z-20">
+            {/* Đăng nhập: Always visible on top */}
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => onOpenAuth('buyer', false)}
+              className="h-9 px-3 text-xs font-semibold"
+            >
+              Đăng nhập
+            </Button>
+            {/* Đăng ký: visible only >= 1100px */}
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => onOpenAuth('buyer', true)}
+              className="hidden min-[1100px]:inline-flex h-9 px-3 text-xs font-semibold"
+            >
+              Đăng ký
+            </Button>
 
             {/* Mobile hamburger menu toggle */}
             <button
               onClick={() => setMobileMenuOpen(true)}
-              className="min-[1100px]:hidden p-2 rounded-xl text-[#101410] hover:bg-[#DAE7C7]/50 transition-colors"
+              className="min-[1100px]:hidden p-2 rounded-xl text-[#101410] hover:bg-[#DAE7C7]/50 transition-colors cursor-pointer"
               aria-label="Menu"
             >
-              <Menu className="w-6 h-6" />
+              <Menu className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
           </div>
         </div>
@@ -247,41 +248,83 @@ export const HeroLanding: React.FC<HeroLandingProps> = ({
         {/* Mobile Navigation Drawer */}
         {mobileMenuOpen && (
           <div className="min-[1100px]:hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex justify-end">
-            <div className="w-72 bg-white h-full p-6 flex flex-col justify-between shadow-2xl animate-in slide-in-from-right">
+            <div className="w-80 max-w-[85vw] bg-white h-full p-5 sm:p-6 flex flex-col justify-between shadow-2xl animate-in slide-in-from-right overflow-y-auto">
               <div>
                 <div className="flex items-center justify-between pb-4 border-b border-[#E2E8D8]">
                   <span className="font-bold text-base text-[#101410]">Menu</span>
                   <button 
                     onClick={() => setMobileMenuOpen(false)}
-                    className="p-1 rounded-lg text-[#5E5E61] hover:bg-[#F5F8EF]"
+                    className="p-1 rounded-lg text-[#5E5E61] hover:bg-[#F5F8EF] cursor-pointer"
+                    aria-label="Đóng menu"
                   >
                     <X className="w-5 h-5" />
                   </button>
                 </div>
 
-                <div className="py-4 space-y-2 text-sm font-semibold text-[#101410] text-left">
+                <div className="py-4 space-y-1.5 text-sm font-semibold text-[#101410] text-left">
                   <button
                     onClick={() => { setMobileMenuOpen(false); scrollToProducts(); }}
-                    className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-[#DAE7C7]/40"
+                    className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-[#DAE7C7]/40 cursor-pointer"
                   >
                     Cửa hàng
                   </button>
+
+                  {/* Mục Danh mục (mở 7 danh mục) theo Requirement B5 */}
+                  <div>
+                    <button
+                      onClick={() => setMobileCategoryOpen(!mobileCategoryOpen)}
+                      className="w-full flex items-center justify-between text-left px-3 py-2.5 rounded-xl hover:bg-[#DAE7C7]/40 cursor-pointer"
+                    >
+                      <span>Danh mục ({CATEGORIES.length})</span>
+                      <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${mobileCategoryOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    {mobileCategoryOpen && (
+                      <div className="pl-3 pr-1 py-1.5 space-y-1 bg-[#F5F8EF] rounded-xl my-1 border border-[#E2E8D8]">
+                        {CATEGORIES.map(cat => {
+                          const emojiMap: Record<string, string> = {
+                            'Thời trang': '🧥',
+                            'Điện tử': '🎧',
+                            'Máy ảnh': '📷',
+                            'Sách': '📖',
+                            'Nhạc cụ': '🎸',
+                            'Phụ kiện': '⌚',
+                            'Gia dụng': '🍳'
+                          };
+                          return (
+                            <button
+                              key={cat}
+                              onClick={() => {
+                                onSelectCategory(cat);
+                                setMobileMenuOpen(false);
+                                scrollToProducts();
+                              }}
+                              className="w-full text-left px-3 py-2 text-xs font-medium text-[#101410] hover:bg-[#DAE7C7]/60 rounded-lg flex items-center justify-between cursor-pointer"
+                            >
+                              <span>{cat}</span>
+                              <span className="text-sm">{emojiMap[cat] || '📦'}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
                   <button
                     onClick={() => { setMobileMenuOpen(false); setShowGuideModal(true); }}
-                    className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-[#DAE7C7]/40"
+                    className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-[#DAE7C7]/40 cursor-pointer"
                   >
                     Cách mua đồ cũ
                   </button>
                   <button
                     onClick={() => { setMobileMenuOpen(false); onOpenAuth('seller', false); }}
-                    className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-[#DAE7C7]/40"
+                    className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-[#DAE7C7]/40 cursor-pointer text-[#08482D]"
                   >
                     Kênh người bán
                   </button>
                   <a
                     href="#footer-section"
                     onClick={() => setMobileMenuOpen(false)}
-                    className="block w-full text-left px-3 py-2.5 rounded-xl hover:bg-[#DAE7C7]/40"
+                    className="block w-full text-left px-3 py-2.5 rounded-xl hover:bg-[#DAE7C7]/40 cursor-pointer"
                   >
                     Liên hệ
                   </a>
@@ -293,17 +336,17 @@ export const HeroLanding: React.FC<HeroLandingProps> = ({
                   variant="primary"
                   size="md"
                   onClick={() => { setMobileMenuOpen(false); onOpenAuth('buyer', false); }}
-                  className="w-full text-xs"
+                  className="w-full text-xs font-semibold"
                 >
                   Đăng nhập người mua
                 </Button>
                 <Button
                   variant="secondary"
                   size="md"
-                  onClick={() => { setMobileMenuOpen(false); onOpenAuth('buyer', true)} }
-                  className="w-full text-xs"
+                  onClick={() => { setMobileMenuOpen(false); onOpenAuth('buyer', true); }}
+                  className="w-full text-xs font-semibold"
                 >
-                  Đăng ký người mua
+                  Đăng ký tài khoản
                 </Button>
               </div>
             </div>
@@ -399,8 +442,8 @@ export const HeroLanding: React.FC<HeroLandingProps> = ({
           </svg>
         </div>
 
-        {/* Subtitle: 2 lines */}
-        <div className="relative max-w-[calc(var(--u)*720)]">
+        {/* Subtitle: 2 lines - max 92% on mobile */}
+        <div className="relative w-full max-w-[92vw] sm:max-w-[calc(var(--u)*720)] mx-auto px-1">
           {/* Handwritten Note 2: "//" (Bước 4) placed to the left of subtitle */}
           <div 
             className="absolute font-hand text-[#08482D] select-none pointer-events-none hidden md:block"
@@ -530,7 +573,7 @@ export const HeroLanding: React.FC<HeroLandingProps> = ({
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#DAE7C7]/60 text-[#08482D] text-xs font-bold mb-2">
             <Store className="w-3.5 h-3.5" /> Chợ nhiều shop độc lập
           </div>
-          <h2 className="text-2xl sm:text-3xl font-serif font-black text-[#101410]">Shop nổi bật tại tiệm</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-[#101410]">Shop nổi bật tại tiệm</h2>
           <p className="text-xs sm:text-sm text-[#5E5E61] mt-1">Mỗi shop là một phong cách riêng, tự đăng và kiểm định kỹ trước khi giao</p>
         </div>
 
@@ -544,6 +587,7 @@ export const HeroLanding: React.FC<HeroLandingProps> = ({
               avatar: 'https://images.unsplash.com/photo-1544816155-12df9643f363?w=120',
               desc: 'Tiệm đồ second-hand có câu chuyện: thời trang, phụ kiện, đồ gia dụng đã kiểm định.',
               productsCount: 4,
+              reviewsCount: 0,
               rating: 5.0
             },
             {
@@ -554,6 +598,7 @@ export const HeroLanding: React.FC<HeroLandingProps> = ({
               avatar: 'https://images.unsplash.com/photo-1512820790803-83ca734da794?w=120',
               desc: 'Sách cũ còn thơm mùi giấy và nhạc cụ đã qua sử dụng, chỉnh âm kỹ trước khi giao.',
               productsCount: 2,
+              reviewsCount: 0,
               rating: 5.0
             },
             {
@@ -564,6 +609,7 @@ export const HeroLanding: React.FC<HeroLandingProps> = ({
               avatar: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=120',
               desc: 'Đồ công nghệ cũ đã test kỹ: máy ảnh film, điện thoại, tai nghe, bàn phím cơ.',
               productsCount: 4,
+              reviewsCount: 1,
               rating: 5.0
             }
           ].map(s => (
@@ -572,26 +618,31 @@ export const HeroLanding: React.FC<HeroLandingProps> = ({
               className="bg-white rounded-3xl border border-[#E2E8D8] overflow-hidden shadow-xs hover:shadow-md transition-all group flex flex-col justify-between"
             >
               <div>
-                <div className="h-16 relative" style={{ backgroundColor: s.color }} />
-                <div className="p-4 pt-0">
-                  <div className="flex items-center gap-3 -mt-6 mb-2.5">
+                {/* Dải màu bìa */}
+                <div className="h-20 w-full relative" style={{ backgroundColor: s.color }} />
+                <div className="px-5 pb-4 pt-0">
+                  {/* Ảnh đại diện tròn đè nửa lên dải bìa, không bị che */}
+                  <div className="relative -mt-9 mb-3 flex items-start">
                     <img
                       src={s.avatar}
                       alt={s.name}
-                      className="w-12 h-12 rounded-full border-2 border-white object-cover shadow-sm bg-stone-100 shrink-0"
+                      className="w-16 h-16 rounded-full border-4 border-white object-cover shadow-md bg-stone-100 shrink-0"
                     />
-                    <div className="min-w-0 pt-2">
-                      <h4 className="font-bold text-sm text-[#101410] truncate group-hover:text-[#08482D] transition-colors">
-                        {s.name}
-                      </h4>
-                      <div className="flex items-center gap-1.5 text-[11px] text-[#5E5E61]">
-                        <span className="flex items-center gap-0.5 text-amber-500 font-bold">
-                          <Star className="w-3 h-3 fill-amber-500" /> {s.rating}
-                        </span>
-                        <span>·</span>
-                        <span>{s.productsCount} món</span>
-                      </div>
-                    </div>
+                  </div>
+                  {/* Tên shop nằm DƯỚI dải màu bìa, chữ #101410 trên nền trắng, không bị che */}
+                  <h4 className="font-bold text-base text-[#101410] truncate group-hover:text-[#08482D] transition-colors leading-tight">
+                    {s.name}
+                  </h4>
+                  <div className="flex items-center gap-1.5 text-xs text-[#5E5E61] mt-1.5 mb-2.5">
+                    {s.reviewsCount && s.reviewsCount > 0 ? (
+                      <span className="flex items-center gap-0.5 text-amber-600 font-semibold">
+                        <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" /> {s.rating}
+                      </span>
+                    ) : (
+                      <span className="text-[#5E5E61]">Chưa có đánh giá</span>
+                    )}
+                    <span>·</span>
+                    <span>{s.productsCount} món</span>
                   </div>
                   <p className="text-xs text-[#5E5E61] line-clamp-2 leading-relaxed">
                     {s.desc}

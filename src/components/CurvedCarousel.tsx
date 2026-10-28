@@ -115,7 +115,7 @@ export default function CurvedCarousel({ products, onOpen, onAddToCart }: Props)
           15 * u
         )}')`;
         el.style.visibility = xr < -40 || xl > W + 40 ? 'hidden' : 'visible';
-        el.classList.toggle('is-narrow', w < 120);
+        el.classList.toggle('is-narrow', w < 145);
         const inner = innerRefs.current[i];
         if (inner) {
           const pad = 12 * u;

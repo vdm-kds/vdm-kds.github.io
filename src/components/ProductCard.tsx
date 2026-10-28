@@ -3,6 +3,7 @@ import { ShoppingBag, Check, Star, Heart, Store } from 'lucide-react';
 import { Product } from '../types';
 import { formatVND } from '../utils/format';
 import { Button } from './Button';
+import { ProductImage } from './ProductImage';
 import { ProductFallbackImage } from './ProductFallbackImage';
 
 interface ProductCardProps {
@@ -65,22 +66,16 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       className="group relative bg-white rounded-3xl border border-[#E2E8D8] overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg cursor-pointer flex flex-col h-full hover:border-[#DAE7C7]"
     >
       {/* Product Image Container */}
-      <div className="relative aspect-4/3 w-full bg-[#F5F8EF] overflow-hidden">
-        {!imgError && product.image_url ? (
-          <img
-            src={product.image_url}
-            alt={product.name}
-            onError={() => setImgError(true)}
-            referrerPolicy="no-referrer"
-            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-          />
-        ) : (
-          <ProductFallbackImage 
-            name={product.name}
-            category={product.category}
-            conditionPct={product.condition_pct}
-          />
-        )}
+      <div className={`relative aspect-4/3 w-full bg-[#F5F8EF] overflow-hidden ${isSoldOut ? 'grayscale contrast-75 opacity-85' : ''}`}>
+        <ProductImage
+          src={product.image_url}
+          alt={product.name}
+          productName={product.name}
+          category={product.category}
+          conditionPct={product.condition_pct}
+          className="w-full h-full"
+          imgClassName="transition-transform duration-500 group-hover:scale-105"
+        />
 
         {/* Mint Studio Condition Badge */}
         <div className="absolute top-3 left-3 z-10 pointer-events-none">
@@ -184,20 +179,26 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             )}
           </div>
 
-          <Button
-            variant={isSoldOut ? 'secondary' : justAdded ? 'soft' : 'primary'}
-            size="sm"
-            onClick={handleAdd}
-            disabled={isSoldOut || isAddingToCart}
-            title={disabledBuy ? 'Chế độ xem trước — Không thể mua hàng' : isSoldOut ? 'Hết hàng' : 'Thêm vào giỏ'}
-            className={`px-3 ${disabledBuy ? 'opacity-40 cursor-not-allowed hover:bg-transparent' : ''}`}
-          >
-            {justAdded ? (
-              <Check className="w-4 h-4 text-[#08482D]" />
-            ) : (
-              <ShoppingBag className="w-4 h-4" />
-            )}
-          </Button>
+          {isSoldOut ? (
+            <span className="text-[11px] font-bold text-[#C2522D] bg-[#F6DDDB] px-2.5 py-1 rounded-full uppercase tracking-wider">
+              Đã có chủ mới
+            </span>
+          ) : (
+            <Button
+              variant={justAdded ? 'soft' : 'primary'}
+              size="sm"
+              onClick={handleAdd}
+              disabled={isAddingToCart}
+              title={disabledBuy ? 'Chế độ xem trước — Không thể mua hàng' : 'Thêm vào giỏ'}
+              className={`px-3 ${disabledBuy ? 'opacity-40 cursor-not-allowed hover:bg-transparent' : ''}`}
+            >
+              {justAdded ? (
+                <Check className="w-4 h-4 text-[#08482D]" />
+              ) : (
+                <ShoppingBag className="w-4 h-4" />
+              )}
+            </Button>
+          )}
         </div>
       </div>
     </div>

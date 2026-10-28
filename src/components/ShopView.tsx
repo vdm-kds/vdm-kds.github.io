@@ -208,7 +208,7 @@ export const ShopView: React.FC<ShopViewProps> = ({
     return (
       <div className="max-w-6xl mx-auto px-4 py-16 text-center">
         <div className="w-12 h-12 border-4 border-[#08482D] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-        <p className="text-stone-600 font-serif">Đang mở cửa tiệm...</p>
+        <p className="text-stone-600">Đang mở cửa tiệm...</p>
       </div>
     );
   }
@@ -217,7 +217,7 @@ export const ShopView: React.FC<ShopViewProps> = ({
     return (
       <div className="max-w-4xl mx-auto px-4 py-16 text-center">
         <Store className="w-16 h-16 text-stone-400 mx-auto mb-4" />
-        <h2 className="text-2xl font-serif font-bold text-stone-800 mb-2">Không tìm thấy shop</h2>
+        <h2 className="text-2xl font-bold text-stone-800 mb-2">Không tìm thấy shop</h2>
         <p className="text-stone-600 mb-6">{error || 'Shop bạn tìm kiếm không tồn tại hoặc đã đổi tên.'}</p>
         <Button onClick={onBackToHome} variant="primary">
           <ArrowLeft className="w-4 h-4 mr-2" /> Về trang chủ
@@ -329,7 +329,7 @@ export const ShopView: React.FC<ShopViewProps> = ({
                 />
                 <div className="mt-8 sm:mt-12">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h1 className="text-xl sm:text-2xl font-serif font-black text-stone-900">{shop.name}</h1>
+                    <h1 className="text-xl sm:text-2xl font-black text-stone-900">{shop.name}</h1>
                     <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-[#DAE7C7] text-[#08482D]">
                       Chính chủ
                     </span>
@@ -400,7 +400,7 @@ export const ShopView: React.FC<ShopViewProps> = ({
                 <div>
                   <span className="text-stone-400 block text-[10px]">Đánh giá:</span>
                   <span className="font-bold text-stone-800">
-                    {reviewsData.average_rating} ({reviewsData.total_reviews} đánh giá)
+                    {reviewsData.total_reviews > 0 ? `${reviewsData.average_rating} (${reviewsData.total_reviews} đánh giá)` : 'Chưa có đánh giá'}
                   </span>
                 </div>
               </div>
@@ -429,7 +429,7 @@ export const ShopView: React.FC<ShopViewProps> = ({
           <div className="mt-6 bg-white p-5 rounded-3xl border border-stone-200 shadow-sm">
             <div className="flex items-center gap-2 mb-3.5">
               <Ticket className="w-4 h-4 text-[#C2522D]" />
-              <h3 className="font-serif font-bold text-sm text-stone-900">Mã giảm giá của shop</h3>
+              <h3 className="font-bold text-sm text-stone-900">Mã giảm giá của shop</h3>
               <span className="text-xs text-stone-500">Lưu để dùng khi thanh toán đơn hàng tại shop này</span>
             </div>
 
@@ -525,7 +525,7 @@ export const ShopView: React.FC<ShopViewProps> = ({
             <div>
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h3 className="font-serif font-black text-lg text-stone-900">Món đồ nổi bật của tiệm</h3>
+                  <h3 className="font-black text-lg text-stone-900">Món đồ nổi bật của tiệm</h3>
                   <p className="text-xs text-stone-500">Tuyển chọn các món đồ được quan tâm nhất</p>
                 </div>
                 <button
@@ -539,7 +539,7 @@ export const ShopView: React.FC<ShopViewProps> = ({
               {products.length === 0 ? (
                 <div className="bg-white p-12 text-center rounded-3xl border border-stone-200">
                   <ShoppingBag className="w-12 h-12 text-stone-300 mx-auto mb-3" />
-                  <p className="text-stone-600 font-serif">Tiệm chưa có sản phẩm nào đang bán.</p>
+                  <p className="text-stone-600">Tiệm chưa có sản phẩm nào đang bán.</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
@@ -558,7 +558,7 @@ export const ShopView: React.FC<ShopViewProps> = ({
 
             {/* Shop About & Story Card */}
             <div className="bg-white rounded-3xl border border-stone-200 p-6 shadow-sm">
-              <h3 className="font-serif font-bold text-base text-stone-900 mb-3 flex items-center gap-2">
+              <h3 className="font-bold text-base text-stone-900 mb-3 flex items-center gap-2">
                 <Store className="w-4 h-4 text-[#08482D]" /> Giới thiệu về {shop.name}
               </h3>
               <p className="text-stone-700 text-sm leading-relaxed mb-4">
@@ -647,7 +647,7 @@ export const ShopView: React.FC<ShopViewProps> = ({
             {filteredProducts.length === 0 ? (
               <div className="bg-white p-16 text-center rounded-3xl border border-stone-200">
                 <Search className="w-12 h-12 text-stone-300 mx-auto mb-3" />
-                <h4 className="font-serif font-bold text-base text-stone-800 mb-1">Không tìm thấy món đồ nào</h4>
+                <h4 className="font-bold text-base text-stone-800 mb-1">Không tìm thấy món đồ nào</h4>
                 <p className="text-xs text-stone-500">Thử tìm kiếm với từ khóa khác hoặc xóa bộ lọc.</p>
               </div>
             ) : (
@@ -672,18 +672,29 @@ export const ShopView: React.FC<ShopViewProps> = ({
             {/* Rating Summary Box */}
             <div className="bg-white p-6 rounded-3xl border border-stone-200 shadow-sm flex flex-col md:flex-row items-center gap-8">
               <div className="text-center md:border-r md:border-stone-100 md:pr-8">
-                <span className="text-5xl font-black font-serif text-[#08482D]">
-                  {reviewsData.average_rating}
-                </span>
-                <div className="flex items-center justify-center gap-1 text-amber-500 my-1">
-                  {[1, 2, 3, 4, 5].map(st => (
-                    <Star
-                      key={st}
-                      className={`w-4 h-4 ${st <= Math.round(reviewsData.average_rating) ? 'fill-amber-500' : 'text-stone-300'}`}
-                    />
-                  ))}
-                </div>
-                <p className="text-xs text-stone-500">{reviewsData.total_reviews} lượt đánh giá</p>
+                {reviewsData.total_reviews > 0 ? (
+                  <>
+                    <span className="text-5xl font-black text-[#08482D]">
+                      {reviewsData.average_rating}
+                    </span>
+                    <div className="flex items-center justify-center gap-1 text-amber-500 my-1">
+                      {[1, 2, 3, 4, 5].map(st => (
+                        <Star
+                          key={st}
+                          className={`w-4 h-4 ${st <= Math.round(reviewsData.average_rating) ? 'fill-amber-500' : 'text-stone-300'}`}
+                        />
+                      ))}
+                    </div>
+                    <p className="text-xs text-stone-500">{reviewsData.total_reviews} lượt đánh giá</p>
+                  </>
+                ) : (
+                  <div className="py-2">
+                    <span className="text-base font-bold text-stone-700 block">
+                      Chưa có đánh giá
+                    </span>
+                    <p className="text-xs text-stone-500 mt-1">Shop chưa có lượt đánh giá nào</p>
+                  </div>
+                )}
               </div>
 
               {/* Star Filter buttons */}
@@ -718,7 +729,7 @@ export const ShopView: React.FC<ShopViewProps> = ({
             {filteredReviews.length === 0 ? (
               <div className="bg-white p-12 text-center rounded-3xl border border-stone-200">
                 <Star className="w-10 h-10 text-stone-300 mx-auto mb-2" />
-                <p className="text-stone-600 text-sm font-serif">Chưa có đánh giá nào cho mục này.</p>
+                <p className="text-stone-600 text-sm">Chưa có đánh giá nào cho mục này.</p>
               </div>
             ) : (
               <div className="space-y-3">

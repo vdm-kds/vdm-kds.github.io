@@ -249,7 +249,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <div className="p-3 bg-amber-50 border border-amber-300 rounded-2xl text-xs text-amber-900 flex items-start gap-2">
             <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
             <p className="leading-relaxed">
-              <strong>Chế độ thuyết trình đang bật</strong> — không thể tạo tài khoản mới. Vui lòng sử dụng 2 tài khoản chủ có sẵn (admin / 0987654321).
+              <strong>Chế độ thuyết trình đang bật</strong> — không thể tạo tài khoản mới. Vui lòng sử dụng 2 tài khoản chủ có sẵn (admin / khachhang).
             </p>
           </div>
         )}

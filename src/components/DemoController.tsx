@@ -13,7 +13,7 @@ interface DemoControllerProps {
 }
 
 export function DemoController({ onRoleSwitched, onDataReset, onPresentationModeChange }: DemoControllerProps) {
-  const { user, login, logout, refreshUser } = useAuth();
+  const { user, logout, switchRole } = useAuth();
   const { showToast } = useToast();
 
   const [isOpen, setIsOpen] = useState(false);
@@ -127,8 +127,7 @@ export function DemoController({ onRoleSwitched, onDataReset, onPresentationMode
   const handleSwitchBuyer = async () => {
     setSwitching(true);
     try {
-      logout();
-      await login('0987654321', '123456', 'buyer');
+      await switchRole(2); // Buyer ID 2 (0987654321)
       setIsOpen(false);
       if (onRoleSwitched) onRoleSwitched('buyer');
     } catch (err: any) {
@@ -145,11 +144,11 @@ export function DemoController({ onRoleSwitched, onDataReset, onPresentationMode
   const handleSwitchSellerShop = async (username: string) => {
     setSwitching(true);
     try {
-      const res = await api.switchSeller(username);
-      setStoredToken(res.token);
-      await refreshUser();
+      let targetUserId = 1;
+      if (username === 'goc_sach_nhac') targetUserId = 3;
+      else if (username === 'retro_tech') targetUserId = 4;
+      await switchRole(targetUserId);
       setIsOpen(false);
-      showToast(`Đã chuyển vai sang shop: ${res.user.full_name}`, 'success');
       if (onRoleSwitched) onRoleSwitched('seller');
     } catch (err: any) {
       showToast(err.message || 'Lỗi chuyển vai người bán', 'error');
@@ -185,7 +184,7 @@ export function DemoController({ onRoleSwitched, onDataReset, onPresentationMode
   };
 
   return (
-    <div className="fixed bottom-5 left-5 z-40 print:hidden font-sans">
+    <div className="fixed bottom-24 sm:bottom-5 left-4 sm:left-5 z-40 print:hidden font-sans">
       {/* Floating Controller Button */}
       {!isOpen && (
         <button

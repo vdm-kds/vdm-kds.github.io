@@ -158,7 +158,7 @@ export const ShopSetupWizard: React.FC<ShopSetupWizardProps> = ({
                 <Store className="w-4 h-4" />
               </span>
               <div>
-                <h2 className="font-serif font-black text-lg text-stone-900">Thiết lập gian hàng</h2>
+                <h2 className="font-black text-lg text-stone-900">Thiết lập gian hàng</h2>
                 <p className="text-xs text-stone-500">Bước {step} trên 3: {step === 1 ? 'Thông tin shop' : step === 2 ? 'Hình ảnh đại diện & bìa' : 'Địa chỉ lấy hàng'}</p>
               </div>
             </div>

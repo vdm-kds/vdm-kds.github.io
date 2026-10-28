@@ -31,7 +31,41 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
   onNavigateToShop
 }) => {
   const { showToast } = useToast();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'orders' | 'shipping' | 'returns' | 'offers' | 'chat' | 'reviews' | 'products' | 'coupons'>('dashboard');
+
+  const getTabFromPath = (path: string): 'dashboard' | 'orders' | 'shipping' | 'returns' | 'offers' | 'chat' | 'reviews' | 'products' | 'coupons' => {
+    if (path.startsWith('/seller/orders')) return 'orders';
+    if (path.startsWith('/seller/shipping')) return 'shipping';
+    if (path.startsWith('/seller/returns')) return 'returns';
+    if (path.startsWith('/seller/offers')) return 'offers';
+    if (path.startsWith('/seller/messages') || path.startsWith('/seller/chat')) return 'chat';
+    if (path.startsWith('/seller/reviews')) return 'reviews';
+    if (path.startsWith('/seller/products')) return 'products';
+    if (path.startsWith('/seller/coupons')) return 'coupons';
+    return 'dashboard';
+  };
+
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'orders' | 'shipping' | 'returns' | 'offers' | 'chat' | 'reviews' | 'products' | 'coupons'>(
+    () => typeof window !== 'undefined' ? getTabFromPath(window.location.pathname) : 'dashboard'
+  );
+
+  const navigateTab = (tab: 'dashboard' | 'orders' | 'shipping' | 'returns' | 'offers' | 'chat' | 'reviews' | 'products' | 'coupons') => {
+    setActiveTab(tab);
+    const pathMap: Record<string, string> = {
+      dashboard: '/seller',
+      orders: '/seller/orders',
+      shipping: '/seller/shipping',
+      returns: '/seller/returns',
+      offers: '/seller/offers',
+      chat: '/seller/messages',
+      reviews: '/seller/reviews',
+      products: '/seller/products',
+      coupons: '/seller/coupons'
+    };
+    const targetPath = pathMap[tab] || '/seller';
+    if (typeof window !== 'undefined' && window.location.pathname !== targetPath) {
+      window.history.pushState(null, '', targetPath);
+    }
+  };
 
   // Dashboard Stats
   const [stats, setStats] = useState<SellerStats | null>(null);
@@ -236,9 +270,29 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
     }
   };
 
+  const getShopInitials = (name?: string) => {
+    if (!name) return 'S';
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  };
+
   useEffect(() => {
     fetchCurrentShop();
   }, [currentUser?.id]);
+
+  useEffect(() => {
+    const shopName = currentShop?.name || 'Kênh người bán';
+    document.title = `${shopName} · Đồ Cũ Còn Thương`;
+  }, [currentShop?.name]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setActiveTab(getTabFromPath(window.location.pathname));
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -432,7 +486,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
     fetchChat();
     fetchReturns();
     fetchSellerReviews();
-  }, []);
+  }, [currentUser?.id, currentShop?.id]);
 
   useEffect(() => {
     if (activeTab === 'dashboard') fetchStats();
@@ -443,7 +497,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
     if (activeTab === 'chat') fetchChat();
     if (activeTab === 'returns') fetchReturns();
     if (activeTab === 'reviews') fetchSellerReviews();
-  }, [activeTab, orderStatusFilter]);
+  }, [activeTab, orderStatusFilter, currentUser?.id, currentShop?.id]);
 
   // Polling cho đơn hàng, tin nhắn và trả giá mỗi 5-10 giây
   useEffect(() => {
@@ -830,7 +884,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
               ♻
             </div>
             <div>
-              <span className="font-serif font-bold text-base sm:text-lg text-[#08482D] tracking-tight block">
+              <span className="font-bold text-base sm:text-lg text-[#08482D] tracking-tight block">
                 Đồ Cũ Còn Thương
               </span>
               <span className="text-[10px] uppercase font-mono tracking-wider font-semibold text-[#C2522D] block -mt-1">
@@ -882,12 +936,15 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                 onClick={() => setSellerMenuOpen(!sellerMenuOpen)}
                 className="flex items-center gap-2 p-1.5 pl-2 rounded-2xl hover:bg-[#F5F8EF] border border-[#DAE7C7] transition-all"
               >
-                <div className="w-7 h-7 rounded-full bg-[#08482D] text-white flex items-center justify-center text-xs font-bold shadow-xs">
-                  S
+                <div 
+                  className="w-7 h-7 rounded-full text-white flex items-center justify-center text-xs font-bold shadow-xs"
+                  style={{ backgroundColor: currentShop?.cover_color || '#08482D' }}
+                >
+                  {getShopInitials(currentShop?.name)}
                 </div>
                 <div className="text-left hidden md:block">
                   <span className="text-xs font-bold text-[#101410] block leading-tight">
-                    Tiệm Đồ Cũ Còn Thương
+                    {currentShop?.name || 'Tiệm Đồ Cũ Còn Thương'}
                   </span>
                   <span className="text-[10px] text-[#5E5E61] font-mono block">
                     @{currentUser?.username || 'admin'}
@@ -901,7 +958,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                 <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl border border-[#DAE7C7] shadow-xl py-1.5 text-xs z-50 animate-fade-in text-[#101410]">
                   {/* Tên shop và @tên đăng nhập (dòng thông tin, không bấm được) */}
                   <div className="px-4 py-2.5 bg-[#F5F8EF]/60 border-b border-[#DAE7C7]/60">
-                    <p className="font-bold text-[#101410]">Tiệm Đồ Cũ Còn Thương</p>
+                    <p className="font-bold text-[#101410]">{currentShop?.name || 'Tiệm Đồ Cũ Còn Thương'}</p>
                     <p className="text-[11px] text-[#5E5E61] font-mono">@{currentUser?.username || 'admin'}</p>
                     <span className="inline-block mt-1 text-[9px] font-bold px-1.5 py-0.2 rounded bg-[#08482D] text-white uppercase font-mono">
                       Kênh Người Bán
@@ -988,7 +1045,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
             ].map(tab => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
+                onClick={() => navigateTab(tab.id as any)}
                 className={`px-3.5 py-1.5 rounded-full transition-all flex items-center gap-1.5 shrink-0 ${
                   activeTab === tab.id
                     ? 'bg-[#08482D] text-white shadow-xs'
@@ -1019,7 +1076,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
           onRefreshStats={fetchStats}
           onViewOrderDetail={(ord) => {
             setSelectedOrder(ord);
-            setActiveTab('orders');
+            navigateTab('orders');
           }}
         />
       )}
@@ -1027,11 +1084,11 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
       {/* TAB 1: DASHBOARD OVERVIEW */}
       {activeTab === 'dashboard' && (
         <div className="space-y-6 animate-in fade-in">
-          {/* Header Title changed to: small "Xin chào," + "Đồ Cũ Còn Thương" */}
+          {/* Header Title changed to: small "Xin chào," + Shop Name */}
           <div className="pb-2">
             <span className="text-xs text-[#5E5E61] block font-medium">Xin chào,</span>
-            <h1 className="text-2xl sm:text-3xl font-serif font-bold text-[#08482D] mt-0.5">
-              Đồ Cũ Còn Thương
+            <h1 className="text-2xl sm:text-3xl font-bold text-[#08482D] mt-0.5">
+              {currentShop?.name || 'Đồ Cũ Còn Thương'}
             </h1>
           </div>
 
@@ -1089,12 +1146,25 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                     <span className="text-xs font-semibold uppercase">Đánh giá TB</span>
                     <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
                   </div>
-                  <div className="font-mono text-xl sm:text-2xl font-bold text-[#101410]">
-                    {reviewsStats.average_rating || 5.0}★
-                  </div>
-                  <span className="text-[11px] text-[#5E5E61] block">
-                    {reviewsStats.total_reviews} lượt đánh giá
-                  </span>
+                  {reviewsStats.total_reviews > 0 ? (
+                    <>
+                      <div className="font-mono text-xl sm:text-2xl font-bold text-[#101410]">
+                        {reviewsStats.average_rating}★
+                      </div>
+                      <span className="text-[11px] text-[#5E5E61] block">
+                        {reviewsStats.total_reviews} lượt đánh giá
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-sm font-semibold text-[#5E5E61]">
+                        Chưa có đánh giá
+                      </div>
+                      <span className="text-[11px] text-[#5E5E61] block">
+                        0 lượt đánh giá
+                      </span>
+                    </>
+                  )}
                 </div>
 
                 <div className="p-4 sm:p-5 rounded-2xl bg-white border border-[#E2E8D8] space-y-1.5 shadow-xs col-span-2 lg:col-span-1">
@@ -3541,7 +3611,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                     required
                     value={shopEditForm.phone}
                     onChange={e => setShopEditForm(prev => ({ ...prev, phone: e.target.value }))}
-                    placeholder="0987654321"
+                    placeholder="0909 246 135"
                     className="w-full px-3.5 py-2.5 rounded-xl border border-[#DAE7C7] bg-[#F5F8EF] font-mono focus:outline-none focus:border-[#08482D]"
                   />
                 </div>

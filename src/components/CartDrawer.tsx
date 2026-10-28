@@ -3,6 +3,7 @@ import { X, Trash2, ShoppingBag, ArrowRight, Truck, Store, MessageCircle, Extern
 import { CartItem } from '../types';
 import { formatVND } from '../utils/format';
 import { Button } from './Button';
+import { ProductImage } from './ProductImage';
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -152,10 +153,12 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                     <div className="divide-y divide-[#E2E8D8]/60 p-2 sm:p-3 space-y-3">
                       {group.items.map((item) => (
                         <div key={item.id} className="pt-3 first:pt-0 flex gap-3 relative group">
-                          <img
+                          <ProductImage
                             src={item.image_url}
                             alt={item.name}
-                            referrerPolicy="no-referrer"
+                            category={item.category}
+                            productName={item.name}
+                            conditionPct={item.condition_pct}
                             className="w-16 h-16 rounded-xl object-cover bg-[#DAE7C7] shrink-0 border border-[#E2E8D8]"
                           />
 

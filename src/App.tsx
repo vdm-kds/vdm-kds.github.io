@@ -71,6 +71,23 @@ function MainShopApp() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [directCheckoutItem, setDirectCheckoutItem] = useState<{ product: Product; quantity: number } | undefined>(undefined);
   const [successOrder, setSuccessOrder] = useState<Order | null>(null);
+  const [successOrders, setSuccessOrders] = useState<Order[]>([]);
+
+  const handleOpenProductDetail = (prod: Product) => {
+    setDetailProduct(prod);
+    if (typeof window !== 'undefined' && !window.location.pathname.startsWith(`/product/${prod.id}`)) {
+      window.history.pushState(null, '', `/product/${prod.id}`);
+    }
+  };
+
+  const handleCloseProductDetail = () => {
+    setDetailProduct(null);
+    setDetailOpenOffer(false);
+    setDetailOpenChat(false);
+    if (typeof window !== 'undefined' && window.location.pathname.startsWith('/product/')) {
+      window.history.pushState(null, '', '/');
+    }
+  };
   const [authModal, setAuthModal] = useState<{ 
     open: boolean; 
     role: 'buyer' | 'seller'; 
@@ -178,6 +195,34 @@ function MainShopApp() {
 
     const handleRouteFromPath = () => {
       const path = window.location.pathname;
+
+      // 1. PRODUCT DETAIL: /product/:id (Requirement A6)
+      if (path.startsWith('/product/')) {
+        const idStr = path.replace('/product/', '').split('/')[0].split('?')[0];
+        const idNum = Number(idStr);
+        if (!isNaN(idNum) && idNum > 0) {
+          if (!detailProduct || detailProduct.id !== idNum) {
+            api.getProduct(idNum).then(res => {
+              if (res.product) {
+                setDetailProduct(res.product);
+                if (currentView === 'seller' && user?.role === 'buyer') {
+                  setCurrentView('home');
+                }
+              }
+            }).catch(() => {
+              setCurrentView('404');
+            });
+          }
+          return;
+        }
+      } else {
+        // If path does not start with /product/, ensure product modal is closed on Back button
+        if (detailProduct) {
+          setDetailProduct(null);
+        }
+      }
+
+      // 2. SHOP VIEW: /shop/:slug
       if (path.startsWith('/shop/')) {
         const slug = path.replace('/shop/', '').split('/')[0].split('?')[0];
         if (slug) {
@@ -185,13 +230,42 @@ function MainShopApp() {
           setCurrentView('shop');
           return;
         }
-      } else if (path === '/seller/register') {
+      }
+
+      // 3. POLICY MODAL: /policy/:slug
+      if (path.startsWith('/policy/')) {
+        const pSlug = path.replace('/policy/', '').split('/')[0].split('?')[0];
+        if (['returns', 'shipping', 'guide', 'about', 'contact'].includes(pSlug)) {
+          setPolicyType(pSlug as any);
+          return;
+        } else {
+          setCurrentView('404');
+          return;
+        }
+      }
+
+      // 4. AUTH ROUTES (MODALS ON TOP OF CURRENT / HOME)
+      if (path === '/seller/register') {
         if (!user) setAuthModal({ open: true, role: 'seller', initialIsRegister: true });
         else if (user.role === 'seller') setCurrentView('seller');
-      } else if (path === '/seller/login') {
+        return;
+      }
+      if (path === '/seller/login') {
         if (!user) setAuthModal({ open: true, role: 'seller', initialIsRegister: false });
         else if (user.role === 'seller') setCurrentView('seller');
-      } else if (path.startsWith('/seller')) {
+        return;
+      }
+      if (path === '/register') {
+        if (!user) setAuthModal({ open: true, role: 'buyer', initialIsRegister: true });
+        return;
+      }
+      if (path === '/login') {
+        if (!user) setAuthModal({ open: true, role: 'buyer', initialIsRegister: false });
+        return;
+      }
+
+      // 5. SELLER ROUTES: /seller, /seller/orders, /seller/orders/:id, etc.
+      if (path.startsWith('/seller')) {
         if (user && user.role === 'seller') {
           setCurrentView('seller');
         } else if (!user) {
@@ -200,11 +274,15 @@ function MainShopApp() {
           showToast('Trang này dành cho người bán', 'error');
           setCurrentView('home');
         }
-      } else if (path === '/register') {
-        if (!user) setAuthModal({ open: true, role: 'buyer', initialIsRegister: true });
-      } else if (path === '/login') {
-        if (!user) setAuthModal({ open: true, role: 'buyer', initialIsRegister: false });
-      } else if (path === '/orders') {
+        return;
+      }
+
+      // 6. BUYER ORDERS: /orders, /orders/:id
+      if (path.startsWith('/orders')) {
+        const orderIdStr = path.replace('/orders', '').replace('/', '').split('?')[0];
+        if (orderIdStr) {
+          setSelectedOrderCodeForTracking(orderIdStr);
+        }
         if (user && user.role === 'buyer') {
           setCurrentView('orders');
         } else if (!user) {
@@ -213,7 +291,11 @@ function MainShopApp() {
           showToast('Bạn đang đăng nhập bằng tài khoản người bán', 'error');
           setCurrentView('seller');
         }
-      } else if (path === '/account') {
+        return;
+      }
+
+      // 7. BUYER ACCOUNT: /account
+      if (path === '/account') {
         if (user && user.role === 'buyer') {
           setCurrentView('account');
         } else if (!user) {
@@ -221,7 +303,15 @@ function MainShopApp() {
         } else {
           setCurrentView('seller');
         }
-      } else if (path === '/checkout') {
+        return;
+      }
+
+      // 8. CART & CHECKOUT: /cart, /checkout, /order-success
+      if (path === '/cart') {
+        setIsCartOpen(true);
+        return;
+      }
+      if (path === '/checkout') {
         if (user && user.role === 'buyer') {
           setCurrentView('checkout');
         } else if (!user) {
@@ -229,13 +319,71 @@ function MainShopApp() {
         } else {
           setCurrentView('seller');
         }
+        return;
       }
+      if (path === '/order-success') {
+        if (user && user.role === 'buyer') {
+          setCurrentView('orders');
+        }
+        return;
+      }
+
+      // 9. CHAT: /chat
+      if (path === '/chat') {
+        window.dispatchEvent(new CustomEvent('open-buyer-chat', { detail: {} }));
+        return;
+      }
+
+      // 10. ROOT: /
+      if (path === '/' || path === '') {
+        if (user?.role === 'seller') {
+          setCurrentView('seller');
+        } else {
+          setCurrentView('home');
+        }
+        return;
+      }
+
+      // 11. UNKNOWN ROUTE -> 404
+      setCurrentView('404');
     };
 
     handleRouteFromPath();
     window.addEventListener('popstate', handleRouteFromPath);
     return () => window.removeEventListener('popstate', handleRouteFromPath);
   }, [authLoading, user]);
+
+  // Global listeners for overlay closing and role navigation (Requirement A1)
+  useEffect(() => {
+    const handleCloseAll = () => {
+      setDetailProduct(null);
+      setIsCartOpen(false);
+      setAuthModal(prev => ({ ...prev, open: false }));
+      setPolicyType(null);
+      setSuccessOrder(null);
+      setSuccessOrders([]);
+    };
+
+    const handleNavigatePath = (e: Event) => {
+      const customEvent = e as CustomEvent<{ path: string }>;
+      const targetPath = customEvent.detail?.path || '/';
+      if (targetPath.startsWith('/seller')) {
+        setCurrentView('seller');
+      } else {
+        setCurrentView('home');
+      }
+      if (typeof window !== 'undefined' && window.location.pathname !== targetPath) {
+        window.history.pushState(null, '', targetPath);
+      }
+    };
+
+    window.addEventListener('close-all-overlays', handleCloseAll);
+    window.addEventListener('navigate-path', handleNavigatePath);
+    return () => {
+      window.removeEventListener('close-all-overlays', handleCloseAll);
+      window.removeEventListener('navigate-path', handleNavigatePath);
+    };
+  }, []);
 
   // Load products with basic and advanced filters
   const fetchProducts = async () => {
@@ -561,7 +709,7 @@ function MainShopApp() {
   const isPreview = currentView === 'preview';
 
   return (
-    <div key={authStatus} className="min-h-screen flex flex-col bg-[#F5F8EF] text-[#101410]">
+    <div key={user?.id ?? 'guest'} className="min-h-screen flex flex-col bg-[#F5F8EF] text-[#101410]">
       {/* PREVIEW BANNER (Fixed on top when seller is previewing shop) */}
       {isPreview && (
         <div className="sticky top-0 z-50 bg-[#C2522D] text-white px-4 sm:px-6 py-2.5 flex items-center justify-between shadow-md">
@@ -603,7 +751,7 @@ function MainShopApp() {
           }}
           onOpenAuth={(role, isRegister) => setAuthModal({ open: true, role, initialIsRegister: !!isRegister })}
           onSelectOrder={handleSelectOrderNotification}
-          onSelectProduct={prod => setDetailProduct(prod)}
+          onSelectProduct={handleOpenProductDetail}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           onSearchSubmit={handleSearchSubmit}
@@ -638,14 +786,14 @@ function MainShopApp() {
         ) : currentView === 'account' ? (
           <AccountView
             onBackToHome={() => setCurrentView('home')}
-            onSelectProduct={prod => setDetailProduct(prod)}
+            onSelectProduct={handleOpenProductDetail}
             onAddToCart={prod => handleAddToCart(prod, 1)}
             onNavigateToShop={handleNavigateToShop}
           />
         ) : currentView === 'shop' ? (
           <ShopView
             slug={activeShopSlug || 'do-cu-con-thuong'}
-            onSelectProduct={(prod: Product) => setDetailProduct(prod)}
+            onSelectProduct={handleOpenProductDetail}
             onAddToCart={(prod: Product) => handleAddToCart(prod, 1)}
             onBuyNow={(prod: Product) => handleBuyNow(prod, 1)}
             onBackToHome={() => {
@@ -665,9 +813,10 @@ function MainShopApp() {
               window.history.pushState({}, '', '/');
               setIsCartOpen(true);
             }}
-            onSuccess={(order) => {
+            onSuccess={(order, allOrders) => {
               setDirectCheckoutItem(undefined);
               setSuccessOrder(order);
+              setSuccessOrders(allOrders && allOrders.length > 0 ? allOrders : [order]);
               refreshCartCount();
               loadCartData();
             }}
@@ -701,7 +850,7 @@ function MainShopApp() {
             onInStockOnlyChange={setInStockOnly}
             onResetFilters={handleResetFilters}
             onApplyFilters={fetchProducts}
-            onSelectProduct={prod => setDetailProduct(prod)}
+            onSelectProduct={handleOpenProductDetail}
             onAddToCart={prod => handleAddToCart(prod, 1)}
             onOpenCart={() => setIsCartOpen(true)}
             wishlistIds={wishlistIds}
@@ -720,7 +869,7 @@ function MainShopApp() {
               <HeroLanding
                 products={products}
                 totalProductsCount={products.length}
-                onSelectProduct={prod => setDetailProduct(prod)}
+                onSelectProduct={handleOpenProductDetail}
                 onAddToCart={prod => handleAddToCart(prod, 1)}
                 onNavigate={handleNavigate}
                 onOpenAuth={(role, isRegister) => setAuthModal({ open: true, role, initialIsRegister: !!isRegister })}
@@ -941,7 +1090,7 @@ function MainShopApp() {
                     <ProductCard
                       key={product.id}
                       product={product}
-                      onSelect={prod => setDetailProduct(prod)}
+                      onSelect={handleOpenProductDetail}
                       onAddToCart={prod => handleAddToCart(prod, 1)}
                       isWishlisted={wishlistIds.has(product.id)}
                       onToggleWishlist={id => handleToggleWishlist(id)}
@@ -957,153 +1106,155 @@ function MainShopApp() {
         )}
       </main>
 
-      {/* FOOTER */}
-      <footer className="bg-white border-t border-[#E2E8D8] py-12 text-[#101410] mt-auto">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-4 gap-8 text-xs">
-          {/* Column 1: Brand Info */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-[#08482D] text-white flex items-center justify-center font-bold text-base">
-                ♻
-              </div>
-              <span className="text-lg font-bold text-[#101410]">
-                Đồ Cũ Còn Thương
-              </span>
-            </div>
-            <p className="text-[#5E5E61] leading-relaxed">
-              Tiệm đồ cũ phong cách tạp chí vintage. Mỗi món đồ cũ đều mang một câu chuyện, kiểm định chất lượng minh bạch trước khi đến tay người thương mới.
-            </p>
-            <div className="flex items-center gap-2 text-[#08482D] font-medium pt-1">
-              <ShieldCheck className="w-4 h-4" />
-              <span>Bảo vệ quyền lợi khách mua & người bán 100%</span>
-            </div>
-          </div>
-
-          {/* Column 2: Policies & Guides */}
-          <div>
-            <h4 className="font-bold text-[#101410] uppercase mb-3 tracking-wider flex items-center gap-1.5">
-              <HelpCircle className="w-3.5 h-3.5 text-[#08482D]" />
-              Chính sách & Hỗ trợ
-            </h4>
-            <ul className="space-y-2 text-[#5E5E61]">
-              <li>
-                <button
-                  onClick={() => setPolicyType('returns')}
-                  className="hover:text-[#08482D] hover:underline transition-colors text-left"
-                >
-                  Chính sách đổi trả & hoàn tiền (3 ngày)
-                </button>
-              </li>
-              <li>
-                <button
-                  onClick={() => setPolicyType('shipping')}
-                  className="hover:text-[#08482D] hover:underline transition-colors text-left"
-                >
-                  Chính sách vận chuyển & đồng kiểm
-                </button>
-              </li>
-              <li>
-                <button
-                  onClick={() => setPolicyType('guide')}
-                  className="hover:text-[#08482D] hover:underline transition-colors text-left"
-                >
-                  Hướng dẫn mua hàng & thanh toán thẻ
-                </button>
-              </li>
-            </ul>
-
-            <div className="mt-4 pt-3 border-t border-[#E2E8D8]">
-              <span className="text-[10px] font-bold text-[#101410] uppercase block mb-1.5">Mã giảm giá đang phát:</span>
-              <div className="flex flex-wrap gap-1.5 font-mono text-[10px]">
-                <span className="bg-[#DAE7C7] text-[#08482D] px-2 py-0.5 rounded-full font-bold border border-[#DAE7C7]">
-                  DOCU10 (-10%)
-                </span>
-                <span className="bg-[#DAE7C7] text-[#08482D] px-2 py-0.5 rounded-full font-bold border border-[#DAE7C7]">
-                  FREESHIP (0đ)
+      {/* FOOTER (hidden on seller channel) */}
+      {currentView !== 'seller' && (
+        <footer className="bg-white border-t border-[#E2E8D8] py-12 text-[#101410] mt-auto">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-4 gap-8 text-xs">
+            {/* Column 1: Brand Info */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-[#08482D] text-white flex items-center justify-center font-bold text-base">
+                  ♻
+                </div>
+                <span className="text-lg font-bold text-[#101410]">
+                  Đồ Cũ Còn Thương
                 </span>
               </div>
-            </div>
-          </div>
-
-          {/* Column 3: About & Contact */}
-          <div>
-            <h4 className="font-bold text-[#101410] uppercase mb-3 tracking-wider flex items-center gap-1.5">
-              <Info className="w-3.5 h-3.5 text-[#08482D]" />
-              Về chúng tôi
-            </h4>
-            <ul className="space-y-2 text-[#5E5E61]">
-              <li>
-                <button
-                  onClick={() => setPolicyType('about')}
-                  className="hover:text-[#08482D] hover:underline transition-colors text-left"
-                >
-                  Câu chuyện tiệm Đồ Cũ Còn Thương
-                </button>
-              </li>
-              <li>
-                <button
-                  onClick={() => setPolicyType('contact')}
-                  className="hover:text-[#08482D] hover:underline transition-colors text-left"
-                >
-                  Liên hệ cửa hàng & Góp ý
-                </button>
-              </li>
-            </ul>
-
-            <div className="mt-4 space-y-1 text-[11px] text-[#5E5E61]">
-              <div>📍 128 Đường Hai Bà Trưng, Quận 1, TP.HCM</div>
-              <div>📞 Hotline: 0987 654 321 (8:00 - 21:00)</div>
-              <div>✉️ docuconthuong@vintage.vn</div>
-            </div>
-          </div>
-
-          {/* Column 4: Payment Methods & Shipping Carriers */}
-          <div>
-            <h4 className="font-bold text-[#101410] uppercase mb-3 tracking-wider">
-              Thanh toán & Vận chuyển
-            </h4>
-            
-            <span className="text-[10px] uppercase font-semibold text-[#5E5E61] block mb-1">Phương thức thanh toán:</span>
-            <div className="grid grid-cols-2 gap-1.5 mb-3">
-              <span className="p-1.5 bg-[#F5F8EF] rounded-lg border border-[#E2E8D8] text-[11px] font-bold text-center text-[#101410]">
-                💳 Visa
-              </span>
-              <span className="p-1.5 bg-[#F5F8EF] rounded-lg border border-[#E2E8D8] text-[11px] font-bold text-center text-[#101410]">
-                💳 Mastercard
-              </span>
-              <span className="p-1.5 bg-[#F5F8EF] rounded-lg border border-[#E2E8D8] text-[11px] font-bold text-center text-[#101410]">
-                🏦 NAPAS ATM
-              </span>
-              <span className="p-1.5 bg-[#F5F8EF] rounded-lg border border-[#E2E8D8] text-[11px] font-bold text-center text-[#101410]">
-                💵 COD tiền mặt
-              </span>
-            </div>
-
-            <span className="text-[10px] uppercase font-semibold text-[#5E5E61] block mb-1">Đơn vị vận chuyển liên kết:</span>
-            <div className="space-y-1 text-[11px] text-[#5E5E61]">
-              <div className="flex items-center gap-1.5">
-                <Truck className="w-3.5 h-3.5 text-[#C2522D]" />
-                <span>Giao Hàng Nhanh (GHN)</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <Truck className="w-3.5 h-3.5 text-[#08482D]" />
-                <span>Giao Hàng Tiết Kiệm (GHTK)</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <Truck className="w-3.5 h-3.5 text-red-600" />
-                <span>Viettel Post</span>
+              <p className="text-[#5E5E61] leading-relaxed">
+                Tiệm đồ cũ phong cách tạp chí vintage. Mỗi món đồ cũ đều mang một câu chuyện, kiểm định chất lượng minh bạch trước khi đến tay người thương mới.
+              </p>
+              <div className="flex items-center gap-2 text-[#08482D] font-medium pt-1">
+                <ShieldCheck className="w-4 h-4" />
+                <span>Bảo vệ quyền lợi khách mua & người bán 100%</span>
               </div>
             </div>
-          </div>
-        </div>
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8 pt-6 border-t border-[#E2E8D8] flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left text-[#5E5E61]">
-          <div>
-            <p>© 2026 Đồ Cũ Còn Thương. Nền tảng thương mại điện tử đồ cũ bền vững phong cách studio xanh bạc hà.</p>
-            <p className="text-xs text-[#08482D] font-medium mt-1">Bản demo: dữ liệu được lưu trên trình duyệt của bạn.</p>
+            {/* Column 2: Policies & Guides */}
+            <div>
+              <h4 className="font-bold text-[#101410] uppercase mb-3 tracking-wider flex items-center gap-1.5">
+                <HelpCircle className="w-3.5 h-3.5 text-[#08482D]" />
+                Chính sách & Hỗ trợ
+              </h4>
+              <ul className="space-y-2 text-[#5E5E61]">
+                <li>
+                  <button
+                    onClick={() => setPolicyType('returns')}
+                    className="hover:text-[#08482D] hover:underline transition-colors text-left"
+                  >
+                    Chính sách đổi trả & hoàn tiền (3 ngày)
+                  </button>
+                </li>
+                <li>
+                  <button
+                    onClick={() => setPolicyType('shipping')}
+                    className="hover:text-[#08482D] hover:underline transition-colors text-left"
+                  >
+                    Chính sách vận chuyển & đồng kiểm
+                  </button>
+                </li>
+                <li>
+                  <button
+                    onClick={() => setPolicyType('guide')}
+                    className="hover:text-[#08482D] hover:underline transition-colors text-left"
+                  >
+                    Hướng dẫn mua hàng & thanh toán thẻ
+                  </button>
+                </li>
+              </ul>
+
+              <div className="mt-4 pt-3 border-t border-[#E2E8D8]">
+                <span className="text-[10px] font-bold text-[#101410] uppercase block mb-1.5">Mã giảm giá đang phát:</span>
+                <div className="flex flex-wrap gap-1.5 font-mono text-[10px]">
+                  <span className="bg-[#DAE7C7] text-[#08482D] px-2 py-0.5 rounded-full font-bold border border-[#DAE7C7]">
+                    DOCU10 (-10%)
+                  </span>
+                  <span className="bg-[#DAE7C7] text-[#08482D] px-2 py-0.5 rounded-full font-bold border border-[#DAE7C7]">
+                    FREESHIP (miễn phí ship)
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Column 3: About & Contact */}
+            <div>
+              <h4 className="font-bold text-[#101410] uppercase mb-3 tracking-wider flex items-center gap-1.5">
+                <Info className="w-3.5 h-3.5 text-[#08482D]" />
+                Về chúng tôi
+              </h4>
+              <ul className="space-y-2 text-[#5E5E61]">
+                <li>
+                  <button
+                    onClick={() => setPolicyType('about')}
+                    className="hover:text-[#08482D] hover:underline transition-colors text-left"
+                  >
+                    Câu chuyện tiệm Đồ Cũ Còn Thương
+                  </button>
+                </li>
+                <li>
+                  <button
+                    onClick={() => setPolicyType('contact')}
+                    className="hover:text-[#08482D] hover:underline transition-colors text-left"
+                  >
+                    Liên hệ cửa hàng & Góp ý
+                  </button>
+                </li>
+              </ul>
+
+              <div className="mt-4 space-y-1 text-[11px] text-[#5E5E61]">
+                <div>📍 128 Đường Hai Bà Trưng, Quận 1, TP.HCM</div>
+                <div>📞 Hotline: 0909 246 135 (8:00 - 21:00)</div>
+                <div>✉️ docuconthuong@vintage.vn</div>
+              </div>
+            </div>
+
+            {/* Column 4: Payment Methods & Shipping Carriers */}
+            <div>
+              <h4 className="font-bold text-[#101410] uppercase mb-3 tracking-wider">
+                Thanh toán & Vận chuyển
+              </h4>
+              
+              <span className="text-[10px] uppercase font-semibold text-[#5E5E61] block mb-1">Phương thức thanh toán:</span>
+              <div className="grid grid-cols-2 gap-1.5 mb-3">
+                <span className="p-1.5 bg-[#F5F8EF] rounded-lg border border-[#E2E8D8] text-[11px] font-bold text-center text-[#101410]">
+                  💳 Visa
+                </span>
+                <span className="p-1.5 bg-[#F5F8EF] rounded-lg border border-[#E2E8D8] text-[11px] font-bold text-center text-[#101410]">
+                  💳 Mastercard
+                </span>
+                <span className="p-1.5 bg-[#F5F8EF] rounded-lg border border-[#E2E8D8] text-[11px] font-bold text-center text-[#101410]">
+                  🏦 NAPAS ATM
+                </span>
+                <span className="p-1.5 bg-[#F5F8EF] rounded-lg border border-[#E2E8D8] text-[11px] font-bold text-center text-[#101410]">
+                  💵 COD tiền mặt
+                </span>
+              </div>
+
+              <span className="text-[10px] uppercase font-semibold text-[#5E5E61] block mb-1">Đơn vị vận chuyển liên kết:</span>
+              <div className="space-y-1 text-[11px] text-[#5E5E61]">
+                <div className="flex items-center gap-1.5">
+                  <Truck className="w-3.5 h-3.5 text-[#C2522D]" />
+                  <span>Giao Hàng Nhanh (GHN)</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Truck className="w-3.5 h-3.5 text-[#08482D]" />
+                  <span>Giao Hàng Tiết Kiệm (GHTK)</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Truck className="w-3.5 h-3.5 text-red-600" />
+                  <span>Viettel Post</span>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-      </footer>
+
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8 pt-6 border-t border-[#E2E8D8] flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left text-[#5E5E61]">
+            <div>
+              <p>© 2026 Đồ Cũ Còn Thương. Nền tảng thương mại điện tử đồ cũ bền vững phong cách studio xanh bạc hà.</p>
+              <p className="text-xs text-[#08482D] font-medium mt-1">Bản demo: dữ liệu được lưu trên trình duyệt của bạn.</p>
+            </div>
+          </div>
+        </footer>
+      )}
 
       {/* Floating Demo Controller Button at Bottom-Left */}
       <DemoController
@@ -1159,47 +1310,50 @@ function MainShopApp() {
             handleBuyNow(prod, 1);
           }
         }}
-        onClose={() => {
-          setDetailProduct(null);
-          setDetailOpenOffer(false);
-          setDetailOpenChat(false);
-        }}
+        onClose={handleCloseProductDetail}
         onAddToCart={(prod, qty) => handleAddToCart(prod, qty)}
         onBuyNow={(prod, qty) => handleBuyNow(prod, qty)}
         disabledBuy={isPreview}
         onDisabledBuyClick={() => showToast('Bạn đang xem cửa hàng dưới góc nhìn của khách — chức năng mua hàng bị vô hiệu hóa', 'info')}
-        onSelectProduct={(p) => setDetailProduct(p)}
+        onSelectProduct={(p) => handleOpenProductDetail(p)}
         onNavigateToShop={handleNavigateToShop}
       />
 
-      {/* Cart Drawer */}
-      <CartDrawer
-        isOpen={isCartOpen}
-        onClose={() => setIsCartOpen(false)}
-        items={cartItems}
-        subtotal={cartSubtotal}
-        shippingFee={cartShippingFee}
-        total={cartTotal}
-        onUpdateQty={handleUpdateCartQty}
-        onRemoveItem={handleRemoveCartItem}
-        onClearCart={handleClearCart}
-        onNavigateToShop={handleNavigateToShop}
-        onProceedToCheckout={() => {
-          setIsCartOpen(false);
-          setDirectCheckoutItem(undefined);
-          setCurrentView('checkout');
-          window.history.pushState({}, '', '/checkout');
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        }}
-      />
+      {/* Cart Drawer (only on buyer/store channel) */}
+      {currentView !== 'seller' && (
+        <CartDrawer
+          isOpen={isCartOpen}
+          onClose={() => setIsCartOpen(false)}
+          items={cartItems}
+          subtotal={cartSubtotal}
+          shippingFee={cartShippingFee}
+          total={cartTotal}
+          onUpdateQty={handleUpdateCartQty}
+          onRemoveItem={handleRemoveCartItem}
+          onClearCart={handleClearCart}
+          onNavigateToShop={handleNavigateToShop}
+          onProceedToCheckout={() => {
+            setIsCartOpen(false);
+            setDirectCheckoutItem(undefined);
+            setCurrentView('checkout');
+            window.history.pushState({}, '', '/checkout');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+        />
+      )}
 
-      {/* Success Order Modal */}
+      {/* Success Order Modal (Requirement A4: shows all created orders) */}
       <SuccessOrderModal
         order={successOrder}
-        onClose={() => setSuccessOrder(null)}
+        orders={successOrders}
+        onClose={() => {
+          setSuccessOrder(null);
+          setSuccessOrders([]);
+        }}
         onViewOrders={code => {
           setSelectedOrderCodeForTracking(code);
           setCurrentView('orders');
+          window.history.pushState({}, '', '/orders');
         }}
       />
 

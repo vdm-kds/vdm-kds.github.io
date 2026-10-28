@@ -26,6 +26,7 @@ interface AuthContextType {
   refreshUser: () => Promise<void>;
   refreshCartCount: () => Promise<void>;
   quickLogin: (role: 'buyer' | 'seller') => Promise<void>;
+  switchRole: (targetUserId: number) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -210,32 +211,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     showToast('Đã đăng xuất', 'info');
   };
 
-  const quickLogin = async (targetRole: 'buyer' | 'seller') => {
+  const switchRole = async (targetUserId: number) => {
     try {
-      if (targetRole === 'seller') {
-        const res = await api.switchSeller();
-        if (mountedRef.current) {
-          setAuthState({
-            status: 'seller',
-            user: res.user,
-            address: null
-          });
-          setCartCount(0);
-        }
+      // 1. Close all overlays, modals, drawers, chat dock
+      window.dispatchEvent(new CustomEvent('close-all-overlays'));
+      window.dispatchEvent(new CustomEvent('close-buyer-chat'));
+
+      // 2. Switch session without calling logout
+      const res = await api.switchRole(targetUserId);
+      if (!mountedRef.current) return;
+
+      // 3. Atomically update AuthContext state once
+      setAuthState({
+        status: res.user.role === 'seller' ? 'seller' : 'buyer',
+        user: res.user,
+        address: null
+      });
+
+      if (res.user.role === 'buyer') {
+        await refreshCartCount();
       } else {
-        const res = await api.switchBuyer();
-        if (mountedRef.current) {
-          setAuthState({
-            status: 'buyer',
-            user: res.user,
-            address: null
-          });
-          refreshCartCount();
-        }
+        setCartCount(0);
       }
-      showToast('Đã chuyển đổi tài khoản thành công', 'success');
+
+      // 4. Navigate: seller -> /seller, buyer -> /
+      const targetPath = res.user.role === 'seller' ? '/seller' : '/';
+      window.dispatchEvent(new CustomEvent('navigate-path', { detail: { path: targetPath } }));
+
+      showToast(`Đã chuyển sang vai ${res.role_name}`, 'success');
     } catch (err: any) {
       showToast(err.message || 'Lỗi chuyển đổi tài khoản', 'error');
+      throw err;
+    }
+  };
+
+  const quickLogin = async (targetRole: 'buyer' | 'seller') => {
+    if (targetRole === 'seller') {
+      await switchRole(1); // Default seller: Đồ Cũ Còn Thương
+    } else {
+      await switchRole(2); // Buyer: Nguyễn Văn A
     }
   };
 
@@ -252,7 +266,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         logout,
         refreshUser,
         refreshCartCount,
-        quickLogin
+        quickLogin,
+        switchRole
       }}
     >
       {children}

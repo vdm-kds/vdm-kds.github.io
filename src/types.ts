@@ -316,9 +316,31 @@ export interface ChatMessage {
   sender_role: 'buyer' | 'seller';
   sender_id: number;
   content: string;
+  type?: 'text' | 'context';
   is_read: number | boolean;
   context_card?: ChatMessageContext;
   created_at: string;
+}
+
+export interface CheckoutShopBreakdown {
+  shop_id: number;
+  shop_name: string;
+  shop_slug: string;
+  items: CartItem[];
+  subtotal: number;
+  shipping_fee: number;
+  coupon_code?: string;
+  discount_amount: number;
+  total: number;
+  applied_coupon?: Coupon | null;
+}
+
+export interface CheckoutCalculation {
+  shops: CheckoutShopBreakdown[];
+  subtotal: number;
+  shipping_fee: number;
+  discount_amount: number;
+  grand_total: number;
 }
 
 export interface ChatConversation {

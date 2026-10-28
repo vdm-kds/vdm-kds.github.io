@@ -1,8 +1,8 @@
-import { Product, Order, User, CartItem, Coupon, Offer, ChatConversation, ChatMessage, ChatMessageContext, ReturnRequest, ReturnStatus, Review, NotificationItem, SellerStats, Address, ShipmentEvent, Shop } from '../types';
+import { Product, Order, User, CartItem, Coupon, Offer, ChatConversation, ChatMessage, ChatMessageContext, ReturnRequest, ReturnStatus, Review, NotificationItem, SellerStats, Address, ShipmentEvent, Shop, CheckoutCalculation, CheckoutShopBreakdown } from '../types';
 
 const DB_KEY = 'dcct_db';
 const SESSION_KEY = 'dcct_session';
-const DB_VERSION = 3;
+const DB_VERSION = 5;
 
 // Simulated realistic network delay
 export const delay = (ms?: number) =>
@@ -24,23 +24,131 @@ export function createShopAvatarSvg(name: string, bg: string = '#08482D', fg: st
   const initials = (words.length > 1 ? words[0][0] + words[1][0] : name.slice(0, 2)).toUpperCase();
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
     <rect width="200" height="200" fill="${bg}" rx="100"/>
-    <text x="100" y="118" font-family="'Plus Jakarta Sans', sans-serif" font-size="70" font-weight="800" fill="${fg}" text-anchor="middle" dominant-baseline="middle">${initials}</text>
+    <text x="100" y="118" font-family="'Be Vietnam Pro', sans-serif" font-size="70" font-weight="800" fill="${fg}" text-anchor="middle" dominant-baseline="middle">${initials}</text>
   </svg>`;
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
-// SVG Placeholder generator for products and defects
-export function createSvgPlaceholder(title: string, category: string, bg: string = '#08482D', fg: string = '#FAF7F2', tag: string = 'ẢNH GỐC 1'): string {
+export const CATEGORY_EMOJIS: Record<string, string> = {
+  'Thời trang': '🧥',
+  'Điện tử': '🎧',
+  'Máy ảnh': '📷',
+  'Sách': '📖',
+  'Nhạc cụ': '🎸',
+  'Phụ kiện': '⌚',
+  'Gia dụng': '🍳'
+};
+
+// Vintage Product SVG Generator according to Requirement B1:
+// - Gradient #08482D to #2E7D4F
+// - Faint #DAE7C7 circles
+// - Large category emoji (🧥, 🎧, 📷, 📖, 🎸, ⌚, 🍳)
+// - Category uppercase in #DAE7C7
+// - Product title in white (#FFFFFF)
+// - Strictly 'Be Vietnam Pro', sans-serif font
+// - 3 distinct variants for product gallery
+export function createVintageProductSvg(title: string, category: string, variant: number = 0): string {
+  const emoji = CATEGORY_EMOJIS[category] || '📦';
+  const cleanTitle = title && title.length > 24 ? title.substring(0, 24) + '...' : (title || 'Sản phẩm');
+  const safeCategory = (category || 'ĐỒ CŨ').toUpperCase();
+
+  let gradId = `vg_${variant}_${Math.random().toString(36).substring(2, 6)}`;
+  let gradStart = '#08482D';
+  let gradEnd = '#2E7D4F';
+  let circles = '';
+  let variantTag = 'ẢNH CHÍNH';
+
+  if (variant === 1) {
+    gradStart = '#0A5335';
+    gradEnd = '#246D43';
+    circles = `
+      <circle cx="440" cy="180" r="170" fill="#DAE7C7" opacity="0.14"/>
+      <circle cx="160" cy="420" r="110" fill="#DAE7C7" opacity="0.08"/>
+    `;
+    variantTag = 'GÓC NGHIÊNG';
+  } else if (variant === 2) {
+    gradStart = '#063D26';
+    gradEnd = '#358A59';
+    circles = `
+      <circle cx="300" cy="210" r="180" fill="#DAE7C7" opacity="0.15"/>
+      <circle cx="480" cy="460" r="95" fill="#DAE7C7" opacity="0.10"/>
+    `;
+    variantTag = 'CHI TIẾT';
+  } else {
+    gradStart = '#08482D';
+    gradEnd = '#2E7D4F';
+    circles = `
+      <circle cx="160" cy="180" r="160" fill="#DAE7C7" opacity="0.13"/>
+      <circle cx="440" cy="380" r="120" fill="#DAE7C7" opacity="0.08"/>
+    `;
+    variantTag = 'MẶT TRƯỚC';
+  }
+
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">
-    <rect width="600" height="600" fill="${bg}"/>
-    <circle cx="300" cy="270" r="140" fill="${fg}" opacity="0.08"/>
-    <circle cx="300" cy="270" r="100" fill="${fg}" opacity="0.12"/>
-    <text x="300" y="240" font-family="'Plus Jakarta Sans', sans-serif" font-size="28" font-weight="700" fill="${fg}" text-anchor="middle" letter-spacing="2">${category.toUpperCase()}</text>
-    <line x1="220" y1="260" x2="380" y2="260" stroke="${fg}" stroke-width="2" stroke-opacity="0.3"/>
-    <text x="300" y="300" font-family="'Fraunces', serif" font-size="24" font-weight="600" fill="${fg}" text-anchor="middle">${title.length > 24 ? title.substring(0, 24) + '...' : title}</text>
-    <text x="300" y="340" font-family="'Space Mono', monospace" font-size="16" fill="${fg}" opacity="0.7" text-anchor="middle">ĐỒ CŨ CÒN THƯƠNG · ${tag}</text>
+    <defs>
+      <linearGradient id="${gradId}" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="${gradStart}"/>
+        <stop offset="100%" stop-color="${gradEnd}"/>
+      </linearGradient>
+    </defs>
+    <rect width="600" height="600" fill="url(#${gradId})"/>
+    ${circles}
+    <text x="300" y="240" font-size="96" text-anchor="middle" dominant-baseline="central">${emoji}</text>
+    <text x="300" y="340" font-family="'Be Vietnam Pro', sans-serif" font-size="20" font-weight="700" fill="#DAE7C7" text-anchor="middle" letter-spacing="3">${safeCategory}</text>
+    <text x="300" y="390" font-family="'Be Vietnam Pro', sans-serif" font-size="24" font-weight="700" fill="#FFFFFF" text-anchor="middle">${cleanTitle}</text>
+    <text x="300" y="430" font-family="'Be Vietnam Pro', sans-serif" font-size="13" font-weight="500" fill="#DAE7C7" opacity="0.8" text-anchor="middle">ĐỒ CŨ CÒN THƯƠNG · ${variantTag}</text>
   </svg>`;
+
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+export function isLegacyOrEmptyImage(src?: string | null): boolean {
+  if (!src || !src.trim()) return true;
+  if (
+    src.includes('Fraunces') ||
+    src.includes('543D2B') ||
+    src.includes('Space%20Mono') ||
+    src.includes('Plus%20Jakarta') ||
+    src.includes('Plus+Jakarta') ||
+    src.includes('%232F3E46') ||
+    src.includes('%23473B32') ||
+    src.includes('%23333D47') ||
+    src.includes('%23544636') ||
+    src.includes('%232B303A') ||
+    src.includes('%235E412F') ||
+    src.includes('%233E444B') ||
+    src.includes('%233C493F') ||
+    src.includes('%234A3B32')
+  ) {
+    return true;
+  }
+  try {
+    const decoded = decodeURIComponent(src);
+    if (
+      decoded.includes('Fraunces') ||
+      decoded.includes('#543D2B') ||
+      decoded.includes('Plus Jakarta Sans') ||
+      decoded.includes('Space Mono') ||
+      decoded.includes('#2F3E46') ||
+      decoded.includes('#473B32') ||
+      decoded.includes('#333D47') ||
+      decoded.includes('#544636') ||
+      decoded.includes('#2B303A') ||
+      decoded.includes('#5E412F') ||
+      decoded.includes('#3E444B') ||
+      decoded.includes('#3C493F') ||
+      decoded.includes('#4A3B32')
+    ) {
+      return true;
+    }
+  } catch {}
+  return false;
+}
+
+// Backward compatible SVG placeholder generator
+export function createSvgPlaceholder(title: string, category: string, _bg?: string, _fg?: string, tag: string = 'ẢNH GỐC 1'): string {
+  const variant = tag.includes('2') || tag.includes('SAU') || tag.includes('NGHIÊNG') ? 1 : tag.includes('3') || tag.includes('CẬN') || tag.includes('TIẾT') ? 2 : 0;
+  return createVintageProductSvg(title, category, variant);
 }
 
 // Normalized initial sample products
@@ -695,13 +803,64 @@ export function getDb(): DCCTDatabase {
 
   try {
     const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object' || typeof parsed.version !== 'number' || parsed.version < DB_VERSION || !Array.isArray(parsed.shops) || parsed.shops.length === 0) {
+    if (!parsed || typeof parsed !== 'object' || typeof parsed.version !== 'number' || !Array.isArray(parsed.shops) || parsed.shops.length === 0) {
       const initial = createInitialDatabase();
       localStorage.setItem(DB_KEY, JSON.stringify(initial));
       return initial;
     }
 
     let modified = false;
+
+    // Version 5 migration: Convert old "Đang hỏi về: ..." to type 'context', upgrade legacy/dark SVG images
+    if (parsed.version < DB_VERSION) {
+      parsed.version = DB_VERSION;
+      if (Array.isArray(parsed.chat_messages)) {
+        for (const m of parsed.chat_messages) {
+          if (m.context_card || (m.content && m.content.startsWith('Đang hỏi về:'))) {
+            m.type = 'context';
+            m.content = '';
+            m.is_read = true;
+          } else if (!m.type) {
+            m.type = 'text';
+          }
+        }
+      }
+      if (Array.isArray(parsed.chat_conversations) && Array.isArray(parsed.chat_messages)) {
+        const convIdsWithRealMessages = new Set(
+          parsed.chat_messages.filter((m: any) => m.type === 'text' && m.content && m.content.trim()).map((m: any) => m.conversation_id)
+        );
+        parsed.chat_conversations = parsed.chat_conversations.filter((c: any) => convIdsWithRealMessages.has(c.id));
+      }
+      if (Array.isArray(parsed.products)) {
+        for (const p of parsed.products) {
+          if (isLegacyOrEmptyImage(p.image_url)) {
+            p.image_url = createVintageProductSvg(p.name, p.category, 0);
+          }
+          if (Array.isArray(p.images)) {
+            p.images = [
+              isLegacyOrEmptyImage(p.images[0]) ? createVintageProductSvg(p.name, p.category, 0) : p.images[0],
+              isLegacyOrEmptyImage(p.images[1]) ? createVintageProductSvg(p.name, p.category, 1) : p.images[1],
+              isLegacyOrEmptyImage(p.images[2]) ? createVintageProductSvg(p.name, p.category, 2) : p.images[2]
+            ];
+          } else {
+            p.images = [
+              createVintageProductSvg(p.name, p.category, 0),
+              createVintageProductSvg(p.name, p.category, 1),
+              createVintageProductSvg(p.name, p.category, 2)
+            ];
+          }
+          if (Array.isArray(p.flaws)) {
+            p.flaws.forEach((fl: any, fIdx: number) => {
+              if (isLegacyOrEmptyImage(fl.image_url)) {
+                fl.image_url = createVintageProductSvg(p.name, 'LỖI SẢN PHẨM', fIdx % 3);
+              }
+            });
+          }
+        }
+      }
+      modified = true;
+    }
+
     const arrayKeys: (keyof DCCTDatabase)[] = [
       'users', 'addresses', 'shops', 'products', 'coupons', 'cart_items',
       'orders', 'shipment_events', 'offers', 'chat_conversations',
@@ -1006,45 +1165,49 @@ export const db = {
     return { message: 'Đổi mật khẩu thành công' };
   },
 
-  async switchBuyer(): Promise<{ message: string; token: string; user: User }> {
-    await delay(100);
+  async switchRole(targetUserId: number): Promise<{ message: string; token: string; user: User; role_name: string }> {
+    await delay(50);
     const database = getDb();
-    const buyer = database.users.find((u) => u.role === 'buyer' && (u.username === '0987654321' || u.is_owner));
-    if (!buyer) throw new Error('Không tìm thấy tài khoản người mua chủ');
+    const targetUser = database.users.find((u) => u.id === Number(targetUserId));
+    if (!targetUser) throw new Error('Không tìm thấy tài khoản');
+    if (!targetUser.is_owner) throw new Error('Tài khoản không phải là tài khoản chủ');
 
+    const session = getCurrentSession();
+    if (session?.user && !session.user.is_owner) {
+      throw new Error('Chỉ tài khoản chủ mới có thể đổi vai');
+    }
+
+    const shop = database.shops.find((s) => s.owner_user_id === targetUser.id);
     const safeUser: User = {
-      id: buyer.id,
-      role: 'buyer',
-      username: buyer.username,
-      full_name: buyer.full_name,
-      phone: buyer.phone,
+      id: targetUser.id,
+      role: targetUser.role,
+      username: targetUser.username,
+      full_name: targetUser.full_name,
+      phone: targetUser.phone,
+      shop_name: shop?.name || targetUser.shop_name,
       is_owner: true
     };
     const token = setCurrentSession(safeUser);
-    return { message: 'Đã chuyển sang vai Khách Mua Chủ Tiệm', token, user: safeUser };
+    const roleName = targetUser.role === 'seller' ? (shop?.name || targetUser.full_name) : targetUser.full_name;
+    return {
+      message: `Đã chuyển sang vai ${roleName}`,
+      token,
+      user: safeUser,
+      role_name: roleName
+    };
+  },
+
+  async switchBuyer(): Promise<{ message: string; token: string; user: User }> {
+    const res = await this.switchRole(2);
+    return { message: res.message, token: res.token, user: res.user };
   },
 
   async switchSeller(targetUsername: string = 'admin'): Promise<{ message: string; token: string; user: User }> {
-    await delay(100);
-    const database = getDb();
-    const seller = database.users.find(
-      (u) => u.role === 'seller' && (u.username === targetUsername || (targetUsername === 'admin' && (u.username === 'admin' || u.is_owner)))
-    );
-    if (!seller) throw new Error('Không tìm thấy tài khoản người bán');
-
-    const shop = database.shops.find((s) => s.owner_user_id === seller.id);
-
-    const safeUser: User = {
-      id: seller.id,
-      role: 'seller',
-      username: seller.username,
-      full_name: seller.full_name,
-      phone: seller.phone,
-      shop_name: shop?.name || seller.shop_name,
-      is_owner: true
-    };
-    const token = setCurrentSession(safeUser);
-    return { message: `Đã chuyển sang vai ${shop?.name || seller.full_name}`, token, user: safeUser };
+    let targetUserId = 1;
+    if (targetUsername === 'goc_sach_nhac') targetUserId = 3;
+    else if (targetUsername === 'retro_tech') targetUserId = 4;
+    const res = await this.switchRole(targetUserId);
+    return { message: res.message, token: res.token, user: res.user };
   },
 
   async resetDemo(): Promise<{ message: string }> {
@@ -1331,11 +1494,19 @@ export const db = {
     await delay(50);
     const database = getDb();
     const shop = database.shops.find((s) => s.id === Number(shopId));
-    const list = database.products.filter((p) => p.shop_id === Number(shopId)).map((p) => ({
-      ...p,
-      shop_name: shop?.name || p.shop_name,
-      shop_slug: shop?.slug || p.shop_slug
-    }));
+    const list = database.products
+      .filter((p) => p.shop_id === Number(shopId))
+      .sort((a, b) => {
+        const aInStock = a.stock > 0 ? 1 : 0;
+        const bInStock = b.stock > 0 ? 1 : 0;
+        if (aInStock !== bInStock) return bInStock - aInStock;
+        return new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime();
+      })
+      .map((p) => ({
+        ...p,
+        shop_name: shop?.name || p.shop_name,
+        shop_slug: shop?.slug || p.shop_slug
+      }));
     return { products: list };
   },
 
@@ -1390,16 +1561,22 @@ export const db = {
       list = list.filter((p) => p.stock > 0);
     }
 
-    if (params?.sort === 'price_asc') {
-      list.sort((a, b) => a.price - b.price);
-    } else if (params?.sort === 'price_desc') {
-      list.sort((a, b) => b.price - a.price);
-    } else if (params?.sort === 'condition') {
-      list.sort((a, b) => b.condition_pct - a.condition_pct);
-    } else {
-      // newest
-      list.sort((a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime());
-    }
+    list.sort((a, b) => {
+      const aInStock = a.stock > 0 ? 1 : 0;
+      const bInStock = b.stock > 0 ? 1 : 0;
+      if (aInStock !== bInStock) return bInStock - aInStock; // available items first, out of stock last
+
+      if (params?.sort === 'price_asc') {
+        return a.price - b.price;
+      } else if (params?.sort === 'price_desc') {
+        return b.price - a.price;
+      } else if (params?.sort === 'condition') {
+        return b.condition_pct - a.condition_pct;
+      } else {
+        // newest
+        return new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime();
+      }
+    });
 
     const populated = list.map((p) => {
       const shop = database.shops.find((s) => s.id === p.shop_id);
@@ -1676,8 +1853,94 @@ export const db = {
   },
 
   // --- COUPONS ---
+  calculateCheckout(
+    cartInput: CartItem[] | { items: CartItem[] },
+    couponsByShop: Record<number, string> = {}
+  ): CheckoutCalculation {
+    const database = getDb();
+    const rawItems: CartItem[] = Array.isArray(cartInput) ? cartInput : (cartInput?.items || []);
+
+    const shopMap = new Map<number, CartItem[]>();
+    for (const it of rawItems) {
+      const sId = it.shop_id || 1;
+      if (!shopMap.has(sId)) {
+        shopMap.set(sId, []);
+      }
+      shopMap.get(sId)!.push(it);
+    }
+
+    const shopBreakdowns: CheckoutShopBreakdown[] = [];
+    let grandSubtotal = 0;
+    let grandShipping = 0;
+    let grandDiscount = 0;
+
+    shopMap.forEach((items, shopId) => {
+      const shopObj = database.shops.find((s) => s.id === shopId);
+      const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+      const shipping_fee = (subtotal >= 1000000 || subtotal === 0) ? 0 : 30000;
+
+      let discount_amount = 0;
+      let validCouponCode: string | undefined = undefined;
+      let appliedCoupon: Coupon | null = null;
+
+      const code = (couponsByShop[shopId] || '').trim().toUpperCase();
+      if (code) {
+        const cpn = database.coupons.find(
+          (c) => c.shop_id === shopId && c.code.toUpperCase() === code && c.is_active
+        );
+        if (cpn) {
+          if (subtotal >= (cpn.min_order_amount || 0)) {
+            if (cpn.type === 'percent') {
+              let d = Math.round(subtotal * (cpn.value / 100));
+              if (cpn.max_discount && d > cpn.max_discount) d = cpn.max_discount;
+              discount_amount = d;
+              validCouponCode = cpn.code;
+              appliedCoupon = cpn;
+            } else if (cpn.type === 'fixed') {
+              discount_amount = Math.min(subtotal, cpn.value);
+              validCouponCode = cpn.code;
+              appliedCoupon = cpn;
+            } else if (cpn.type === 'shipping') {
+              if (shipping_fee > 0) {
+                discount_amount = Math.min(shipping_fee, cpn.value || shipping_fee);
+                validCouponCode = cpn.code;
+                appliedCoupon = cpn;
+              }
+            }
+          }
+        }
+      }
+
+      const total = Math.max(0, subtotal + shipping_fee - discount_amount);
+      grandSubtotal += subtotal;
+      grandShipping += shipping_fee;
+      grandDiscount += discount_amount;
+
+      shopBreakdowns.push({
+        shop_id: shopId,
+        shop_name: items[0]?.shop_name || shopObj?.name || 'Đồ Cũ Còn Thương',
+        shop_slug: items[0]?.shop_slug || shopObj?.slug || 'do-cu-con-thuong',
+        items,
+        subtotal,
+        shipping_fee,
+        coupon_code: discount_amount > 0 ? validCouponCode : undefined,
+        discount_amount,
+        total,
+        applied_coupon: appliedCoupon
+      });
+    });
+
+    return {
+      shops: shopBreakdowns,
+      subtotal: grandSubtotal,
+      shipping_fee: grandShipping,
+      discount_amount: grandDiscount,
+      grand_total: grandSubtotal + grandShipping - grandDiscount
+    };
+  },
+
   async validateCoupon(code: string, subtotal: number, shippingFee?: number, shopId?: number): Promise<{ valid: boolean; discount_amount: number; coupon: Coupon; message: string }> {
-    await delay();
+    await delay(30);
     const cleanCode = (code || '').toUpperCase().trim();
     const database = getDb();
     let cpn = database.coupons.find((c) => c.code.toUpperCase() === cleanCode && c.is_active);
@@ -1690,7 +1953,7 @@ export const db = {
       throw new Error('Mã giảm giá không tồn tại hoặc đã hết hạn');
     }
     if (subtotal < (cpn.min_order_amount || 0)) {
-      throw new Error(`Đơn hàng tối thiểu phải từ ${(cpn.min_order_amount || 0).toLocaleString()}đ để dùng mã này`);
+      throw new Error(`Đơn hàng của shop phải từ ${(cpn.min_order_amount || 0).toLocaleString()}đ để dùng mã này`);
     }
 
     const actualShippingFee = shippingFee !== undefined ? shippingFee : (subtotal >= 1000000 ? 0 : 30000);
@@ -1698,7 +1961,7 @@ export const db = {
     let discount = 0;
     if (cpn.type === 'shipping') {
       if (actualShippingFee <= 0) {
-        throw new Error('Đơn của bạn đã được miễn phí vận chuyển, không cần dùng mã này');
+        throw new Error('Phần hàng của shop này đã được miễn phí vận chuyển');
       }
       discount = Math.min(actualShippingFee, 30000);
     } else if (cpn.type === 'percent') {
@@ -1748,8 +2011,8 @@ export const db = {
       throw new Error('Vui lòng điền đầy đủ thông tin giao hàng');
     }
 
-    // Group items by shop_id
-    const shopItemsMap = new Map<number, Array<{ product_id: number; quantity: number }>>();
+    // Prepare fullCartItems for calculateCheckout
+    const fullItems: CartItem[] = [];
     for (const it of payload.items) {
       const prod = database.products.find((p) => p.id === it.product_id);
       if (!prod) throw new Error(`Sản phẩm #${it.product_id} không tồn tại`);
@@ -1761,29 +2024,38 @@ export const db = {
         throw new Error('Bạn không thể tự mua sản phẩm của chính shop mình');
       }
 
-      if (!shopItemsMap.has(sId)) {
-        shopItemsMap.set(sId, []);
-      }
-      shopItemsMap.get(sId)!.push(it);
+      fullItems.push({
+        id: it.product_id,
+        shop_id: sId,
+        shop_name: shopObj?.name,
+        shop_slug: shopObj?.slug,
+        product_id: prod.id,
+        quantity: it.quantity,
+        name: prod.name,
+        category: prod.category,
+        price: prod.price,
+        original_price: prod.original_price,
+        condition_pct: prod.condition_pct,
+        condition_detail: prod.condition_detail,
+        stock: prod.stock,
+        image_url: prod.image_url
+      });
     }
 
+    const couponsByShop = payload.shop_coupons || (payload.coupon_code ? { 1: payload.coupon_code } : {});
+    const calc = this.calculateCheckout(fullItems, couponsByShop);
+
     const createdOrders: Order[] = [];
-    let grandTotal = 0;
 
-    for (const [shopId, sItems] of shopItemsMap.entries()) {
-      const shopObj = database.shops.find((s) => s.id === shopId);
-      let sSubtotal = 0;
-      const orderItems: any[] = [];
+    for (const shopBreakdown of calc.shops) {
+      const shopObj = database.shops.find((s) => s.id === shopBreakdown.shop_id);
 
-      for (const it of sItems) {
+      const orderItems = shopBreakdown.items.map((it: CartItem, idx: number) => {
         const prod = database.products.find((p) => p.id === it.product_id)!;
         prod.stock = Math.max(0, prod.stock - it.quantity);
 
-        const lineTotal = prod.price * it.quantity;
-        sSubtotal += lineTotal;
-
-        orderItems.push({
-          id: (database.orders.length * 10) + orderItems.length + 1,
+        return {
+          id: (database.orders.length * 10) + idx + 1,
           order_id: 0,
           product_id: prod.id,
           product_name: prod.name,
@@ -1793,33 +2065,20 @@ export const db = {
           original_price: prod.original_price,
           quantity: it.quantity,
           condition_pct: prod.condition_pct
-        });
+        };
+      });
+
+      if (shopBreakdown.applied_coupon) {
+        const cpnInDb = database.coupons.find((c) => c.id === shopBreakdown.applied_coupon!.id);
+        if (cpnInDb) cpnInDb.usage_count = (cpnInDb.usage_count || 0) + 1;
       }
-
-      const sShippingFee = sSubtotal >= 1000000 ? 0 : 30000;
-      let sDiscount = 0;
-      const targetCouponCode = payload.shop_coupons?.[shopId] || payload.coupon_code;
-
-      if (targetCouponCode) {
-        try {
-          const valRes = await this.validateCoupon(targetCouponCode, sSubtotal, sShippingFee, shopId);
-          sDiscount = valRes.discount_amount;
-          const cpn = database.coupons.find((c) => c.code.toUpperCase() === targetCouponCode.toUpperCase() && c.shop_id === shopId);
-          if (cpn) cpn.usage_count = (cpn.usage_count || 0) + 1;
-        } catch {
-          // Ignore invalid coupon for this shop
-        }
-      }
-
-      const sTotal = Math.max(0, sSubtotal + sShippingFee - sDiscount);
-      grandTotal += sTotal;
 
       const newOrderId = (database.orders.reduce((max, o) => Math.max(max, o.id), 0) || 0) + 1;
       const orderCode = `DCCT-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`;
 
       const newOrder: Order = {
         id: newOrderId,
-        shop_id: shopId,
+        shop_id: shopBreakdown.shop_id,
         seller_id: shopObj?.owner_user_id || 1,
         shop_name: shopObj?.name || 'Đồ Cũ Còn Thương',
         shop_slug: shopObj?.slug || 'do-cu-con-thuong',
@@ -1836,14 +2095,14 @@ export const db = {
         address: payload.address.trim(),
         note: payload.note?.trim(),
         items_count: orderItems.length,
-        subtotal: sSubtotal,
-        shipping_fee: sShippingFee,
-        discount_amount: sDiscount,
-        total: sTotal,
-        coupon_code: targetCouponCode,
+        subtotal: shopBreakdown.subtotal,
+        shipping_fee: shopBreakdown.shipping_fee,
+        discount_amount: shopBreakdown.discount_amount,
+        total: shopBreakdown.total,
+        coupon_code: shopBreakdown.discount_amount > 0 ? shopBreakdown.coupon_code : undefined,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        items: orderItems.map((i) => ({ ...i, order_id: newOrderId })),
+        items: orderItems.map((i: any) => ({ ...i, order_id: newOrderId })),
         shipment_events: [
           {
             id: (database.shipment_events.reduce((max, e) => Math.max(max, e.id), 0) || 0) + 1,
@@ -1865,7 +2124,7 @@ export const db = {
         user_id: session.user.id,
         role: 'buyer',
         title: 'Đặt hàng thành công',
-        message: `Đơn hàng #${orderCode} tại ${shopObj?.name} trị giá ${sTotal.toLocaleString()}đ đã được gửi tới shop.`,
+        message: `Đơn hàng #${orderCode} tại ${shopObj?.name} trị giá ${shopBreakdown.total.toLocaleString()}đ đã được gửi tới shop.`,
         order_id: newOrderId,
         is_read: false,
         created_at: new Date().toISOString()
@@ -1876,7 +2135,7 @@ export const db = {
         user_id: shopObj?.owner_user_id || 1,
         role: 'seller',
         title: 'Đơn hàng mới chờ duyệt',
-        message: `Khách hàng ${payload.recipient_name} vừa đặt đơn #${orderCode}.`,
+        message: `Đơn hàng mới #${orderCode} (${shopBreakdown.items.length} món, ${shopBreakdown.total.toLocaleString()}đ) đang chờ bạn xác nhận.`,
         order_id: newOrderId,
         is_read: false,
         created_at: new Date().toISOString()
@@ -1894,7 +2153,7 @@ export const db = {
       message: 'Đặt hàng thành công',
       order: createdOrders[0],
       orders: createdOrders,
-      total_amount: grandTotal
+      total_amount: calc.grand_total
     };
   },
 
@@ -2247,6 +2506,14 @@ export const db = {
       throw new Error('Bạn không thể trả giá sản phẩm của chính shop mình');
     }
 
+    // Check if buyer already has an active pending/countered offer for this product
+    const existingActive = database.offers.find(
+      (o) => o.buyer_id === session.user.id && o.product_id === prod.id && (o.status === 'pending' || o.status === 'countered')
+    );
+    if (existingActive) {
+      throw new Error('Bạn đang có một lời trả giá đang chờ phản hồi cho sản phẩm này');
+    }
+
     const newOfferId = (database.offers.reduce((max, o) => Math.max(max, o.id), 0) || 0) + 1;
     const expiresAt = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
 
@@ -2414,6 +2681,32 @@ export const db = {
     return { message: 'Đã từ chối mức giá thương lượng' };
   },
 
+  async cancelOffer(offerId: number): Promise<{ message: string }> {
+    await delay(50);
+    const session = getCurrentSession();
+    if (!session || !session.user) throw new Error('Vui lòng đăng nhập');
+    const database = getDb();
+    const off = database.offers.find((o) => o.id === Number(offerId) && o.buyer_id === session.user.id);
+    if (!off) throw new Error('Không tìm thấy lời trả giá');
+    if (off.status !== 'pending' && off.status !== 'countered') {
+      throw new Error('Không thể hủy lời trả giá ở trạng thái này');
+    }
+    off.status = 'rejected';
+    off.seller_note = 'Người mua đã hủy lời trả giá';
+    saveDb(database);
+    return { message: 'Đã hủy lời trả giá' };
+  },
+
+  async getMyOfferForProduct(productId: number): Promise<{ offer: Offer | null }> {
+    await delay(30);
+    const session = getCurrentSession();
+    if (!session || !session.user) return { offer: null };
+    const database = getDb();
+    const myOffers = database.offers.filter((o) => o.buyer_id === session.user.id && o.product_id === Number(productId));
+    const active = myOffers.find((o) => o.status === 'pending' || o.status === 'countered') || myOffers.find((o) => o.status === 'accepted');
+    return { offer: active || null };
+  },
+
   // --- CHAT / NHẮN TIN THEO SHOP (MULTI-SHOP SHOPEE-STYLE) ---
   async startShopChat(
     shopId: number,
@@ -2424,7 +2717,7 @@ export const db = {
       initial_message?: string;
     }
   ): Promise<{ conversation: ChatConversation; created: boolean }> {
-    await delay(50);
+    await delay(30);
     const session = getCurrentSession();
     if (!session || !session.user) {
       throw new Error('Vui lòng đăng nhập để chat với shop');
@@ -2441,35 +2734,8 @@ export const db = {
       (c) => c.buyer_id === session.user.id && c.shop_id === shop.id
     );
 
-    let isNew = false;
-    if (!conv) {
-      isNew = true;
-      const newConvId = (database.chat_conversations.reduce((max, c) => Math.max(max, c.id), 0) || 0) + 1;
-      conv = {
-        id: newConvId,
-        buyer_id: session.user.id,
-        seller_id: shop.owner_user_id,
-        shop_id: shop.id,
-        shop_name: shop.name,
-        shop_slug: shop.slug,
-        shop_avatar: shop.avatar,
-        buyer_name: session.user.full_name,
-        buyer_phone: session.user.phone,
-        last_message: context?.type === 'product' ? 'Đang hỏi về sản phẩm' : (context?.type === 'order' ? 'Đang hỏi về đơn hàng' : 'Xin chào shop!'),
-        last_message_at: new Date().toISOString(),
-        buyer_unread: 0,
-        seller_unread: 1,
-        created_at: new Date().toISOString(),
-        messages: []
-      };
-      database.chat_conversations.unshift(conv);
-    }
-
-    // If context is passed, add context card message
+    let contextCard: ChatMessageContext | undefined;
     if (context) {
-      let contextCard: ChatMessageContext | undefined;
-      let contextContent = '';
-
       if (context.type === 'product' && context.product_id) {
         const prod = database.products.find((p) => p.id === context.product_id);
         if (prod) {
@@ -2480,11 +2746,6 @@ export const db = {
             image_url: prod.image_url,
             price: prod.price
           };
-          contextContent = `Đang hỏi về: ${prod.name}`;
-          conv.product_id = prod.id;
-          conv.product_name = prod.name;
-          conv.product_image = prod.image_url;
-          conv.product_price = prod.price;
         }
       } else if (context.type === 'order' && context.order_code) {
         const ord = database.orders.find((o) => o.code === context.order_code || o.id === Number(context.order_code));
@@ -2496,40 +2757,57 @@ export const db = {
             price: ord.total,
             status_text: ord.status === 'completed' ? 'Đã hoàn thành' : ord.status === 'shipping' ? 'Đang giao' : 'Đang xử lý'
           };
-          contextContent = `Đang hỏi về đơn hàng #${ord.code} · ${ord.total.toLocaleString()}đ`;
-          conv.order_code = ord.code;
         }
-      }
-
-      if (contextCard) {
-        const newMsgId = (database.chat_messages.reduce((max, m) => Math.max(max, m.id), 0) || 0) + 1;
-        const msg: ChatMessage = {
-          id: newMsgId,
-          conversation_id: conv.id,
-          sender_role: 'buyer',
-          sender_id: session.user.id,
-          content: context.initial_message || contextContent,
-          context_card: contextCard,
-          is_read: false,
-          created_at: new Date().toISOString()
-        };
-        database.chat_messages.push(msg);
-        conv.last_message = msg.content;
-        conv.last_message_at = msg.created_at;
-        conv.seller_unread = (conv.seller_unread || 0) + 1;
       }
     }
 
-    saveDb(database);
+    if (!conv) {
+      // Do NOT save empty conversation to DB before buyer sends first message
+      const virtualConv: ChatConversation = {
+        id: 0,
+        shop_id: shop.id,
+        buyer_id: session.user.id,
+        seller_id: shop.owner_user_id,
+        shop_name: shop.name,
+        shop_slug: shop.slug,
+        shop_avatar: shop.avatar,
+        buyer_name: session.user.full_name,
+        buyer_phone: session.user.phone,
+        last_message: '',
+        last_message_at: new Date().toISOString(),
+        buyer_unread: 0,
+        seller_unread: 0,
+        created_at: new Date().toISOString(),
+        messages: contextCard ? [{
+          id: -1,
+          conversation_id: 0,
+          sender_role: 'buyer',
+          sender_id: session.user.id,
+          content: '',
+          type: 'context',
+          context_card: contextCard,
+          is_read: true,
+          created_at: new Date().toISOString()
+        }] : []
+      };
+      return { conversation: virtualConv, created: true };
+    }
+
     const msgs = database.chat_messages.filter((m) => m.conversation_id === conv!.id);
     return {
-      conversation: { ...conv, messages: msgs },
-      created: isNew
+      conversation: {
+        ...conv,
+        shop_name: conv.shop_name || shop.name,
+        shop_slug: conv.shop_slug || shop.slug,
+        shop_avatar: conv.shop_avatar || shop.avatar,
+        messages: msgs
+      },
+      created: false
     };
   },
 
   async getChatConversations(): Promise<{ conversations: ChatConversation[] }> {
-    await delay(60);
+    await delay(50);
     const database = getDb();
     const session = getCurrentSession();
     if (!session || !session.user) return { conversations: [] };
@@ -2544,17 +2822,36 @@ export const db = {
       convs = database.chat_conversations.filter((c) => c.shop_id === sellerShop.id);
     }
 
-    const populated = convs.map((c) => {
-      const msgs = database.chat_messages.filter((m) => m.conversation_id === c.id);
-      const shopObj = database.shops.find((s) => s.id === c.shop_id);
-      return {
-        ...c,
-        shop_name: c.shop_name || shopObj?.name || 'Shop',
-        shop_slug: c.shop_slug || shopObj?.slug || '',
-        shop_avatar: c.shop_avatar || shopObj?.avatar || '',
-        messages: msgs
-      };
-    }).sort((a, b) => new Date(b.last_message_at || 0).getTime() - new Date(a.last_message_at || 0).getTime());
+    const populated = convs
+      .filter((c) => {
+        // Only keep conversations with at least 1 real text message
+        const msgs = database.chat_messages.filter((m) => m.conversation_id === c.id);
+        return msgs.some((m) => m.type === 'text' && m.content && m.content.trim());
+      })
+      .map((c) => {
+        const msgs = database.chat_messages.filter((m) => m.conversation_id === c.id);
+        const textMsgs = msgs.filter((m) => m.type === 'text' && m.content && m.content.trim());
+        const lastText = textMsgs[textMsgs.length - 1];
+        const shopObj = database.shops.find((s) => s.id === c.shop_id);
+
+        const isSeller = session.user.role === 'seller';
+        const unreadCount = msgs.filter(
+          (m) => m.type === 'text' && !m.is_read && (isSeller ? m.sender_role === 'buyer' : m.sender_role === 'seller')
+        ).length;
+
+        return {
+          ...c,
+          shop_name: c.shop_name || shopObj?.name || 'Shop',
+          shop_slug: c.shop_slug || shopObj?.slug || '',
+          shop_avatar: c.shop_avatar || shopObj?.avatar || '',
+          last_message: lastText?.content || '',
+          last_message_at: lastText?.created_at || c.last_message_at,
+          buyer_unread: isSeller ? c.buyer_unread : unreadCount,
+          seller_unread: isSeller ? unreadCount : c.seller_unread,
+          messages: msgs
+        };
+      })
+      .sort((a, b) => new Date(b.last_message_at || 0).getTime() - new Date(a.last_message_at || 0).getTime());
 
     return { conversations: populated };
   },
@@ -2567,12 +2864,26 @@ export const db = {
 
     const msgs = database.chat_messages.filter((m) => m.conversation_id === conv.id);
 
-    // Mark read
+    // Mark read for text messages
     const session = getCurrentSession();
     if (session?.user?.role === 'seller') {
       conv.seller_unread = 0;
+      msgs.forEach((m) => {
+        if (m.sender_role === 'buyer') m.is_read = true;
+      });
     } else {
       conv.buyer_unread = 0;
+      msgs.forEach((m) => {
+        if (m.sender_role === 'seller') m.is_read = true;
+      });
+    }
+
+    if (session?.user) {
+      for (const n of database.notifications) {
+        if (n.type === 'chat' && n.order_id === conv.id && n.user_id === session.user.id) {
+          n.is_read = true;
+        }
+      }
     }
     saveDb(database);
 
@@ -2599,7 +2910,7 @@ export const db = {
     content: string;
     context_card?: ChatMessageContext;
   }): Promise<{ message: ChatMessage; conversation: ChatConversation }> {
-    await delay(80);
+    await delay(50);
     const session = getCurrentSession();
     if (!session || !session.user) {
       throw new Error('Chưa gửi được, bạn thử lại nhé');
@@ -2610,68 +2921,145 @@ export const db = {
     }
 
     const content = (payload.content || '').trim();
-    if (!content && !payload.context_card) {
-      throw new Error('Nội dung không được để trống');
+    if (!content) {
+      throw new Error('Nội dung tin nhắn không được để trống');
     }
 
     const senderRole = session.user.role === 'seller' ? 'seller' : 'buyer';
     let conv: ChatConversation | undefined;
 
-    if (payload.conversation_id) {
+    if (payload.conversation_id && payload.conversation_id > 0) {
       conv = database.chat_conversations.find((c) => c.id === Number(payload.conversation_id));
     }
 
-    if (!conv && payload.shop_id && senderRole === 'buyer') {
-      const res = await this.startShopChat(payload.shop_id, payload.product_id ? {
-        type: 'product',
-        product_id: payload.product_id
-      } : (payload.order_code ? {
-        type: 'order',
-        order_code: payload.order_code
-      } : undefined));
-      conv = database.chat_conversations.find((c) => c.id === res.conversation.id);
+    if (!conv && payload.shop_id) {
+      conv = database.chat_conversations.find(
+        (c) => c.shop_id === Number(payload.shop_id) && c.buyer_id === (senderRole === 'buyer' ? session.user.id : c.buyer_id)
+      );
     }
 
-    if (!conv) {
-      throw new Error('Chưa gửi được, bạn thử lại nhé');
-    }
+    const targetShop = database.shops.find((s) => s.id === (conv?.shop_id || Number(payload.shop_id)));
+    if (!targetShop) throw new Error('Không tìm thấy shop');
 
-    // If buyer, verify not chatting with own shop
-    const targetShop = database.shops.find((s) => s.id === conv?.shop_id);
-    if (senderRole === 'buyer' && targetShop && targetShop.owner_user_id === session.user.id) {
+    if (senderRole === 'buyer' && targetShop.owner_user_id === session.user.id) {
       throw new Error('Bạn không thể tự chat với shop của chính mình');
     }
 
-    // If seller, verify ownership
     if (senderRole === 'seller') {
-      this.checkSellerShopOwnership(session, database, conv.shop_id);
+      this.checkSellerShopOwnership(session, database, targetShop.id);
     }
 
+    // If conversation doesn't exist yet, create it now!
+    if (!conv) {
+      const newConvId = (database.chat_conversations.reduce((max, c) => Math.max(max, c.id), 0) || 0) + 1;
+      conv = {
+        id: newConvId,
+        shop_id: targetShop.id,
+        buyer_id: session.user.id,
+        seller_id: targetShop.owner_user_id,
+        shop_name: targetShop.name,
+        shop_slug: targetShop.slug,
+        shop_avatar: targetShop.avatar,
+        buyer_name: session.user.full_name,
+        buyer_phone: session.user.phone,
+        last_message: content,
+        last_message_at: new Date().toISOString(),
+        buyer_unread: senderRole === 'seller' ? 1 : 0,
+        seller_unread: senderRole === 'buyer' ? 1 : 0,
+        created_at: new Date().toISOString()
+      };
+      database.chat_conversations.unshift(conv);
+    }
+
+    // If context_card provided: only insert if different from last context card in this conversation
+    if (payload.context_card) {
+      const prevContextMsgs = database.chat_messages.filter(
+        (m) => m.conversation_id === conv!.id && m.type === 'context'
+      );
+      const lastContext = prevContextMsgs[prevContextMsgs.length - 1];
+      const isSameProd = lastContext?.context_card?.product_id && payload.context_card.product_id && lastContext.context_card.product_id === payload.context_card.product_id;
+      const isSameOrd = lastContext?.context_card?.order_code && payload.context_card.order_code && lastContext.context_card.order_code === payload.context_card.order_code;
+
+      if (!isSameProd && !isSameOrd) {
+        const ctxMsgId = (database.chat_messages.reduce((max, m) => Math.max(max, m.id), 0) || 0) + 1;
+        const ctxMsg: ChatMessage = {
+          id: ctxMsgId,
+          conversation_id: conv.id,
+          sender_role: senderRole,
+          sender_id: session.user.id,
+          content: '', // NO text bubble!
+          type: 'context',
+          context_card: payload.context_card,
+          is_read: true,
+          created_at: new Date().toISOString()
+        };
+        database.chat_messages.push(ctxMsg);
+      }
+    }
+
+    // Now insert real text message
     const newMsgId = (database.chat_messages.reduce((max, m) => Math.max(max, m.id), 0) || 0) + 1;
     const newMsg: ChatMessage = {
       id: newMsgId,
       conversation_id: conv.id,
       sender_role: senderRole,
       sender_id: session.user.id,
-      content: content || 'Đã gửi thông tin',
-      context_card: payload.context_card,
+      content,
+      type: 'text',
       is_read: false,
       created_at: new Date().toISOString()
     };
-
     database.chat_messages.push(newMsg);
 
-    conv.last_message = content || (payload.context_card ? payload.context_card.title : 'Đã gửi thông tin');
+    conv.last_message = content;
     conv.last_message_at = newMsg.created_at;
+
     if (senderRole === 'buyer') {
       conv.seller_unread = (conv.seller_unread || 0) + 1;
     } else {
       conv.buyer_unread = (conv.buyer_unread || 0) + 1;
     }
 
+    // Notification for recipient (with 60 chars snippet, grouped/updated if existing unread notification for this conversation exists)
+    const recipientUserId = senderRole === 'buyer' ? targetShop.owner_user_id : conv.buyer_id;
+    const recipientRole = senderRole === 'buyer' ? 'seller' : 'buyer';
+    const senderName = senderRole === 'buyer' ? session.user.full_name : targetShop.name;
+    const snippet = content.length > 60 ? content.slice(0, 60) + '...' : content;
+
+    const existingNotif = database.notifications.find(
+      (n) => n.user_id === recipientUserId && n.type === 'chat' && n.order_id === conv!.id && !n.is_read
+    );
+
+    if (existingNotif) {
+      existingNotif.title = `Tin nhắn mới từ ${senderName}`;
+      existingNotif.message = `Tin nhắn mới từ ${senderName}: "${snippet}"`;
+      existingNotif.created_at = new Date().toISOString();
+    } else {
+      database.notifications.unshift({
+        id: (database.notifications.reduce((max, n) => Math.max(max, n.id), 0) || 0) + 1,
+        user_id: recipientUserId,
+        role: recipientRole,
+        type: 'chat',
+        order_id: conv.id,
+        title: `Tin nhắn mới từ ${senderName}`,
+        message: `Tin nhắn mới từ ${senderName}: "${snippet}"`,
+        is_read: false,
+        created_at: new Date().toISOString()
+      });
+    }
+
     saveDb(database);
     const msgs = database.chat_messages.filter((m) => m.conversation_id === conv!.id);
-    return { message: newMsg, conversation: { ...conv, messages: msgs } };
+    return {
+      message: newMsg,
+      conversation: {
+        ...conv,
+        shop_name: conv.shop_name || targetShop.name,
+        shop_slug: conv.shop_slug || targetShop.slug,
+        shop_avatar: conv.shop_avatar || targetShop.avatar,
+        messages: msgs
+      }
+    };
   },
 
   async markChatRead(conversationId: number): Promise<{ message: string }> {
@@ -2685,6 +3073,17 @@ export const db = {
         conv.seller_unread = 0;
       } else {
         conv.buyer_unread = 0;
+      }
+      for (const m of database.chat_messages) {
+        if (m.conversation_id === conv.id) {
+          if (session.user.role === 'seller' && m.sender_role === 'buyer') m.is_read = true;
+          if (session.user.role === 'buyer' && m.sender_role === 'seller') m.is_read = true;
+        }
+      }
+      for (const n of database.notifications) {
+        if (n.type === 'chat' && n.order_id === conv.id && n.user_id === session.user.id) {
+          n.is_read = true;
+        }
       }
       saveDb(database);
     }

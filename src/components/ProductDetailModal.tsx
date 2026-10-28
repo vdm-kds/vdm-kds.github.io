@@ -2,12 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { 
   X, ShoppingBag, ShieldCheck, Heart, ArrowRight, Check, Star, 
   MessageSquare, MessageCircle, Tag, AlertTriangle, Eye, Flame, ZoomIn, ZoomOut, 
-  ChevronLeft, ChevronRight, Maximize2, ThumbsUp, Play, Store, Filter, AlertCircle
+  ChevronLeft, ChevronRight, Maximize2, ThumbsUp, Play, Store, Filter, AlertCircle, Share2
 } from 'lucide-react';
-import { Product, ReviewsResponse, ProductFlaw, Shop } from '../types';
+import { Product, ReviewsResponse, ProductFlaw, Shop, Offer } from '../types';
 import { formatVND } from '../utils/format';
 import { api } from '../services/api';
+import { useToast } from '../context/ToastContext';
 import { Button } from './Button';
+import { ProductImage } from './ProductImage';
 import { ProductFallbackImage } from './ProductFallbackImage';
 import { OfferModal } from './OfferModal';
 import { ChatDrawer } from './ChatDrawer';
@@ -47,12 +49,15 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 }) => {
   if (!product) return null;
 
+  const { showToast } = useToast();
   const [quantity, setQuantity] = useState<number>(1);
   const [shopInfo, setShopInfo] = useState<Shop | null>(null);
   const [otherShopProducts, setOtherShopProducts] = useState<Product[]>([]);
   const [imgError, setImgError] = useState(false);
   const [brokenThumbs, setBrokenThumbs] = useState<Set<number>>(new Set());
   const [justAdded, setJustAdded] = useState(false);
+  const [activeOffer, setActiveOffer] = useState<Offer | null>(null);
+  const [cancellingOffer, setCancellingOffer] = useState(false);
   const [reviewsData, setReviewsData] = useState<ReviewsResponse | null>(null);
   const [loadingReviews, setLoadingReviews] = useState(false);
   const [shopReviewsData, setShopReviewsData] = useState<any | null>(null);
@@ -119,6 +124,30 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
       setOtherShopProducts((res.products || []).filter(p => p.id !== fullProduct.id).slice(0, 4));
     }).catch(() => {});
   }, [fullProduct.shop_id, fullProduct.id]);
+
+  const fetchActiveOffer = async () => {
+    if (!currentUser || !fullProduct?.id) {
+      setActiveOffer(null);
+      return;
+    }
+    try {
+      const res = await api.getMyOfferForProduct(fullProduct.id);
+      setActiveOffer(res.offer || null);
+    } catch {
+      setActiveOffer(null);
+    }
+  };
+
+  useEffect(() => {
+    fetchActiveOffer();
+  }, [currentUser?.id, fullProduct?.id]);
+
+  const getRemainingHours = (expiresAt?: string) => {
+    if (!expiresAt) return 24;
+    const diff = new Date(expiresAt).getTime() - Date.now();
+    if (diff <= 0) return 0;
+    return Math.max(1, Math.round(diff / (1000 * 60 * 60)));
+  };
 
   // Parse images array
   const imageList: string[] = React.useMemo(() => {
@@ -321,52 +350,72 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-black/60 backdrop-blur-xs overflow-y-auto">
         <div 
-          className="relative w-full max-w-5xl bg-white rounded-3xl border border-[#E2E8D8] shadow-2xl overflow-hidden my-auto max-h-[92vh] flex flex-col md:flex-row text-[#101410]"
+          className="relative w-full max-w-5xl bg-white rounded-3xl border border-[#E2E8D8] shadow-2xl overflow-hidden my-auto max-h-[92vh] flex flex-col lg:flex-row text-[#101410]"
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Close Button */}
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 z-20 w-9 h-9 rounded-full bg-white/95 border border-[#E2E8D8] text-[#101410] hover:bg-[#F5F8EF] flex items-center justify-center transition-colors shadow-sm"
-            aria-label="Đóng"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          {/* Header Action Buttons (Pinned to top-right of modal with white background) */}
+          <div className="absolute top-4 right-4 z-30 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                const url = `${window.location.origin}/product/${fullProduct.id}`;
+                navigator.clipboard.writeText(url);
+                showToast('Đã sao chép liên kết sản phẩm!', 'success');
+              }}
+              className="px-3 py-1.5 rounded-full bg-white border border-[#E2E8D8] text-[#08482D] hover:bg-[#F5F8EF] flex items-center gap-1.5 text-xs font-semibold shadow-md transition-colors cursor-pointer"
+              title="Sao chép liên kết"
+            >
+              <Share2 className="w-3.5 h-3.5 text-[#08482D]" />
+              <span className="hidden sm:inline">Sao chép liên kết</span>
+            </button>
 
-          {/* LEFT COLUMN: Multi-image gallery & Lightbox triggers */}
-          <div className="md:w-5/12 bg-[#F5F8EF]/80 p-4 md:p-6 flex flex-col border-b md:border-b-0 md:border-r border-[#E2E8D8] overflow-y-auto">
+            <button
+              onClick={onClose}
+              className="w-9 h-9 rounded-full bg-white border border-[#E2E8D8] text-[#101410] hover:bg-[#F5F8EF] flex items-center justify-center transition-colors shadow-md cursor-pointer"
+              aria-label="Đóng"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* LEFT COLUMN: Multi-image gallery & Lightbox triggers (1 column on 640-1024px, 1:1 ratio max 480px) */}
+          <div className="w-full lg:w-5/12 bg-[#F5F8EF]/80 p-4 lg:p-6 flex flex-col border-b lg:border-b-0 lg:border-r border-[#E2E8D8] overflow-y-auto">
             {/* Main Image Container */}
-            <div className="relative aspect-square rounded-2xl bg-white border border-[#E2E8D8] overflow-hidden group mb-3 shadow-xs flex items-center justify-center">
-              {!imgError && currentDisplayImage ? (
-                <img
-                  src={currentDisplayImage}
-                  alt={fullProduct.name}
-                  onError={() => setImgError(true)}
-                  referrerPolicy="no-referrer"
-                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105 cursor-pointer"
-                  onClick={() => setIsLightboxOpen(true)}
-                />
+            <div className={`relative w-full max-w-[480px] mx-auto aspect-square rounded-2xl bg-white border border-[#E2E8D8] overflow-hidden group mb-3 shadow-xs flex items-center justify-center ${isSoldOut ? 'grayscale contrast-75 opacity-85' : ''}`}>
+              <ProductImage
+                src={currentDisplayImage}
+                alt={fullProduct.name}
+                productName={fullProduct.name}
+                category={fullProduct.category}
+                conditionPct={fullProduct.condition_pct}
+                variantIndex={selectedImageIndex % 3}
+                className="w-full h-full cursor-pointer"
+                imgClassName="transition-transform duration-300 group-hover:scale-105"
+                onClick={() => setIsLightboxOpen(true)}
+              />
+
+              {/* Out of stock badge (Requirement A7) */}
+              {isSoldOut ? (
+                <div className="absolute top-3 left-3 z-10">
+                  <span className="px-3 py-1 rounded-full bg-[#C2522D] text-white text-xs font-bold shadow-md uppercase tracking-wider">
+                    Đã có chủ mới
+                  </span>
+                </div>
               ) : (
-                <ProductFallbackImage 
-                  productName={fullProduct.name} 
-                  category={fullProduct.category} 
-                  className="w-full h-full" 
-                />
+                /* Condition floating stamp badge */
+                <div className="absolute top-3 left-3 z-10 pointer-events-none">
+                  <div className="stamp-badge px-2.5 py-0.5 text-xs shadow-sm">
+                    {fullProduct.condition_pct}% MỚI
+                  </div>
+                </div>
               )}
 
-              {/* Scarcity / Single item Badge */}
-              {fullProduct.stock === 1 && (
-                <div className="absolute top-3 right-3 z-10 px-2.5 py-1 rounded-full bg-amber-500 text-white text-[11px] font-bold font-mono shadow-sm flex items-center gap-1 animate-pulse">
+              {/* Scarcity / Single item Badge (Offset below condition stamp on left, away from top-right ✕) */}
+              {!isSoldOut && fullProduct.stock === 1 && (
+                <div className="absolute top-11 left-3 z-10 px-2.5 py-1 rounded-full bg-amber-500 text-white text-[11px] font-bold font-mono shadow-sm flex items-center gap-1 animate-pulse">
                   <span>Chỉ có 1 món</span>
                 </div>
               )}
-
-              {/* Condition floating stamp badge */}
-              <div className="absolute top-3 left-3 z-10 pointer-events-none">
-                <div className="stamp-badge px-2.5 py-0.5 text-xs shadow-sm">
-                  {fullProduct.condition_pct}% MỚI
-                </div>
-              </div>
 
               {/* Zoom click hint */}
               <button
@@ -400,9 +449,9 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
               )}
             </div>
 
-            {/* Thumbnail Strip */}
+            {/* Thumbnail Strip (Scrolls horizontally without clipping) */}
             {imageList.length > 1 && (
-              <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar mb-4">
+              <div className="w-full max-w-[480px] mx-auto flex gap-2 overflow-x-auto pb-1 no-scrollbar scrollbar-none mb-4">
                 {imageList.map((img, idx) => {
                   if (brokenThumbs.has(idx)) return null;
                   return (
@@ -416,11 +465,14 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                           : 'border-[#E2E8D8] opacity-70 hover:opacity-100'
                       }`}
                     >
-                      <img 
+                      <ProductImage 
                         src={img} 
                         alt={`thumb-${idx}`} 
-                        onError={() => setBrokenThumbs(prev => new Set(prev).add(idx))}
-                        className="w-full h-full object-cover" 
+                        productName={fullProduct.name}
+                        category={fullProduct.category}
+                        variantIndex={idx % 3}
+                        className="w-full h-full"
+                        imgClassName="w-full h-full object-cover" 
                       />
                     </button>
                   );
@@ -429,7 +481,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             )}
 
             {/* Social Proof & Scarcity Alerts */}
-            <div className="space-y-2 mt-auto pt-2">
+            <div className="space-y-2 mt-auto pt-2 max-w-[480px] w-full mx-auto">
               <div className="flex items-center gap-2 p-2.5 rounded-xl bg-white border border-[#E2E8D8] text-xs">
                 <Eye className="w-4 h-4 text-[#08482D] shrink-0" />
                 <span className="text-[#5E5E61]">
@@ -449,7 +501,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
           </div>
 
           {/* RIGHT COLUMN: Details, Inspection, Flaws, Reviews & Actions */}
-          <div className="md:w-7/12 p-6 md:p-8 overflow-y-auto flex flex-col justify-between space-y-6">
+          <div className="w-full lg:w-7/12 p-6 lg:p-8 overflow-y-auto flex flex-col justify-between space-y-6">
             <div className="space-y-5">
               {/* Category & Stock */}
               <div className="flex items-center justify-between text-xs font-semibold text-[#5E5E61] uppercase tracking-wider">
@@ -597,7 +649,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
               {/* REVIEWS SECTION (SHOPEE STYLE) */}
               <div className="pt-3 border-t border-[#E2E8D8] space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-base font-serif font-bold text-[#08482D] flex items-center gap-2">
+                  <h3 className="text-base font-bold text-[#08482D] flex items-center gap-2">
                     <Star className="w-4 h-4 fill-[#08482D]" />
                     Đánh Giá Sản Phẩm ({totalReviews})
                   </h3>
@@ -885,12 +937,18 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                             Đánh giá về Shop Đồ Cũ Còn Thương
                           </h4>
                           <div className="flex items-center gap-2 text-xs mt-0.5">
-                            <span className="font-bold text-[#101410] font-mono">
-                              {shopReviewsData.average_rating} / 5 ⭐
-                            </span>
-                            <span className="text-[#5E5E61]">
-                              ({shopReviewsData.total_reviews} đánh giá toàn shop)
-                            </span>
+                            {shopReviewsData && shopReviewsData.total_reviews > 0 ? (
+                              <>
+                                <span className="font-bold text-[#101410] font-mono">
+                                  {shopReviewsData.average_rating} / 5 ⭐
+                                </span>
+                                <span className="text-[#5E5E61]">
+                                  ({shopReviewsData.total_reviews} đánh giá toàn shop)
+                                </span>
+                              </>
+                            ) : (
+                              <span className="text-[#5E5E61]">Chưa có đánh giá</span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -959,97 +1017,185 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
               )}
             </div>
 
-            {/* ACTION MODULE: Quantity, Add to cart, Buy now, Trả giá, Hỏi shop */}
+            {/* ACTION MODULE: Quantity, Add to cart, Buy now, Trả giá */}
             <div className="pt-4 border-t border-[#E2E8D8] space-y-3">
-              {!isSoldOut && (
-                <div className="flex items-center justify-between gap-4">
-                  <span className="text-xs font-bold text-[#101410]">Số lượng:</span>
-                  <div className="flex items-center border border-[#E2E8D8] rounded-xl bg-[#F5F8EF] p-1 font-mono text-xs">
-                    <button
-                      onClick={handleDecrease}
-                      disabled={quantity <= 1}
-                      className="w-7 h-7 flex items-center justify-center hover:bg-[#DAE7C7]/50 rounded-lg disabled:opacity-40"
-                    >
-                      -
-                    </button>
-                    <span className="w-8 text-center font-bold text-[#101410]">{quantity}</span>
-                    <button
-                      onClick={handleIncrease}
-                      disabled={quantity >= fullProduct.stock}
-                      className="w-7 h-7 flex items-center justify-center hover:bg-[#DAE7C7]/50 rounded-lg disabled:opacity-40"
-                    >
-                      +
-                    </button>
+              {isSoldOut ? (
+                /* Out of stock notice (Requirement A7) */
+                <div className="p-4 rounded-2xl bg-[#F6DDDB]/70 border border-[#F6DDDB] text-center space-y-1">
+                  <div className="font-bold text-sm text-[#B33F33] uppercase tracking-wider">
+                    Đã có chủ mới
                   </div>
+                  <p className="text-xs text-[#5E5E61]">
+                    Món đồ vintage độc bản này đã được người mua khác rước về. Hãy tham khảo các món tương tự của shop nhé!
+                  </p>
                 </div>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-xs font-bold text-[#101410]">Số lượng:</span>
+                    <div className="flex items-center border border-[#E2E8D8] rounded-xl bg-[#F5F8EF] p-1 font-mono text-xs">
+                      <button
+                        onClick={handleDecrease}
+                        disabled={quantity <= 1}
+                        className="w-7 h-7 flex items-center justify-center hover:bg-[#DAE7C7]/50 rounded-lg disabled:opacity-40"
+                      >
+                        -
+                      </button>
+                      <span className="w-8 text-center font-bold text-[#101410]">{quantity}</span>
+                      <button
+                        onClick={handleIncrease}
+                        disabled={quantity >= fullProduct.stock}
+                        className="w-7 h-7 flex items-center justify-center hover:bg-[#DAE7C7]/50 rounded-lg disabled:opacity-40"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Main Buy Buttons */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button
+                      variant={justAdded ? "soft" : "secondary"}
+                      size="md"
+                      onClick={handleAdd}
+                      className={`w-full text-xs font-bold ${disabledBuy ? 'opacity-40 cursor-not-allowed' : ''}`}
+                    >
+                      {justAdded ? <Check className="w-4 h-4 mr-1 text-[#08482D]" /> : <ShoppingBag className="w-4 h-4 mr-1 text-[#08482D]" />}
+                      <span>{justAdded ? 'Đã thêm' : 'Thêm vào giỏ'}</span>
+                    </Button>
+
+                    <Button
+                      variant="primary"
+                      size="md"
+                      onClick={handleBuy}
+                      className={`w-full text-xs font-bold ${disabledBuy ? 'opacity-40 cursor-not-allowed' : ''}`}
+                    >
+                      <span>Mua ngay</span>
+                      <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                    </Button>
+                  </div>
+
+                  {/* Trả giá & Active Offer Status Block (Requirement A7) */}
+                  {activeOffer && activeOffer.status === 'pending' ? (
+                    <div className="p-3 bg-[#DAE7C7]/40 rounded-2xl border border-[#DAE7C7] flex items-center justify-between gap-3 text-xs">
+                      <div>
+                        <span className="font-semibold text-[#101410] block">
+                          Bạn đã trả giá <strong className="font-mono text-[#08482D]">{formatVND(activeOffer.offered_price)}</strong>
+                        </span>
+                        <span className="text-[11px] text-[#5E5E61]">
+                          Đang chờ shop phản hồi (còn {getRemainingHours(activeOffer.expires_at)} giờ)
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={cancellingOffer}
+                        onClick={async () => {
+                          setCancellingOffer(true);
+                          try {
+                            await api.cancelOffer(activeOffer.id);
+                            showToast('Đã hủy lời trả giá', 'info');
+                            await fetchActiveOffer();
+                          } catch (err: any) {
+                            showToast(err.message || 'Lỗi hủy trả giá', 'error');
+                          } finally {
+                            setCancellingOffer(false);
+                          }
+                        }}
+                        className="text-xs font-bold text-[#B33F33] hover:underline px-2 py-1 rounded shrink-0 cursor-pointer"
+                      >
+                        {cancellingOffer ? 'Đang hủy...' : 'Hủy lời trả giá'}
+                      </button>
+                    </div>
+                  ) : activeOffer && activeOffer.status === 'accepted' ? (
+                    <div className="p-3 bg-[#DAE7C7] rounded-2xl border border-[#08482D] flex items-center justify-between gap-3 text-xs">
+                      <div>
+                        <span className="font-bold text-[#08482D] block">
+                          Shop đã đồng ý giá {formatVND(activeOffer.offered_price)}!
+                        </span>
+                        <span className="text-[11px] text-[#5E5E61]">
+                          Bạn có thể mua ngay với mức giá đã thương lượng.
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onBuyNow({ ...fullProduct, price: activeOffer.offered_price }, 1);
+                          onClose();
+                        }}
+                        className="px-3 py-1.5 bg-[#08482D] text-white rounded-xl text-xs font-bold shadow-xs hover:bg-[#063A24] shrink-0 cursor-pointer"
+                      >
+                        Mua với giá này
+                      </button>
+                    </div>
+                  ) : activeOffer && activeOffer.status === 'countered' ? (
+                    <div className="p-3 bg-[#F5EEDC] rounded-2xl border border-[#8A6D3B]/40 space-y-2 text-xs">
+                      <div>
+                        <span className="font-bold text-[#8A6D3B] block">
+                          Shop phản hồi giá mới: <strong className="font-mono text-sm">{formatVND(activeOffer.counter_price || activeOffer.offered_price)}</strong>
+                        </span>
+                        {activeOffer.seller_note && (
+                          <p className="text-[11px] text-[#5E5E61] italic mt-0.5">"{activeOffer.seller_note}"</p>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              await api.buyerAcceptCounter(activeOffer.id);
+                              showToast('Đã đồng ý giá shop đề xuất', 'success');
+                              await fetchActiveOffer();
+                            } catch (err: any) {
+                              showToast(err.message || 'Lỗi', 'error');
+                            }
+                          }}
+                          className="flex-1 py-1.5 bg-[#08482D] text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer"
+                        >
+                          Đồng ý giá này
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              await api.buyerRejectCounter(activeOffer.id);
+                              showToast('Đã từ chối giá đề xuất', 'info');
+                              await fetchActiveOffer();
+                            } catch (err: any) {
+                              showToast(err.message || 'Lỗi', 'error');
+                            }
+                          }}
+                          className="px-3 py-1.5 border border-[#DAE7C7] hover:bg-white text-xs font-semibold text-[#5E5E61] rounded-xl cursor-pointer"
+                        >
+                          Từ chối
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    /* Nút Trả giá duy nhất (Requirement A5: bỏ nút Hỏi shop trùng lặp, chỉ giữ Chat với shop ở Shop Card) */
+                    <div>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => {
+                          if (disabledBuy && onDisabledBuyClick) {
+                            onDisabledBuyClick();
+                            return;
+                          }
+                          if (!currentUser && onRequestAuth) {
+                            onRequestAuth('offer', fullProduct);
+                            return;
+                          }
+                          setShowOfferModal(true);
+                        }}
+                        className="w-full text-xs font-bold gap-1.5 border-[#DAE7C7]"
+                      >
+                        <Tag className="w-4 h-4 text-[#08482D]" />
+                        <span>Trả giá</span>
+                      </Button>
+                    </div>
+                  )}
+                </>
               )}
-
-              {/* Main Buy Buttons */}
-              <div className="grid grid-cols-2 gap-3">
-                <Button
-                  variant={justAdded ? "soft" : "secondary"}
-                  size="md"
-                  onClick={handleAdd}
-                  disabled={isSoldOut}
-                  className={`w-full text-xs font-bold ${disabledBuy ? 'opacity-40 cursor-not-allowed' : ''}`}
-                >
-                  {justAdded ? <Check className="w-4 h-4 mr-1 text-[#08482D]" /> : <ShoppingBag className="w-4 h-4 mr-1 text-[#08482D]" />}
-                  <span>{justAdded ? 'Đã thêm' : 'Thêm vào giỏ'}</span>
-                </Button>
-
-                <Button
-                  variant="primary"
-                  size="md"
-                  onClick={handleBuy}
-                  disabled={isSoldOut}
-                  className={`w-full text-xs font-bold ${disabledBuy ? 'opacity-40 cursor-not-allowed' : ''}`}
-                >
-                  <span>Mua ngay</span>
-                  <ArrowRight className="w-3.5 h-3.5 ml-1" />
-                </Button>
-              </div>
-
-              {/* Secondary Market-Specific Action Buttons: "Trả giá" & "Hỏi shop" */}
-              <div className="grid grid-cols-2 gap-3 pt-1">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => {
-                    if (disabledBuy && onDisabledBuyClick) {
-                      onDisabledBuyClick();
-                      return;
-                    }
-                    if (!currentUser && onRequestAuth) {
-                      onRequestAuth('offer', fullProduct);
-                      return;
-                    }
-                    setShowOfferModal(true);
-                  }}
-                  disabled={isSoldOut}
-                  className="w-full text-xs font-bold gap-1.5 border-[#DAE7C7]"
-                >
-                  <Tag className="w-4 h-4 text-[#08482D]" />
-                  <span>Trả giá</span>
-                </Button>
-
-                <Button
-                  variant="soft"
-                  size="sm"
-                  onClick={() => {
-                    if (!currentUser && onRequestAuth) {
-                      onRequestAuth('chat', fullProduct);
-                      return;
-                    }
-                    window.dispatchEvent(new CustomEvent('open-buyer-chat', {
-                      detail: { shopId: fullProduct.shop_id || 1, product: fullProduct }
-                    }));
-                  }}
-                  className="w-full text-xs font-bold gap-1.5"
-                >
-                  <MessageSquare className="w-4 h-4 text-[#08482D]" />
-                  <span>Hỏi shop</span>
-                </Button>
-              </div>
 
               {/* SHOP CARD (KIỂU SHOPEE) */}
               <div className="p-3.5 rounded-2xl bg-[#F5F8EF] border border-[#DAE7C7] flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
@@ -1069,10 +1215,14 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                       </span>
                     </div>
                     <div className="flex items-center gap-2 text-[11px] text-[#5E5E61] mt-0.5">
-                      <span className="flex items-center gap-0.5">
-                        <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
-                        <strong className="text-stone-800">{shopInfo?.rating_avg || 5.0}</strong>
-                      </span>
+                      {shopReviewsData && shopReviewsData.total_reviews > 0 ? (
+                        <span className="flex items-center gap-0.5">
+                          <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
+                          <strong className="text-stone-800">{shopReviewsData.average_rating}</strong>
+                        </span>
+                      ) : (
+                        <span>Chưa có đánh giá</span>
+                      )}
                       <span>·</span>
                       <span><strong>{shopInfo?.product_count || otherShopProducts.length + 1}</strong> sản phẩm</span>
                     </div>
@@ -1115,7 +1265,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
               {otherShopProducts.length > 0 && (
                 <div className="p-3.5 rounded-2xl bg-white border border-[#E2E8D8] space-y-2.5">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-serif font-bold text-[#08482D] flex items-center gap-1.5">
+                    <h4 className="text-xs font-bold text-[#08482D] flex items-center gap-1.5">
                       <Store className="w-3.5 h-3.5" /> Món khác của shop này
                     </h4>
                     {shopInfo?.slug && (
@@ -1363,13 +1513,19 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   <Store className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-serif text-lg font-bold text-[#08482D]">
+                  <h3 className="text-lg font-bold text-[#08482D]">
                     Tất cả đánh giá về Shop Đồ Cũ Còn Thương
                   </h3>
                   <div className="flex items-center gap-2 text-xs text-[#5E5E61]">
-                    <span className="font-bold font-mono text-[#101410]">{shopReviewsData.average_rating} / 5 ⭐</span>
-                    <span>·</span>
-                    <span>{shopReviewsData.total_reviews} lượt đánh giá khách hàng</span>
+                    {shopReviewsData && shopReviewsData.total_reviews > 0 ? (
+                      <>
+                        <span className="font-bold font-mono text-[#101410]">{shopReviewsData.average_rating} / 5 ⭐</span>
+                        <span>·</span>
+                        <span>{shopReviewsData.total_reviews} lượt đánh giá khách hàng</span>
+                      </>
+                    ) : (
+                      <span>Chưa có đánh giá</span>
+                    )}
                   </div>
                 </div>
               </div>

@@ -1068,7 +1068,7 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart, onNavi
                   required
                   value={addrPhone}
                   onChange={e => setAddrPhone(e.target.value)}
-                  placeholder="VD: 0987654321"
+                  placeholder="VD: 0909 246 135"
                   className="w-full px-3.5 py-2.5 rounded-xl border border-[#E2E8D8] bg-white focus:outline-none focus:ring-2 focus:ring-[#C2522D]"
                 />
               </div>

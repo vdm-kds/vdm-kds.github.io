@@ -13,6 +13,7 @@ import { Button } from './Button';
 import { ChatDrawer } from './ChatDrawer';
 import { ReturnRequestModal } from './ReturnRequestModal';
 import { InvoiceModal } from './InvoiceModal';
+import { ProductImage } from './ProductImage';
 
 interface OrdersViewProps {
   onBackToShop: () => void;
@@ -343,10 +344,11 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                   <div className="border-t border-[#E2E8D8]/50 pt-3 space-y-2">
                     {order.items?.slice(0, 2).map((item, idx) => (
                       <div key={idx} className="flex items-center gap-3 text-xs">
-                        <img
+                        <ProductImage
                           src={item.image_url}
                           alt={item.product_name}
-                          referrerPolicy="no-referrer"
+                          productName={item.product_name}
+                          conditionPct={item.condition_pct}
                           className="w-10 h-10 rounded-lg object-cover bg-[#DAE7C7] shrink-0"
                         />
                         <div className="flex-1 min-w-0">
@@ -578,9 +580,11 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                   return (
                     <div key={idx} className="py-3 flex items-center justify-between gap-3 text-xs">
                       <div className="flex items-center gap-3 min-w-0">
-                        <img
+                        <ProductImage
                           src={item.image_url}
                           alt={item.product_name}
+                          productName={item.product_name}
+                          conditionPct={item.condition_pct}
                           className="w-12 h-12 rounded-xl object-cover bg-[#DAE7C7] border border-[#E2E8D8] shrink-0"
                         />
                         <div className="min-w-0">
@@ -850,7 +854,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
               <Star className="w-7 h-7 fill-[#08482D]" />
             </div>
             <div>
-              <h3 className="font-serif text-xl font-bold text-[#08482D]">Cảm ơn bạn!</h3>
+              <h3 className="text-xl font-bold text-[#08482D]">Cảm ơn bạn!</h3>
               <p className="text-xs text-[#5E5E61] mt-1.5 leading-relaxed">
                 Đánh giá món đồ để giúp người mua sau nhé
               </p>
