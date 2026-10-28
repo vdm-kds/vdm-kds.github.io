@@ -2,7 +2,7 @@ import { Product, Order, User, CartItem, Coupon, Offer, ChatConversation, ChatMe
 
 const DB_KEY = 'dcct_db';
 const SESSION_KEY = 'dcct_session';
-const DB_VERSION = 5;
+const DB_VERSION = 6;
 
 // Simulated realistic network delay
 export const delay = (ms?: number) =>
@@ -39,18 +39,42 @@ export const CATEGORY_EMOJIS: Record<string, string> = {
   'Gia dụng': '🍳'
 };
 
-// Vintage Product SVG Generator according to Requirement B1:
+// Requirement 5: Product-specific emojis
+// iPhone 📱, bàn phím ⌨️, tai nghe 🎧, máy ảnh 📷, đồng hồ ⌚, túi xách 👜, áo khoác 🧥, nồi chiên 🍳, sách 📖, guitar 🎸
+// Fallback to category emoji for user-created products
+export function getProductEmoji(title?: string, category?: string): string {
+  const t = (title || '').toLowerCase();
+  if (t.includes('iphone') || t.includes('điện thoại') || t.includes('smartphone')) return '📱';
+  if (t.includes('bàn phím') || t.includes('keyboard') || t.includes('keychron')) return '⌨️';
+  if (t.includes('tai nghe') || t.includes('headphone') || t.includes('earphone') || t.includes('sony wh')) return '🎧';
+  if (t.includes('máy ảnh') || t.includes('camera') || t.includes('canon') || t.includes('nikon') || t.includes('film')) return '📷';
+  if (t.includes('đồng hồ') || t.includes('watch') || t.includes('casio')) return '⌚';
+  if (t.includes('túi xách') || t.includes('túi da') || t.includes('balo') || t.includes('bag') || t.includes('ví')) return '👜';
+  if (t.includes('áo khoác') || t.includes('denim') || t.includes('jacket') || t.includes('áo') || t.includes('quần')) return '🧥';
+  if (t.includes('nồi chiên') || t.includes('nồi') || t.includes('chảo') || t.includes('philips')) return '🍳';
+  if (t.includes('sách') || t.includes('nhà giả kim') || t.includes('truyện') || t.includes('book')) return '📖';
+  if (t.includes('guitar') || t.includes('đàn') || t.includes('yamaha')) return '🎸';
+
+  if (category && CATEGORY_EMOJIS[category]) {
+    return CATEGORY_EMOJIS[category];
+  }
+  return '📦';
+}
+
+// Vintage Product SVG Generator according to Requirement B1 & Sửa Lỗi 4:
+// - Product-specific emojis
+// - Dynamic owning shop name in subtitle ("{SHOP_NAME} · {VARIANT}")
 // - Gradient #08482D to #2E7D4F
 // - Faint #DAE7C7 circles
-// - Large category emoji (🧥, 🎧, 📷, 📖, 🎸, ⌚, 🍳)
 // - Category uppercase in #DAE7C7
 // - Product title in white (#FFFFFF)
 // - Strictly 'Be Vietnam Pro', sans-serif font
 // - 3 distinct variants for product gallery
-export function createVintageProductSvg(title: string, category: string, variant: number = 0): string {
-  const emoji = CATEGORY_EMOJIS[category] || '📦';
+export function createVintageProductSvg(title: string, category: string, variant: number = 0, shopName?: string): string {
+  const emoji = getProductEmoji(title, category);
   const cleanTitle = title && title.length > 24 ? title.substring(0, 24) + '...' : (title || 'Sản phẩm');
   const safeCategory = (category || 'ĐỒ CŨ').toUpperCase();
+  const safeShopName = (shopName || 'ĐỒ CŨ CÒN THƯƠNG').toUpperCase();
 
   let gradId = `vg_${variant}_${Math.random().toString(36).substring(2, 6)}`;
   let gradStart = '#08482D';
@@ -96,7 +120,7 @@ export function createVintageProductSvg(title: string, category: string, variant
     <text x="300" y="240" font-size="96" text-anchor="middle" dominant-baseline="central">${emoji}</text>
     <text x="300" y="340" font-family="'Be Vietnam Pro', sans-serif" font-size="20" font-weight="700" fill="#DAE7C7" text-anchor="middle" letter-spacing="3">${safeCategory}</text>
     <text x="300" y="390" font-family="'Be Vietnam Pro', sans-serif" font-size="24" font-weight="700" fill="#FFFFFF" text-anchor="middle">${cleanTitle}</text>
-    <text x="300" y="430" font-family="'Be Vietnam Pro', sans-serif" font-size="13" font-weight="500" fill="#DAE7C7" opacity="0.8" text-anchor="middle">ĐỒ CŨ CÒN THƯƠNG · ${variantTag}</text>
+    <text x="300" y="430" font-family="'Be Vietnam Pro', sans-serif" font-size="13" font-weight="500" fill="#DAE7C7" opacity="0.8" text-anchor="middle">${safeShopName} · ${variantTag}</text>
   </svg>`;
 
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
@@ -146,9 +170,9 @@ export function isLegacyOrEmptyImage(src?: string | null): boolean {
 }
 
 // Backward compatible SVG placeholder generator
-export function createSvgPlaceholder(title: string, category: string, _bg?: string, _fg?: string, tag: string = 'ẢNH GỐC 1'): string {
+export function createSvgPlaceholder(title: string, category: string, _bg?: string, _fg?: string, tag: string = 'ẢNH GỐC 1', shopName?: string): string {
   const variant = tag.includes('2') || tag.includes('SAU') || tag.includes('NGHIÊNG') ? 1 : tag.includes('3') || tag.includes('CẬN') || tag.includes('TIẾT') ? 2 : 0;
-  return createVintageProductSvg(title, category, variant);
+  return createVintageProductSvg(title, category, variant, shopName);
 }
 
 // Normalized initial sample products
@@ -480,8 +504,8 @@ function createInitialDatabase(): DCCTDatabase {
       phone: '0901234567',
       created_at: '2026-07-15T08:00:00.000Z',
       follower_ids: [2],
-      rating_avg: 4.9,
-      review_count: 48,
+      rating_avg: 0,
+      review_count: 0,
       response_rate: 99,
       joined_text: '3 tháng trước'
     },
@@ -497,8 +521,8 @@ function createInitialDatabase(): DCCTDatabase {
       phone: '0902345678',
       created_at: '2026-08-10T09:30:00.000Z',
       follower_ids: [],
-      rating_avg: 5.0,
-      review_count: 24,
+      rating_avg: 0,
+      review_count: 0,
       response_rate: 96,
       joined_text: '2 tháng trước'
     },
@@ -514,8 +538,8 @@ function createInitialDatabase(): DCCTDatabase {
       phone: '0903456789',
       created_at: '2026-08-01T10:00:00.000Z',
       follower_ids: [2],
-      rating_avg: 4.8,
-      review_count: 36,
+      rating_avg: 0,
+      review_count: 0,
       response_rate: 98,
       joined_text: '2 tháng trước'
     }
@@ -554,15 +578,15 @@ function createInitialDatabase(): DCCTDatabase {
       seller_id: 1
     };
 
-    const img1 = createSvgPlaceholder(item.name, item.category, item.bg, '#FAF7F2', 'MẶT TRƯỚC');
-    const img2 = createSvgPlaceholder(item.name, item.category, item.bg, '#FAF7F2', 'MẶT SAU');
-    const img3 = createSvgPlaceholder(item.name, item.category, item.bg, '#FAF7F2', 'CẬN CẢNH');
-    const img4 = createSvgPlaceholder(item.name, item.category, item.bg, '#FAF7F2', 'CHI TIẾT');
+    const img1 = createSvgPlaceholder(item.name, item.category, item.bg, '#FAF7F2', 'MẶT TRƯỚC', mapping.shop_name);
+    const img2 = createSvgPlaceholder(item.name, item.category, item.bg, '#FAF7F2', 'MẶT SAU', mapping.shop_name);
+    const img3 = createSvgPlaceholder(item.name, item.category, item.bg, '#FAF7F2', 'CẬN CẢNH', mapping.shop_name);
+    const img4 = createSvgPlaceholder(item.name, item.category, item.bg, '#FAF7F2', 'CHI TIẾT', mapping.shop_name);
 
     const flawsWithImg = item.flaws.map((fl, fIdx) => ({
       id: fIdx + 1,
       description: fl.description,
-      image_url: createSvgPlaceholder(item.name, 'KHUYẾT ĐIỂM', '#8B261E', '#FAF7F2', `LỖI #${fIdx + 1}`)
+      image_url: createSvgPlaceholder(item.name, 'KHUYẾT ĐIỂM', '#8B261E', '#FAF7F2', `LỖI #${fIdx + 1}`, mapping.shop_name)
     }));
 
     return {
@@ -789,6 +813,44 @@ if (typeof window !== 'undefined') {
   });
 }
 
+export function checkExpiredOffers(database: DCCTDatabase): boolean {
+  if (!database || !Array.isArray(database.offers)) return false;
+  let modified = false;
+  const now = Date.now();
+  for (const offer of database.offers) {
+    if (offer.status === 'pending') {
+      const expTime = offer.expires_at
+        ? new Date(offer.expires_at).getTime()
+        : new Date(offer.created_at).getTime() + 24 * 3600 * 1000;
+      if (now >= expTime) {
+        offer.status = 'expired';
+        modified = true;
+        const buyerId = offer.buyer_id || offer.user_id;
+        if (buyerId && Array.isArray(database.notifications)) {
+          const rawPrice = offer.offered_price || (offer as any).price || 0;
+          const formattedPrice = rawPrice.toLocaleString('vi-VN') + 'đ';
+          const notifMsg = `Lời trả giá ${formattedPrice} cho món "${offer.product_name}" đã hết hạn 24 giờ. Bạn có thể trả giá lại.`;
+          const alreadyNotified = database.notifications.some(
+            (n) => n.user_id === buyerId && n.title === 'Lời trả giá hết hạn' && n.message === notifMsg
+          );
+          if (!alreadyNotified) {
+            database.notifications.unshift({
+              id: (database.notifications.reduce((max, n) => Math.max(max, n.id), 0) || 0) + 1,
+              user_id: buyerId,
+              role: 'buyer',
+              title: 'Lời trả giá hết hạn',
+              message: notifMsg,
+              is_read: false,
+              created_at: new Date().toISOString()
+            });
+          }
+        }
+      }
+    }
+  }
+  return modified;
+}
+
 export function getDb(): DCCTDatabase {
   if (typeof window === 'undefined') {
     return createInitialDatabase();
@@ -833,28 +895,29 @@ export function getDb(): DCCTDatabase {
       }
       if (Array.isArray(parsed.products)) {
         for (const p of parsed.products) {
-          if (isLegacyOrEmptyImage(p.image_url)) {
-            p.image_url = createVintageProductSvg(p.name, p.category, 0);
-          }
-          if (Array.isArray(p.images)) {
-            p.images = [
-              isLegacyOrEmptyImage(p.images[0]) ? createVintageProductSvg(p.name, p.category, 0) : p.images[0],
-              isLegacyOrEmptyImage(p.images[1]) ? createVintageProductSvg(p.name, p.category, 1) : p.images[1],
-              isLegacyOrEmptyImage(p.images[2]) ? createVintageProductSvg(p.name, p.category, 2) : p.images[2]
-            ];
-          } else {
-            p.images = [
-              createVintageProductSvg(p.name, p.category, 0),
-              createVintageProductSvg(p.name, p.category, 1),
-              createVintageProductSvg(p.name, p.category, 2)
-            ];
-          }
+          const shopObj = parsed.shops?.find((s: Shop) => s.id === p.shop_id);
+          const shopName = shopObj?.name || p.shop_name || 'ĐỒ CŨ CÒN THƯƠNG';
+          p.image_url = createVintageProductSvg(p.name, p.category, 0, shopName);
+          p.images = [
+            createVintageProductSvg(p.name, p.category, 0, shopName),
+            createVintageProductSvg(p.name, p.category, 1, shopName),
+            createVintageProductSvg(p.name, p.category, 2, shopName)
+          ];
           if (Array.isArray(p.flaws)) {
             p.flaws.forEach((fl: any, fIdx: number) => {
-              if (isLegacyOrEmptyImage(fl.image_url)) {
-                fl.image_url = createVintageProductSvg(p.name, 'LỖI SẢN PHẨM', fIdx % 3);
-              }
+              fl.image_url = createVintageProductSvg(p.name, 'LỖI SẢN PHẨM', fIdx % 3, shopName);
             });
+          }
+        }
+      }
+
+      // Reset fake ratings on shops with 0 real reviews
+      if (Array.isArray(parsed.shops) && Array.isArray(parsed.reviews)) {
+        for (const s of parsed.shops) {
+          const realRevs = parsed.reviews.filter((r: Review) => r.shop_id === s.id);
+          if (realRevs.length === 0) {
+            s.rating_avg = 0;
+            s.review_count = 0;
           }
         }
       }
@@ -871,6 +934,11 @@ export function getDb(): DCCTDatabase {
         (parsed as any)[key] = [];
         modified = true;
       }
+    }
+
+    // Auto-expire offers pending > 24 hours and notify buyer
+    if (checkExpiredOffers(parsed)) {
+      modified = true;
     }
 
     if (modified) {
@@ -1953,7 +2021,7 @@ export const db = {
       throw new Error('Mã giảm giá không tồn tại hoặc đã hết hạn');
     }
     if (subtotal < (cpn.min_order_amount || 0)) {
-      throw new Error(`Đơn hàng của shop phải từ ${(cpn.min_order_amount || 0).toLocaleString()}đ để dùng mã này`);
+      throw new Error(`Đơn hàng của shop phải từ ${(cpn.min_order_amount || 0).toLocaleString('vi-VN')}đ để dùng mã này`);
     }
 
     const actualShippingFee = shippingFee !== undefined ? shippingFee : (subtotal >= 1000000 ? 0 : 30000);
@@ -2124,7 +2192,7 @@ export const db = {
         user_id: session.user.id,
         role: 'buyer',
         title: 'Đặt hàng thành công',
-        message: `Đơn hàng #${orderCode} tại ${shopObj?.name} trị giá ${shopBreakdown.total.toLocaleString()}đ đã được gửi tới shop.`,
+        message: `Đơn hàng #${orderCode} tại ${shopObj?.name} trị giá ${shopBreakdown.total.toLocaleString('vi-VN')}đ đã được gửi tới shop.`,
         order_id: newOrderId,
         is_read: false,
         created_at: new Date().toISOString()
@@ -2135,7 +2203,7 @@ export const db = {
         user_id: shopObj?.owner_user_id || 1,
         role: 'seller',
         title: 'Đơn hàng mới chờ duyệt',
-        message: `Đơn hàng mới #${orderCode} (${shopBreakdown.items.length} món, ${shopBreakdown.total.toLocaleString()}đ) đang chờ bạn xác nhận.`,
+        message: `Đơn hàng mới #${orderCode} (${shopBreakdown.items.length} món, ${shopBreakdown.total.toLocaleString('vi-VN')}đ) đang chờ bạn xác nhận.`,
         order_id: newOrderId,
         is_read: false,
         created_at: new Date().toISOString()
@@ -2478,8 +2546,8 @@ export const db = {
     return { message: `Đã duyệt ${count} đơn hàng`, confirmed_count: count };
   },
 
-  // --- OFFERS / TRẢ GIÁ (LỖI 3) ---
-  async createOffer(payload: { productId: number; offeredPrice: number; message?: string }): Promise<{ message: string; offer: Offer }> {
+  // --- OFFERS / TRẢ GIÁ (Requirement 1) ---
+  async createOffer(payload: { productId?: number; product_id?: number; offeredPrice?: number; offered_price?: number; price?: number; message?: string }): Promise<{ message: string; offer: Offer }> {
     await delay();
     const session = getCurrentSession();
     if (!session || !session.user || session.user.role !== 'buyer') {
@@ -2490,10 +2558,12 @@ export const db = {
       throw new Error('Cửa hàng đang tạm dừng nhận đơn trong buổi thuyết trình');
     }
 
-    const prod = database.products.find((p) => p.id === Number(payload.productId));
+    const prodId = Number(payload.productId ?? payload.product_id);
+    const prod = database.products.find((p) => p.id === prodId);
     if (!prod) throw new Error('Không tìm thấy sản phẩm');
 
-    const offeredPrice = Math.round(Number(payload.offeredPrice));
+    const rawOfferedPrice = payload.offeredPrice ?? payload.offered_price ?? (payload as any).price;
+    const offeredPrice = Math.round(Number(rawOfferedPrice));
     if (isNaN(offeredPrice) || offeredPrice <= 0) {
       throw new Error('Mức giá đề xuất không hợp lệ');
     }
@@ -2508,10 +2578,10 @@ export const db = {
 
     // Check if buyer already has an active pending/countered offer for this product
     const existingActive = database.offers.find(
-      (o) => o.buyer_id === session.user.id && o.product_id === prod.id && (o.status === 'pending' || o.status === 'countered')
+      (o) => (o.buyer_id === session.user.id || o.user_id === session.user.id) && o.product_id === prod.id && (o.status === 'pending' || o.status === 'countered')
     );
     if (existingActive) {
-      throw new Error('Bạn đang có một lời trả giá đang chờ phản hồi cho sản phẩm này');
+      throw new Error('Bạn đang có một lời trả giá chờ phản hồi cho món này');
     }
 
     const newOfferId = (database.offers.reduce((max, o) => Math.max(max, o.id), 0) || 0) + 1;
@@ -2529,6 +2599,7 @@ export const db = {
       product_image: prod.image_url,
       original_price: prod.price,
       offered_price: offeredPrice,
+      price: offeredPrice,
       message: payload.message?.trim(),
       status: 'pending',
       expires_at: expiresAt,
@@ -2540,12 +2611,13 @@ export const db = {
     database.offers.unshift(newOffer);
 
     // Notify seller of this shop
+    const formattedPrice = offeredPrice.toLocaleString('vi-VN') + 'đ';
     database.notifications.unshift({
       id: (database.notifications.reduce((max, n) => Math.max(max, n.id), 0) || 0) + 1,
       user_id: shop?.owner_user_id || 1,
       role: 'seller',
       title: 'Lời trả giá mới',
-      message: `Khách hàng ${session.user.full_name} trả giá ${offeredPrice.toLocaleString()}đ cho "${prod.name}".`,
+      message: `Khách hàng ${session.user.full_name} trả giá ${formattedPrice} cho "${prod.name}".`,
       is_read: false,
       created_at: new Date().toISOString()
     });
@@ -2563,6 +2635,7 @@ export const db = {
     const session = getCurrentSession();
     if (!session || !session.user) return { offers: [] };
     const database = getDb();
+    if (checkExpiredOffers(database)) saveDb(database);
     const myOffers = database.offers.filter((o) => o.user_id === session.user.id || o.buyer_id === session.user.id);
     return { offers: myOffers };
   },
@@ -2571,6 +2644,7 @@ export const db = {
     await delay();
     const session = getCurrentSession();
     const database = getDb();
+    if (checkExpiredOffers(database)) saveDb(database);
     const sellerShop = this.checkSellerShopOwnership(session, database);
     return { offers: database.offers.filter((o) => o.shop_id === sellerShop.id) };
   },
@@ -2587,12 +2661,13 @@ export const db = {
     off.status = 'accepted';
 
     // Notify buyer
+    const formattedPrice = (off.offered_price || (off as any).price || 0).toLocaleString('vi-VN') + 'đ';
     database.notifications.unshift({
       id: (database.notifications.reduce((max, n) => Math.max(max, n.id), 0) || 0) + 1,
       user_id: off.buyer_id || off.user_id || 1,
       role: 'buyer',
       title: 'Shop chấp nhận trả giá!',
-      message: `Shop đã chấp nhận mức giá ${off.offered_price.toLocaleString()}đ cho "${off.product_name}". Hãy đặt mua ngay nhé!`,
+      message: `Shop đã chấp nhận mức giá ${formattedPrice} cho "${off.product_name}". Hãy đặt mua ngay nhé!`,
       is_read: false,
       created_at: new Date().toISOString()
     });
@@ -2615,12 +2690,13 @@ export const db = {
     off.seller_note = sellerNote?.trim();
 
     // Notify buyer
+    const formattedCounter = Number(counterPrice).toLocaleString('vi-VN') + 'đ';
     database.notifications.unshift({
       id: (database.notifications.reduce((max, n) => Math.max(max, n.id), 0) || 0) + 1,
       user_id: off.buyer_id || off.user_id || 1,
       role: 'buyer',
       title: 'Shop thương lượng lại mức giá',
-      message: `Shop đề xuất mức giá ${Number(counterPrice).toLocaleString()}đ cho "${off.product_name}".`,
+      message: `Shop đề xuất mức giá ${formattedCounter} cho "${off.product_name}".`,
       is_read: false,
       created_at: new Date().toISOString()
     });
@@ -2665,6 +2741,7 @@ export const db = {
     off.status = 'accepted';
     if (off.counter_price) {
       off.offered_price = off.counter_price;
+      off.price = off.counter_price;
     }
     saveDb(database);
     return { message: 'Đã đồng ý mức giá thương lượng' };
@@ -2686,7 +2763,7 @@ export const db = {
     const session = getCurrentSession();
     if (!session || !session.user) throw new Error('Vui lòng đăng nhập');
     const database = getDb();
-    const off = database.offers.find((o) => o.id === Number(offerId) && o.buyer_id === session.user.id);
+    const off = database.offers.find((o) => o.id === Number(offerId) && (o.buyer_id === session.user.id || o.user_id === session.user.id));
     if (!off) throw new Error('Không tìm thấy lời trả giá');
     if (off.status !== 'pending' && off.status !== 'countered') {
       throw new Error('Không thể hủy lời trả giá ở trạng thái này');
@@ -2702,7 +2779,8 @@ export const db = {
     const session = getCurrentSession();
     if (!session || !session.user) return { offer: null };
     const database = getDb();
-    const myOffers = database.offers.filter((o) => o.buyer_id === session.user.id && o.product_id === Number(productId));
+    if (checkExpiredOffers(database)) saveDb(database);
+    const myOffers = database.offers.filter((o) => (o.buyer_id === session.user.id || o.user_id === session.user.id) && o.product_id === Number(productId));
     const active = myOffers.find((o) => o.status === 'pending' || o.status === 'countered') || myOffers.find((o) => o.status === 'accepted');
     return { offer: active || null };
   },
@@ -3109,7 +3187,7 @@ export const db = {
     );
 
     const total = list.length;
-    const avg = total > 0 ? Number((list.reduce((acc, r) => acc + r.rating, 0) / total).toFixed(1)) : 5.0;
+    const avg = total > 0 ? Number((list.reduce((acc, r) => acc + r.rating, 0) / total).toFixed(1)) : 0;
 
     const dist: Record<string, number> = { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 };
     for (const r of list) {
@@ -3146,7 +3224,7 @@ export const db = {
     }
 
     const total = list.length;
-    const avg = total > 0 ? Number((list.reduce((acc, r) => acc + r.rating, 0) / total).toFixed(1)) : 5.0;
+    const avg = total > 0 ? Number((list.reduce((acc, r) => acc + r.rating, 0) / total).toFixed(1)) : 0;
 
     const dist: Record<string, number> = { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 };
     for (const r of list) {
@@ -3171,7 +3249,7 @@ export const db = {
 
     const list = database.reviews.filter((r) => r.shop_id === sellerShop.id);
     const total = list.length;
-    const avg = total > 0 ? Number((list.reduce((acc, r) => acc + r.rating, 0) / total).toFixed(1)) : 5.0;
+    const avg = total > 0 ? Number((list.reduce((acc, r) => acc + r.rating, 0) / total).toFixed(1)) : 0;
     const unreplied = list.filter((r) => !r.seller_reply).length;
 
     return {

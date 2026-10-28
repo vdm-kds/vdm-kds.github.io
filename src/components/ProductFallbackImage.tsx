@@ -1,4 +1,5 @@
 import React from 'react';
+import { getProductEmoji } from '../services/db';
 
 interface ProductFallbackImageProps {
   name?: string;
@@ -9,16 +10,6 @@ interface ProductFallbackImageProps {
   compact?: boolean;
 }
 
-const CATEGORY_EMOJIS: Record<string, string> = {
-  'Thời trang': '🧥',
-  'Điện tử': '🎧',
-  'Máy ảnh': '📷',
-  'Sách': '📖',
-  'Nhạc cụ': '🎸',
-  'Phụ kiện': '⌚',
-  'Gia dụng': '🍳'
-};
-
 export const ProductFallbackImage: React.FC<ProductFallbackImageProps> = ({
   name,
   productName,
@@ -28,7 +19,7 @@ export const ProductFallbackImage: React.FC<ProductFallbackImageProps> = ({
   compact = false
 }) => {
   const displayName = productName || name || 'Sản phẩm';
-  const emoji = CATEGORY_EMOJIS[category] || '📦';
+  const emoji = getProductEmoji(displayName, category);
 
   return (
     <div 

@@ -286,6 +286,7 @@ export interface Offer {
   product_category?: string;
   original_price: number;
   offered_price: number;
+  price?: number;
   counter_price?: number;
   message?: string;
   seller_note?: string;

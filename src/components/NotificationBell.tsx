@@ -145,7 +145,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onSelectOrde
           setIsOpen(!isOpen);
           if (!isOpen) fetchNotifications(true);
         }}
-        className={`relative p-2.5 rounded-xl text-[#101410] hover:bg-[#DAE7C7] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C2522D] ${
+        className={`relative w-10 h-10 flex items-center justify-center rounded-xl text-[#101410] hover:bg-[#DAE7C7] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C2522D] shrink-0 ${
           hasShaked ? 'animate-bounce' : ''
         }`}
         aria-label="Thông báo"

@@ -1,8 +1,12 @@
-// Định dạng tiền tệ VNĐ (vd: 1.500.000đ)
+// Định dạng tiền tệ VNĐ chuẩn với dấu chấm (vd: 100.000đ, 75.000đ)
 export function formatVND(amount: number | undefined | null): string {
   if (amount === undefined || amount === null || isNaN(amount)) return '0đ';
-  return new Intl.NumberFormat('vi-VN').format(amount) + 'đ';
+  const val = Math.round(Number(amount));
+  return val.toLocaleString('vi-VN') + 'đ';
 }
+
+// Hàm duy nhất formatMoney dùng cho mọi nơi
+export const formatMoney = formatVND;
 
 // Định dạng ngày giờ dd/MM/yyyy HH:mm
 export function formatDate(dateString: string | undefined | null): string {
@@ -39,18 +43,16 @@ export function getOrderStatusBadge(status: string): { label: string; bg: string
   }
 }
 
-// Map trạng thái thanh toán
+// Map trạng thái thanh toán chuẩn tiếng Việt (không hiện 'pending', 'paid')
 export function getPaymentStatusBadge(status: string): { label: string; bg: string; text: string } {
-  switch (status) {
-    case 'paid':
-      return { label: 'Đã thanh toán', bg: 'bg-[#EBF5EE]', text: 'text-[#337A47]' };
-    case 'unpaid':
-      return { label: 'Chưa thanh toán (COD)', bg: 'bg-[#F5EEDC]', text: 'text-[#8A6D3B]' };
-    case 'refunded':
-      return { label: 'Đã hoàn tiền (mô phỏng)', bg: 'bg-[#F2EDEA]', text: 'text-[#8C5E47]' };
-    default:
-      return { label: status, bg: 'bg-stone-100', text: 'text-stone-700' };
+  const s = (status || '').toLowerCase();
+  if (s === 'paid') {
+    return { label: 'Đã thanh toán', bg: 'bg-[#EBF5EE]', text: 'text-[#337A47]' };
   }
+  if (s === 'refunded') {
+    return { label: 'Đã hoàn tiền', bg: 'bg-[#F2EDEA]', text: 'text-[#8C5E47]' };
+  }
+  return { label: 'Chưa thanh toán', bg: 'bg-[#F5EEDC]', text: 'text-[#8A6D3B]' };
 }
 
 // Thuật toán Luhn kiểm tra số thẻ hợp lệ

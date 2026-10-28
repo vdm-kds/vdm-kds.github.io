@@ -351,7 +351,7 @@ export function DemoController({ onRoleSwitched, onDataReset, onPresentationMode
                             {s.name}
                           </div>
                           <div className="text-[10px] text-[#5E5E61] truncate">
-                            @{s.username} • {s.desc}
+                            {s.username === 'admin' ? '@docuconthuong' : `@${s.username}`} • {s.desc}
                           </div>
                         </div>
                       </div>

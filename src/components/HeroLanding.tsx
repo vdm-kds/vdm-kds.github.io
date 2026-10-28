@@ -588,7 +588,7 @@ export const HeroLanding: React.FC<HeroLandingProps> = ({
               desc: 'Tiệm đồ second-hand có câu chuyện: thời trang, phụ kiện, đồ gia dụng đã kiểm định.',
               productsCount: 4,
               reviewsCount: 0,
-              rating: 5.0
+              rating: 0
             },
             {
               id: 2,
@@ -599,7 +599,7 @@ export const HeroLanding: React.FC<HeroLandingProps> = ({
               desc: 'Sách cũ còn thơm mùi giấy và nhạc cụ đã qua sử dụng, chỉnh âm kỹ trước khi giao.',
               productsCount: 2,
               reviewsCount: 0,
-              rating: 5.0
+              rating: 0
             },
             {
               id: 3,
@@ -609,8 +609,8 @@ export const HeroLanding: React.FC<HeroLandingProps> = ({
               avatar: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=120',
               desc: 'Đồ công nghệ cũ đã test kỹ: máy ảnh film, điện thoại, tai nghe, bàn phím cơ.',
               productsCount: 4,
-              reviewsCount: 1,
-              rating: 5.0
+              reviewsCount: 0,
+              rating: 0
             }
           ].map(s => (
             <div

@@ -112,6 +112,9 @@ export const api = {
   getOrders: (status?: string) =>
     db.getMyOrders(status),
 
+  getMyOrders: (status?: string) =>
+    db.getMyOrders(status),
+
   getOrder: (id: number | string) =>
     db.getOrder(id),
 
@@ -316,8 +319,12 @@ export const api = {
   getSellerOffers: () =>
     db.getSellerOffers(),
 
-  createOffer: (payload: { product_id: number; offered_price: number; message?: string }) =>
-    db.createOffer({ productId: payload.product_id, offeredPrice: payload.offered_price, message: payload.message }),
+  createOffer: (payload: { product_id?: number; productId?: number; offered_price?: number; offeredPrice?: number; price?: number; message?: string }) =>
+    db.createOffer({
+      productId: Number(payload.productId ?? payload.product_id),
+      offeredPrice: Number(payload.offeredPrice ?? payload.offered_price ?? (payload as any).price),
+      message: payload.message
+    }),
 
   acceptOffer: (id: number) =>
     db.acceptOffer(id),

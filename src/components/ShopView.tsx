@@ -108,7 +108,7 @@ export const ShopView: React.FC<ShopViewProps> = ({
       const shopRevList = (revRes.reviews || []).filter((r: Review) => r.shop_id === currentShop.id || shopProdIds.has(r.product_id));
       
       const totalRev = shopRevList.length;
-      const avgRev = totalRev > 0 ? Number((shopRevList.reduce((acc, r) => acc + r.rating, 0) / totalRev).toFixed(1)) : 5.0;
+      const avgRev = totalRev > 0 ? Number((shopRevList.reduce((acc, r) => acc + r.rating, 0) / totalRev).toFixed(1)) : 0;
       const dist: Record<string, number> = { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 };
       for (const r of shopRevList) {
         const k = String(r.rating);
@@ -457,11 +457,11 @@ export const ShopView: React.FC<ShopViewProps> = ({
                         {cpn.type === 'shipping'
                           ? 'Giảm 30.000đ phí vận chuyển'
                           : cpn.type === 'percent'
-                          ? `Giảm ${cpn.value}% tối đa ${(cpn.max_discount || 0).toLocaleString()}đ`
-                          : `Giảm ${cpn.value.toLocaleString()}đ`}
+                          ? `Giảm ${cpn.value}% tối đa ${formatVND(cpn.max_discount || 0)}`
+                          : `Giảm ${formatVND(cpn.value)}`}
                       </p>
                       <p className="text-[10px] text-stone-500 mt-0.5">
-                        Đơn tối thiểu {(cpn.min_order_amount || 0).toLocaleString()}đ
+                        Đơn tối thiểu {formatVND(cpn.min_order_amount || 0)}
                       </p>
                     </div>
 

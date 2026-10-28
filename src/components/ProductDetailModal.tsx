@@ -348,40 +348,15 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-black/60 backdrop-blur-xs overflow-y-auto">
+      <div className="fixed inset-0 z-50 flex items-start md:items-center justify-center p-0 md:p-6 bg-black/60 backdrop-blur-xs overflow-y-auto">
         <div 
-          className="relative w-full max-w-5xl bg-white rounded-3xl border border-[#E2E8D8] shadow-2xl overflow-hidden my-auto max-h-[92vh] flex flex-col lg:flex-row text-[#101410]"
+          className="relative w-full max-w-5xl bg-white rounded-none md:rounded-3xl border-0 md:border border-[#E2E8D8] shadow-2xl overflow-y-auto md:overflow-hidden min-h-screen md:min-h-0 md:max-h-[92vh] flex flex-col lg:flex-row text-[#101410]"
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Header Action Buttons (Pinned to top-right of modal with white background) */}
-          <div className="absolute top-4 right-4 z-30 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                const url = `${window.location.origin}/product/${fullProduct.id}`;
-                navigator.clipboard.writeText(url);
-                showToast('Đã sao chép liên kết sản phẩm!', 'success');
-              }}
-              className="px-3 py-1.5 rounded-full bg-white border border-[#E2E8D8] text-[#08482D] hover:bg-[#F5F8EF] flex items-center gap-1.5 text-xs font-semibold shadow-md transition-colors cursor-pointer"
-              title="Sao chép liên kết"
-            >
-              <Share2 className="w-3.5 h-3.5 text-[#08482D]" />
-              <span className="hidden sm:inline">Sao chép liên kết</span>
-            </button>
-
-            <button
-              onClick={onClose}
-              className="w-9 h-9 rounded-full bg-white border border-[#E2E8D8] text-[#101410] hover:bg-[#F5F8EF] flex items-center justify-center transition-colors shadow-md cursor-pointer"
-              aria-label="Đóng"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          {/* LEFT COLUMN: Multi-image gallery & Lightbox triggers (1 column on 640-1024px, 1:1 ratio max 480px) */}
-          <div className="w-full lg:w-5/12 bg-[#F5F8EF]/80 p-4 lg:p-6 flex flex-col border-b lg:border-b-0 lg:border-r border-[#E2E8D8] overflow-y-auto">
-            {/* Main Image Container */}
-            <div className={`relative w-full max-w-[480px] mx-auto aspect-square rounded-2xl bg-white border border-[#E2E8D8] overflow-hidden group mb-3 shadow-xs flex items-center justify-center ${isSoldOut ? 'grayscale contrast-75 opacity-85' : ''}`}>
+          {/* LEFT COLUMN: Multi-image gallery & Lightbox triggers (1:1 100% width on <=768px) */}
+          <div className="w-full lg:w-5/12 bg-[#F5F8EF]/80 p-0 md:p-6 flex flex-col border-b lg:border-b-0 lg:border-r border-[#E2E8D8] overflow-visible md:overflow-y-auto">
+            {/* Main Image Container: 1:1 aspect ratio, 100% width, no compressed height */}
+            <div className={`relative w-full aspect-square max-w-none md:max-w-[480px] mx-auto bg-white border-b md:border border-[#E2E8D8] overflow-hidden group mb-3 shadow-xs flex items-center justify-center rounded-none md:rounded-2xl ${isSoldOut ? 'grayscale contrast-75 opacity-85' : ''}`}>
               <ProductImage
                 src={currentDisplayImage}
                 alt={fullProduct.name}
@@ -394,40 +369,50 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 onClick={() => setIsLightboxOpen(true)}
               />
 
-              {/* Out of stock badge (Requirement A7) */}
-              {isSoldOut ? (
-                <div className="absolute top-3 left-3 z-10">
+              {/* TOP-LEFT BADGES: Condition stamp & Scarcity badge stacked vertically, never overlapping */}
+              <div className="absolute top-3 left-3 z-20 flex flex-col gap-1.5 items-start pointer-events-none">
+                {isSoldOut ? (
                   <span className="px-3 py-1 rounded-full bg-[#C2522D] text-white text-xs font-bold shadow-md uppercase tracking-wider">
                     Đã có chủ mới
                   </span>
-                </div>
-              ) : (
-                /* Condition floating stamp badge */
-                <div className="absolute top-3 left-3 z-10 pointer-events-none">
+                ) : (
                   <div className="stamp-badge px-2.5 py-0.5 text-xs shadow-sm">
                     {fullProduct.condition_pct}% MỚI
                   </div>
-                </div>
-              )}
+                )}
 
-              {/* Scarcity / Single item Badge (Offset below condition stamp on left, away from top-right ✕) */}
-              {!isSoldOut && fullProduct.stock === 1 && (
-                <div className="absolute top-11 left-3 z-10 px-2.5 py-1 rounded-full bg-amber-500 text-white text-[11px] font-bold font-mono shadow-sm flex items-center gap-1 animate-pulse">
-                  <span>Chỉ có 1 món</span>
-                </div>
-              )}
+                {!isSoldOut && fullProduct.stock === 1 && (
+                  <div className="px-2.5 py-1 rounded-full bg-amber-500 text-white text-[11px] font-bold font-mono shadow-sm flex items-center gap-1 animate-pulse">
+                    <span>Chỉ có 1 món</span>
+                  </div>
+                )}
+              </div>
 
-              {/* Zoom click hint */}
-              <button
-                type="button"
-                onClick={() => setIsLightboxOpen(true)}
-                className="absolute bottom-3 right-3 p-2 rounded-xl bg-white/90 text-[#101410] shadow-sm hover:bg-white flex items-center gap-1 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <Maximize2 className="w-3.5 h-3.5" />
-                <span className="font-semibold text-[11px]">Phóng to</span>
-              </button>
+              {/* TOP-RIGHT BUTTONS: Share & Close (✕) buttons */}
+              <div className="absolute top-3 right-3 z-30 flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const url = `${window.location.origin}/product/${fullProduct.id}`;
+                    navigator.clipboard.writeText(url);
+                    showToast('Đã sao chép liên kết sản phẩm!', 'success');
+                  }}
+                  className="w-9 h-9 rounded-full bg-white/90 backdrop-blur-xs border border-[#E2E8D8] text-[#08482D] hover:bg-[#F5F8EF] flex items-center justify-center text-xs font-semibold shadow-md transition-colors cursor-pointer"
+                  title="Sao chép liên kết"
+                >
+                  <Share2 className="w-4 h-4 text-[#08482D]" />
+                </button>
 
-              {/* Wishlist button */}
+                <button
+                  onClick={onClose}
+                  className="w-9 h-9 rounded-full bg-white/90 backdrop-blur-xs border border-[#E2E8D8] text-[#101410] hover:bg-[#F5F8EF] flex items-center justify-center transition-colors shadow-md cursor-pointer"
+                  aria-label="Đóng"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* BOTTOM-LEFT: Wishlist (Heart) button */}
               {onToggleWishlist && (
                 <button
                   onClick={() => {
@@ -437,7 +422,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                     }
                     onToggleWishlist(fullProduct.id);
                   }}
-                  className={`absolute bottom-3 left-3 z-10 p-2.5 rounded-full shadow-md transition-all ${
+                  className={`absolute bottom-3 left-3 z-20 p-2.5 rounded-full shadow-md transition-all ${
                     isWishlisted
                       ? 'bg-[#B3362F] text-white'
                       : 'bg-white/90 text-[#5E5E61] hover:text-[#B3362F]'
@@ -447,11 +432,21 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   <Heart className={`w-4 h-4 ${isWishlisted ? 'fill-current' : ''}`} />
                 </button>
               )}
+
+              {/* BOTTOM-RIGHT: Zoom click hint */}
+              <button
+                type="button"
+                onClick={() => setIsLightboxOpen(true)}
+                className="absolute bottom-3 right-3 z-20 p-2 rounded-xl bg-white/90 text-[#101410] shadow-sm hover:bg-white flex items-center gap-1 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <Maximize2 className="w-3.5 h-3.5" />
+                <span className="font-semibold text-[11px]">Phóng to</span>
+              </button>
             </div>
 
-            {/* Thumbnail Strip (Scrolls horizontally without clipping) */}
+            {/* Thumbnail Strip: 64x64px thumbnails, horizontal scroll without clipping */}
             {imageList.length > 1 && (
-              <div className="w-full max-w-[480px] mx-auto flex gap-2 overflow-x-auto pb-1 no-scrollbar scrollbar-none mb-4">
+              <div className="w-full px-4 md:px-0 max-w-[480px] mx-auto flex gap-2 overflow-x-auto pb-1 no-scrollbar scrollbar-none mb-4">
                 {imageList.map((img, idx) => {
                   if (brokenThumbs.has(idx)) return null;
                   return (
@@ -459,7 +454,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                       key={idx}
                       type="button"
                       onClick={() => setSelectedImageIndex(idx)}
-                      className={`w-14 h-14 rounded-xl border-2 overflow-hidden shrink-0 transition-all ${
+                      className={`w-16 h-16 rounded-xl border-2 overflow-hidden shrink-0 transition-all ${
                         selectedImageIndex === idx
                           ? 'border-[#08482D] ring-2 ring-[#08482D]/20'
                           : 'border-[#E2E8D8] opacity-70 hover:opacity-100'
@@ -481,7 +476,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             )}
 
             {/* Social Proof & Scarcity Alerts */}
-            <div className="space-y-2 mt-auto pt-2 max-w-[480px] w-full mx-auto">
+            <div className="space-y-2 mt-auto pt-2 px-4 md:px-0 max-w-[480px] w-full mx-auto">
               <div className="flex items-center gap-2 p-2.5 rounded-xl bg-white border border-[#E2E8D8] text-xs">
                 <Eye className="w-4 h-4 text-[#08482D] shrink-0" />
                 <span className="text-[#5E5E61]">
@@ -537,8 +532,8 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   </span>
                 </div>
               ) : (
-                <div className="text-xs text-[#5E5E61] italic">
-                  Chưa có đánh giá nào cho sản phẩm này
+                <div className="text-xs text-[#5E5E61]">
+                  Chưa có đánh giá
                 </div>
               )}
 
@@ -1075,15 +1070,12 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                     </Button>
                   </div>
 
-                  {/* Trả giá & Active Offer Status Block (Requirement A7) */}
+                  {/* Trả giá & Active Offer Status Block (Requirement 1) */}
                   {activeOffer && activeOffer.status === 'pending' ? (
                     <div className="p-3 bg-[#DAE7C7]/40 rounded-2xl border border-[#DAE7C7] flex items-center justify-between gap-3 text-xs">
                       <div>
                         <span className="font-semibold text-[#101410] block">
-                          Bạn đã trả giá <strong className="font-mono text-[#08482D]">{formatVND(activeOffer.offered_price)}</strong>
-                        </span>
-                        <span className="text-[11px] text-[#5E5E61]">
-                          Đang chờ shop phản hồi (còn {getRemainingHours(activeOffer.expires_at)} giờ)
+                          Bạn đã trả giá <strong className="font-mono text-[#08482D]">{formatVND(activeOffer.offered_price || (activeOffer as any).price || 0)}</strong> · Đang chờ shop phản hồi (còn {getRemainingHours(activeOffer.expires_at)} giờ)
                         </span>
                       </div>
                       <button
@@ -1110,16 +1102,13 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                     <div className="p-3 bg-[#DAE7C7] rounded-2xl border border-[#08482D] flex items-center justify-between gap-3 text-xs">
                       <div>
                         <span className="font-bold text-[#08482D] block">
-                          Shop đã đồng ý giá {formatVND(activeOffer.offered_price)}!
-                        </span>
-                        <span className="text-[11px] text-[#5E5E61]">
-                          Bạn có thể mua ngay với mức giá đã thương lượng.
+                          Shop đã đồng ý {formatVND(activeOffer.offered_price || (activeOffer as any).price || 0)}
                         </span>
                       </div>
                       <button
                         type="button"
                         onClick={() => {
-                          onBuyNow({ ...fullProduct, price: activeOffer.offered_price }, 1);
+                          onBuyNow({ ...fullProduct, price: activeOffer.offered_price || (activeOffer as any).price || fullProduct.price }, 1);
                           onClose();
                         }}
                         className="px-3 py-1.5 bg-[#08482D] text-white rounded-xl text-xs font-bold shadow-xs hover:bg-[#063A24] shrink-0 cursor-pointer"
@@ -1131,7 +1120,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                     <div className="p-3 bg-[#F5EEDC] rounded-2xl border border-[#8A6D3B]/40 space-y-2 text-xs">
                       <div>
                         <span className="font-bold text-[#8A6D3B] block">
-                          Shop phản hồi giá mới: <strong className="font-mono text-sm">{formatVND(activeOffer.counter_price || activeOffer.offered_price)}</strong>
+                          Shop đề nghị <strong className="font-mono text-sm">{formatVND(activeOffer.counter_price || activeOffer.offered_price || (activeOffer as any).price || 0)}</strong>
                         </span>
                         {activeOffer.seller_note && (
                           <p className="text-[11px] text-[#5E5E61] italic mt-0.5">"{activeOffer.seller_note}"</p>
@@ -1151,7 +1140,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                           }}
                           className="flex-1 py-1.5 bg-[#08482D] text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer"
                         >
-                          Đồng ý giá này
+                          Đồng ý
                         </button>
                         <button
                           type="button"

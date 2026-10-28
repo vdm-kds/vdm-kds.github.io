@@ -123,7 +123,7 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="text-xl sm:text-2xl font-bold tracking-tight text-[#101410] block leading-none">
                 Đồ Cũ Còn Thương
               </span>
-              <span className="text-[11px] text-[#5E5E61] font-medium tracking-wide mt-1 block">
+              <span className="text-[11px] text-[#5E5E61] font-medium tracking-wide mt-1 hidden sm:block">
                 Tiệm đồ cũ còn thương, chờ người thương mới
               </span>
             </div>
@@ -249,7 +249,7 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Zone 3: Primary Actions, Cart, Notification & User Menu */}
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        <div className="flex items-center gap-1 sm:gap-3 shrink-0">
           {/* Navigation Tab Shortcuts */}
           <nav className="hidden sm:flex items-center gap-1 text-xs font-medium text-[#5E5E61]">
             <button
@@ -315,12 +315,12 @@ export const Header: React.FC<HeaderProps> = ({
           {user && user.role === 'buyer' && (
             <button
               onClick={onOpenCart}
-              className="relative p-2.5 rounded-xl text-[#101410] hover:bg-[#DAE7C7]/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#08482D]"
+              className="relative w-10 h-10 flex items-center justify-center rounded-xl text-[#101410] hover:bg-[#DAE7C7]/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#08482D] shrink-0"
               aria-label="Giỏ hàng"
             >
               <ShoppingBag className="w-5 h-5 text-[#08482D]" />
               {cartCount > 0 && (
-                <span className="absolute top-1.5 right-1.5 min-w-[18px] h-[18px] px-1 bg-[#C2522D] text-white text-[10px] font-bold font-mono rounded-full flex items-center justify-center shadow-xs">
+                <span className="absolute top-1 right-1 min-w-[18px] h-[18px] px-1 bg-[#C2522D] text-white text-[10px] font-bold font-mono rounded-full flex items-center justify-center shadow-xs">
                   {cartCount}
                 </span>
               )}
@@ -348,7 +348,7 @@ export const Header: React.FC<HeaderProps> = ({
 
                 <button
                   onClick={logout}
-                  className="p-2.5 rounded-xl text-[#5E5E61] hover:text-[#B3362F] hover:bg-[#F6DDDB] transition-colors"
+                  className="hidden sm:flex p-2.5 rounded-xl text-[#5E5E61] hover:text-[#B3362F] hover:bg-[#F6DDDB] transition-colors items-center justify-center shrink-0"
                   title="Đăng xuất"
                 >
                   <LogOut className="w-4 h-4" />
@@ -379,7 +379,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Mobile hamburger menu toggle */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="sm:hidden p-2 rounded-xl text-[#101410] hover:bg-[#DAE7C7]/50"
+            className="sm:hidden w-10 h-10 flex items-center justify-center rounded-xl text-[#101410] hover:bg-[#DAE7C7]/50 shrink-0"
             aria-label="Menu"
           >
             {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}

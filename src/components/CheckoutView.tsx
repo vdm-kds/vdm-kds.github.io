@@ -36,6 +36,65 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
   const [note, setNote] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('card');
 
+  // Address auto-fill & management (Requirement 2)
+  const [savedAddresses, setSavedAddresses] = useState<any[]>([]);
+  const [showAddressModal, setShowAddressModal] = useState(false);
+  const [saveAddressForLater, setSaveAddressForLater] = useState(true);
+
+  // Auto-fill address on mount from default address or most recent order
+  useEffect(() => {
+    const initAddress = async () => {
+      try {
+        const addrRes = await api.getAddresses();
+        const list = addrRes.addresses || [];
+        setSavedAddresses(list);
+
+        const defaultAddr = list.find((a: any) => a.is_default);
+        if (defaultAddr) {
+          setRecipientName(defaultAddr.recipient_name);
+          setPhone(defaultAddr.phone);
+          setAddressLine(defaultAddr.address_line);
+          return;
+        }
+
+        if (list.length > 0) {
+          setRecipientName(list[0].recipient_name);
+          setPhone(list[0].phone);
+          setAddressLine(list[0].address_line);
+          return;
+        }
+
+        // If no saved addresses, fallback to most recent order
+        const ordersRes = await api.getMyOrders();
+        const orders = ordersRes.orders || [];
+        if (orders.length > 0) {
+          const latest = orders[0];
+          setRecipientName(latest.recipient_name || latest.buyer_name || user?.full_name || '');
+          setPhone(latest.phone || user?.phone || '');
+          setAddressLine(latest.address || '');
+          return;
+        }
+
+        // Fallback to user profile
+        if (user) {
+          if (user.full_name) setRecipientName(user.full_name);
+          if (user.phone) setPhone(user.phone);
+        }
+      } catch {
+        if (address) {
+          setRecipientName(address.recipient_name);
+          setPhone(address.phone);
+          setAddressLine(address.address_line);
+        } else if (user) {
+          if (user.full_name) setRecipientName(user.full_name);
+          if (user.phone) setPhone(user.phone);
+        }
+      }
+    };
+
+    initAddress();
+  }, [user]);
+
   // Thẻ quốc tế Visa/Mastercard
   const [cardNumber, setCardNumber] = useState('4111 1111 1111 1111');
   const [cardHolder, setCardHolder] = useState('NGUYEN VAN A');
@@ -312,6 +371,24 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
       });
 
       await refreshCartCount();
+
+      // Save address if requested (Requirement 2)
+      if (saveAddressForLater && addressLine.trim() && recipientName.trim()) {
+        try {
+          const already = savedAddresses.some(
+            (a: any) => a.address_line?.trim().toLowerCase() === addressLine.trim().toLowerCase()
+          );
+          if (!already) {
+            await api.addAddress({
+              recipient_name: recipientName.trim(),
+              phone: phone.trim(),
+              address_line: addressLine.trim(),
+              is_default: savedAddresses.length === 0
+            });
+          }
+        } catch {}
+      }
+
       onSuccess(res.order, res.orders);
     } catch (error: any) {
       showToast(error.message || 'Lỗi khi đặt hàng', 'error');
@@ -355,10 +432,19 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
 
             {/* Khung nhập thông tin giao hàng */}
             <div className="bg-white p-5 sm:p-6 rounded-3xl border border-[#E2E8D8] space-y-4 shadow-2xs">
-              <h3 className="font-bold text-sm sm:text-base text-[#101410] flex items-center gap-2">
-                <Truck className="w-4 h-4 text-[#08482D]" />
-                Địa chỉ nhận hàng
-              </h3>
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-sm sm:text-base text-[#101410] flex items-center gap-2">
+                  <Truck className="w-4 h-4 text-[#08482D]" />
+                  Địa chỉ nhận hàng
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setShowAddressModal(true)}
+                  className="text-xs font-bold text-[#08482D] hover:underline flex items-center gap-1 cursor-pointer bg-[#DAE7C7]/50 hover:bg-[#DAE7C7] px-3 py-1 rounded-lg transition-colors"
+                >
+                  Đổi địa chỉ
+                </button>
+              </div>
 
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
@@ -404,6 +490,19 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                 />
               </div>
 
+              {/* Checkbox lưu địa chỉ cho lần sau */}
+              <div className="pt-0.5">
+                <label className="inline-flex items-center gap-2 text-xs text-[#101410] font-medium cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={saveAddressForLater}
+                    onChange={(e) => setSaveAddressForLater(e.target.checked)}
+                    className="w-4 h-4 rounded text-[#08482D] accent-[#08482D] focus:ring-[#08482D] border-[#E2E8D8]"
+                  />
+                  <span>Lưu địa chỉ này cho lần sau</span>
+                </label>
+              </div>
+
               <div>
                 <label className="text-xs font-semibold text-[#5E5E61] block mb-1">
                   Ghi chú cho người bán / shipper (không bắt buộc)
@@ -417,6 +516,75 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                 />
               </div>
             </div>
+
+            {/* Modal Chọn / Đổi địa chỉ */}
+            {showAddressModal && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+                <div 
+                  className="bg-white rounded-3xl border border-[#E2E8D8] p-6 w-full max-w-md shadow-2xl space-y-4"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center justify-between pb-2 border-b border-[#E2E8D8]">
+                    <h4 className="font-bold text-base text-[#101410]">Chọn địa chỉ nhận hàng</h4>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddressModal(false)}
+                      className="p-1 rounded-full text-[#5E5E61] hover:bg-[#F5F8EF]"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <div className="max-h-64 overflow-y-auto space-y-2.5 pr-1">
+                    {savedAddresses.map((addr: any) => (
+                      <div
+                        key={addr.id}
+                        onClick={() => {
+                          setRecipientName(addr.recipient_name);
+                          setPhone(addr.phone);
+                          setAddressLine(addr.address_line);
+                          setShowAddressModal(false);
+                          showToast('Đã chọn địa chỉ nhận hàng', 'info');
+                        }}
+                        className="p-3.5 rounded-2xl border border-[#E2E8D8] hover:border-[#08482D] hover:bg-[#F5F8EF] cursor-pointer transition-colors text-xs space-y-1"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-[#101410]">{addr.recipient_name} ({addr.phone})</span>
+                          {addr.is_default ? (
+                            <span className="px-2 py-0.5 rounded-full bg-[#DAE7C7] text-[#08482D] text-[10px] font-bold">Mặc định</span>
+                          ) : null}
+                        </div>
+                        <p className="text-[#5E5E61] leading-relaxed">{addr.address_line}</p>
+                      </div>
+                    ))}
+
+                    {savedAddresses.length === 0 && (
+                      <p className="text-xs text-[#5E5E61] text-center py-4">Chưa có địa chỉ nào được lưu trước đó.</p>
+                    )}
+                  </div>
+
+                  <div className="pt-2 border-t border-[#E2E8D8] flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAddressLine('');
+                        setShowAddressModal(false);
+                      }}
+                      className="flex-1 py-2.5 px-3 rounded-xl border border-[#08482D] text-[#08482D] text-xs font-bold hover:bg-[#DAE7C7]/30 transition-colors cursor-pointer"
+                    >
+                      Nhập địa chỉ mới
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddressModal(false)}
+                      className="py-2.5 px-4 rounded-xl bg-[#08482D] text-white text-xs font-bold hover:bg-[#063A24] transition-colors cursor-pointer"
+                    >
+                      Đóng
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Chọn phương thức thanh toán */}
             <div className="bg-white p-5 sm:p-6 rounded-3xl border border-[#E2E8D8] space-y-5 shadow-2xs">

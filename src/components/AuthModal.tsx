@@ -249,7 +249,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <div className="p-3 bg-amber-50 border border-amber-300 rounded-2xl text-xs text-amber-900 flex items-start gap-2">
             <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
             <p className="leading-relaxed">
-              <strong>Chế độ thuyết trình đang bật</strong> — không thể tạo tài khoản mới. Vui lòng sử dụng 2 tài khoản chủ có sẵn (admin / khachhang).
+              <strong>Chế độ thuyết trình đang bật</strong> — không thể tạo tài khoản mới. Vui lòng sử dụng tài khoản có sẵn để tiếp tục.
             </p>
           </div>
         )}
@@ -306,7 +306,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   required
                   value={username}
                   onChange={e => handleFieldChange('username', e.target.value, setUsername)}
-                  placeholder="admin_shop, tiemxua99..."
+                  placeholder="Tên đăng nhập của shop"
                   className={`w-full px-3.5 py-2.5 rounded-xl border bg-[#F5F8EF] focus:bg-white focus:outline-none text-sm font-mono ${
                     fieldErrors.username ? 'border-red-400 bg-red-50' : 'border-[#DAE7C7] focus:border-[#08482D]'
                   }`}
@@ -394,7 +394,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     handleFieldChange('username', val, setUsername);
                   }
                 }}
-                placeholder={activeRole === 'buyer' ? '09xxxxxxxx (10 chữ số)' : 'admin, seller1...'}
+                placeholder={activeRole === 'buyer' ? '09xxxxxxxx (10 chữ số)' : 'Tên đăng nhập của shop'}
                 className={`w-full px-3.5 py-2.5 rounded-xl border bg-[#F5F8EF] focus:bg-white focus:outline-none text-sm font-mono ${
                   fieldErrors[activeRole === 'buyer' ? 'phone' : 'username']
                     ? 'border-red-400 bg-red-50'

@@ -947,7 +947,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                     {currentShop?.name || 'Tiệm Đồ Cũ Còn Thương'}
                   </span>
                   <span className="text-[10px] text-[#5E5E61] font-mono block">
-                    @{currentUser?.username || 'admin'}
+                    @{currentUser?.username || 'shop'}
                   </span>
                 </div>
                 <ChevronDown className="w-3.5 h-3.5 text-[#5E5E61]" />
@@ -959,7 +959,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                   {/* Tên shop và @tên đăng nhập (dòng thông tin, không bấm được) */}
                   <div className="px-4 py-2.5 bg-[#F5F8EF]/60 border-b border-[#DAE7C7]/60">
                     <p className="font-bold text-[#101410]">{currentShop?.name || 'Tiệm Đồ Cũ Còn Thương'}</p>
-                    <p className="text-[11px] text-[#5E5E61] font-mono">@{currentUser?.username || 'admin'}</p>
+                    <p className="text-[11px] text-[#5E5E61] font-mono">@{currentUser?.username || 'shop'}</p>
                     <span className="inline-block mt-1 text-[9px] font-bold px-1.5 py-0.2 rounded bg-[#08482D] text-white uppercase font-mono">
                       Kênh Người Bán
                     </span>
@@ -1570,6 +1570,12 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                     <div>Mã vận đơn: <strong className="font-mono text-[#47533E]">{selectedOrder.tracking_code || 'Chưa có'}</strong></div>
                     <div className="mt-1">
                       Phương thức: <strong>{selectedOrder.payment_method === 'cod' ? 'Tiền mặt COD' : selectedOrder.card_type}</strong>
+                    </div>
+                    <div className="mt-1 flex items-center gap-1.5">
+                      <span>Trạng thái thanh toán:</span>
+                      <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-semibold ${getPaymentStatusBadge(selectedOrder.payment_status).bg} ${getPaymentStatusBadge(selectedOrder.payment_status).text}`}>
+                        {getPaymentStatusBadge(selectedOrder.payment_status).label}
+                      </span>
                     </div>
                   </div>
                 </div>
