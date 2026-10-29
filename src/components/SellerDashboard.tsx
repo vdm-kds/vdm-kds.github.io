@@ -499,17 +499,45 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
     if (activeTab === 'reviews') fetchSellerReviews();
   }, [activeTab, orderStatusFilter, currentUser?.id, currentShop?.id]);
 
-  // Polling cho đơn hàng, tin nhắn và trả giá mỗi 5-10 giây
+  // Real-time onSnapshot subscriptions for seller (Requirement 3)
   useEffect(() => {
-    const timer = setInterval(() => {
-      if (activeTab === 'dashboard') fetchStats();
-      if (activeTab === 'orders') fetchOrders(true);
-      if (activeTab === 'chat') fetchChat();
-      if (activeTab === 'offers') fetchOffers();
-      if (activeTab === 'reviews') fetchSellerReviews();
-    }, 5000);
-    return () => clearInterval(timer);
-  }, [activeTab, orderStatusFilter, selectedOrder?.id, activeConversation?.id]);
+    if (!currentUser || currentUser.role !== 'seller') return;
+
+    const unsubOrders = api.subscribeSellerOrders((allOrders) => {
+      setOrders(allOrders);
+      fetchStats();
+    });
+
+    const unsubOffers = api.subscribeOffers((allOffers) => {
+      setSellerOffers(allOffers);
+    });
+
+    const unsubConvs = api.subscribeConversations((allConvs) => {
+      setChatConversations(allConvs);
+    });
+
+    const unsubReturns = api.subscribeReturns((allReturns) => {
+      setSellerReturns(allReturns);
+    });
+
+    return () => {
+      unsubOrders();
+      unsubOffers();
+      unsubConvs();
+      unsubReturns();
+    };
+  }, [currentUser?.id, currentUser?.role]);
+
+  // Subscribe to active conversation messages
+  useEffect(() => {
+    if (!activeConversation?.id) return;
+    const unsub = api.subscribeMessages(String(activeConversation.id), (msgs) => {
+      setActiveConversation(prev => prev ? { ...prev, messages: msgs } : prev);
+    });
+    return () => {
+      unsub();
+    };
+  }, [activeConversation?.id]);
 
   // Bulk Orders Handlers
   const handleToggleOrderSelect = (id: number) => {
@@ -597,6 +625,11 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
 
   const handleCreateCoupon = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!currentShop?.id && !currentUser?.shop_id) {
+      showToast('Vui lòng thiết lập thông tin shop trước khi tạo mã giảm giá', 'error');
+      setShopProfileModal(true);
+      return;
+    }
     try {
       await api.createSellerCoupon(couponForm);
       showToast('Tạo mã giảm giá mới thành công!', 'success');
@@ -616,6 +649,11 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
 
   // Xử lý Thêm / Sửa sản phẩm
   const handleOpenProductModal = (mode: 'add' | 'edit', item?: Product) => {
+    if (mode === 'add' && !currentShop?.id && !currentUser?.shop_id) {
+      showToast('Vui lòng thiết lập thông tin shop trước khi đăng bán', 'error');
+      setShopProfileModal(true);
+      return;
+    }
     if (mode === 'edit' && item) {
       let imgs: string[] = [];
       if (Array.isArray(item.images)) imgs = item.images;
@@ -2082,7 +2120,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                 <div className="p-4 border-b border-[#E2E8D8] bg-[#F5F8EF] flex items-center justify-between">
                   <div>
                     <h3 className="font-bold text-sm text-[#101410]">
-                      {activeConversation.buyer_name || 'Khách hàng'} ({activeConversation.buyer_phone || ''})
+                      {activeConversation.buyer_name || 'Khách hàng'}{activeConversation.buyer_phone ? ` (${activeConversation.buyer_phone})` : ''}
                     </h3>
                     <p className="text-[11px] text-[#5E5E61]">
                       {activeConversation.product_name ? `Hỏi về: ${activeConversation.product_name} (${formatVND(activeConversation.product_price || 0)})` :
@@ -2097,12 +2135,25 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                     const isSeller = msg.sender_role === 'seller';
                     return (
                       <div key={msg.id} className={`flex flex-col ${isSeller ? 'items-end' : 'items-start'}`}>
+                        {msg.context_card && (
+                          <div className="mb-1 p-2 rounded-xl bg-white border border-[#DAE7C7] flex items-center gap-2 max-w-[80%] text-xs shadow-2xs">
+                            {(msg.context_card.image || msg.context_card.image_url) && (
+                              <img src={msg.context_card.image || msg.context_card.image_url} alt="" className="w-10 h-10 rounded-lg object-cover bg-[#DAE7C7]" />
+                            )}
+                            <div className="min-w-0">
+                              <p className="font-bold truncate text-[#101410]">{msg.context_card.title}</p>
+                              {msg.context_card.price && (
+                                <p className="font-mono text-[#08482D] font-bold">{formatVND(msg.context_card.price)}</p>
+                              )}
+                            </div>
+                          </div>
+                        )}
                         <div className={`max-w-[80%] px-4 py-2.5 text-xs rounded-2xl shadow-xs break-words ${
                           isSeller
                             ? 'bg-[#08482D] text-white rounded-tr-xs'
-                            : 'bg-white text-[#101410] border border-[#DAE7C7] rounded-tl-xs'
+                            : 'bg-[#DAE7C7] text-[#101410] rounded-tl-xs'
                         }`}>
-                          {msg.content}
+                          {msg.content || msg.message}
                         </div>
                         <span className="text-[10px] text-[#5E5E61] mt-0.5 px-1 font-mono">
                           {new Date(msg.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}

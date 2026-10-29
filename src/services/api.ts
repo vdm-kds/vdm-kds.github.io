@@ -558,5 +558,30 @@ export const api = {
     db.getEligibleShipmentOrders(),
 
   advanceShipmentStep: (order_id: number | string, step?: number) =>
-    db.advanceShipmentStep(order_id, step || 1)
+    db.advanceShipmentStep(order_id, step || 1),
+
+  // --- REAL-TIME ON-SNAPSHOT SUBSCRIPTIONS (Requirement 3) ---
+  subscribeBuyerOrders: (cb: (orders: Order[]) => void) =>
+    db.subscribeBuyerOrders(cb),
+
+  subscribeSellerOrders: (cb: (orders: Order[]) => void) =>
+    db.subscribeSellerOrders(cb),
+
+  subscribeOrderDetail: (code: string | number, cb: (order: Order | null) => void) =>
+    db.subscribeOrderDetail(code, cb),
+
+  subscribeConversations: (cb: (conversations: ChatConversation[]) => void) =>
+    db.subscribeConversations(cb),
+
+  subscribeMessages: (conversationId: string, cb: (messages: ChatMessage[]) => void) =>
+    db.subscribeMessages(conversationId, cb),
+
+  subscribeNotifications: (cb: (notifications: NotificationItem[], unreadCount: number) => void) =>
+    db.subscribeNotifications(cb),
+
+  subscribeOffers: (cb: (offers: Offer[]) => void) =>
+    db.subscribeOffers(cb),
+
+  subscribeReturns: (cb: (returns: ReturnRequest[]) => void) =>
+    db.subscribeReturns(cb)
 };

@@ -111,13 +111,29 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
     fetchOrders(false);
   }, [activeTab]);
 
-  // Polling every 10s for real-time order updates
+  // Real-time listener for buyer orders via onSnapshot (Requirement 3)
   useEffect(() => {
-    const timer = setInterval(() => {
-      fetchOrders(true);
-    }, 10000);
-    return () => clearInterval(timer);
-  }, [activeTab, selectedOrder?.id]);
+    const unsub = api.subscribeBuyerOrders((allOrders) => {
+      let filtered = allOrders;
+      if (activeTab && activeTab !== 'all') {
+        filtered = allOrders.filter(o => o.status === activeTab);
+      }
+      setOrders(filtered);
+      setLoading(false);
+
+      if (selectedOrder) {
+        const currentInList = allOrders.find(o => o.id === selectedOrder.id || o.code === selectedOrder.code);
+        if (currentInList) setSelectedOrder(currentInList);
+      } else if (selectedOrderCode) {
+        const found = allOrders.find(o => o.code === selectedOrderCode);
+        if (found) setSelectedOrder(found);
+      }
+    });
+
+    return () => {
+      unsub();
+    };
+  }, [activeTab, selectedOrder?.id, selectedOrderCode]);
 
   const handleSelectOrder = async (orderId: number) => {
     try {
@@ -210,8 +226,13 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
           <h1 className="text-2xl sm:text-3xl font-bold text-[#101410]">
             Hành trình Đơn mua của bạn
           </h1>
-          <p className="text-xs text-[#5E5E61] mt-0.5">
-            Cập nhật lộ trình theo thời gian thực mỗi 10 giây từ đơn vị vận chuyển
+          <p className="text-xs text-[#5E5E61] mt-0.5 flex items-center gap-1.5">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#08482D] opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-[#08482D]"></span>
+            </span>
+            <span className="text-[#08482D] font-bold">Trực tiếp</span>
+            <span>· Cập nhật trạng thái và lộ trình giao hàng tức thì</span>
           </p>
         </div>
 
@@ -335,7 +356,11 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                         {formatVND(order.total)}
                       </span>
                       <span className="text-[10px] text-[#5E5E61] uppercase font-mono">
-                        {order.payment_method === 'cod' ? 'Thanh toán COD' : 'Thanh toán thẻ'}
+                        {order.payment_method === 'cod'
+                          ? 'Thanh toán COD'
+                          : order.card_category === 'domestic'
+                          ? 'Thẻ ATM NAPAS'
+                          : 'Thẻ quốc tế'}
                       </span>
                     </div>
                   </div>

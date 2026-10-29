@@ -56,6 +56,7 @@ export interface StoredAccount {
 
 const STORAGE_KEY_ACCOUNTS = 'dcct_accounts';
 const STORAGE_KEY_ACTIVE = 'dcct_active';
+const STORAGE_KEY_LAST_ACTIVE = 'dcct_last_active';
 
 export function getStoredAccounts(): StoredAccount[] {
   try {
@@ -98,12 +99,22 @@ export function getActiveAccountKey(): string | null {
   }
 }
 
+export function getLastActiveAccountKey(): string | null {
+  try {
+    return localStorage.getItem(STORAGE_KEY_LAST_ACTIVE);
+  } catch {
+    return null;
+  }
+}
+
 export function setActiveAccountKey(key: string | null): void {
   try {
     if (key) {
       sessionStorage.setItem(STORAGE_KEY_ACTIVE, key);
+      localStorage.setItem(STORAGE_KEY_LAST_ACTIVE, key);
     } else {
       sessionStorage.removeItem(STORAGE_KEY_ACTIVE);
+      localStorage.removeItem(STORAGE_KEY_LAST_ACTIVE);
     }
   } catch {
     // quiet catch
@@ -177,6 +188,17 @@ export function getActiveFirestore(): Firestore {
 
 // Startup verification: cleans default app, verifies all remembered accounts
 export async function syncAndValidateAccounts(): Promise<{ validAccounts: StoredAccount[]; activeAccount: StoredAccount | null }> {
+  // 7. Dọn dữ liệu cũ: xóa các khóa localStorage cũ của bản trước Firebase ("dcct_db", demo keys)
+  try {
+    localStorage.removeItem('dcct_db');
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (k && (k.startsWith('dcct_demo_') || k.startsWith('dcct_mock_'))) {
+        localStorage.removeItem(k);
+      }
+    }
+  } catch {}
+
   // 4. Dọn lỗi cũ: khi tải trang, nếu app [DEFAULT] đang có currentUser thì gọi signOut trên app [DEFAULT]
   try {
     const defApp = getDefaultApp();
@@ -207,8 +229,19 @@ export async function syncAndValidateAccounts(): Promise<{ validAccounts: Stored
     localStorage.setItem(STORAGE_KEY_ACCOUNTS, JSON.stringify(validAccounts));
   } catch {}
 
-  // Kiểm tra tài khoản trong "dcct_active"
-  const activeKey = getActiveAccountKey();
+  // 5. Kiểm tra tài khoản trong "dcct_active"; nếu trống thì kiểm tra "dcct_last_active"
+  let activeKey = getActiveAccountKey();
+  if (!activeKey) {
+    const lastActiveKey = getLastActiveAccountKey();
+    if (lastActiveKey) {
+      const matched = validAccounts.find((a) => getAppKeyFor(a.role, a.username) === lastActiveKey);
+      if (matched) {
+        activeKey = lastActiveKey;
+        setActiveAccountKey(lastActiveKey);
+      }
+    }
+  }
+
   let activeAccount: StoredAccount | null = null;
 
   if (activeKey) {

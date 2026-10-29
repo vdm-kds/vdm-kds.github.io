@@ -41,7 +41,17 @@ function MainShopApp() {
   const { showToast } = useToast();
 
   // Navigation State
-  const [currentView, setCurrentView] = useState<'home' | 'orders' | 'seller' | 'account' | 'preview' | 'checkout' | 'shop' | '404'>('home');
+  const [currentView, setCurrentView] = useState<'home' | 'orders' | 'seller' | 'account' | 'preview' | 'checkout' | 'shop' | '404'>(() => {
+    if (typeof window !== 'undefined') {
+      const p = window.location.pathname;
+      if (p.startsWith('/seller')) return 'seller';
+      if (p === '/checkout') return 'checkout';
+      if (p.startsWith('/orders')) return 'orders';
+      if (p === '/account') return 'account';
+      if (p.startsWith('/shop/')) return 'shop';
+    }
+    return 'home';
+  });
   const [activeShopSlug, setActiveShopSlug] = useState<string | null>(null);
   const [showShopSetupWizard, setShowShopSetupWizard] = useState(false);
   const [selectedOrderCodeForTracking, setSelectedOrderCodeForTracking] = useState<string | null>(null);
@@ -284,6 +294,9 @@ function MainShopApp() {
         if (user && user.role === 'seller') {
           setCurrentView('seller');
         } else if (!user) {
+          if (path !== '/seller/login' && path !== '/seller/register') {
+            window.history.replaceState({}, '', '/seller/login');
+          }
           setAuthModal({ open: true, role: 'seller', initialIsRegister: false });
         } else {
           showToast('Trang này dành cho người bán', 'error');

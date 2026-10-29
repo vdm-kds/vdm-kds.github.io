@@ -123,6 +123,32 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
+  const [localItems, setLocalItems] = useState<CartItem[]>(items);
+  const [isLoadingCart, setIsLoadingCart] = useState(false);
+
+  useEffect(() => {
+    if (items.length > 0) {
+      setLocalItems(items);
+    }
+  }, [items]);
+
+  useEffect(() => {
+    if (!directItem && items.length === 0) {
+      setIsLoadingCart(true);
+      api.getCart().then((res) => {
+        if (res.items && res.items.length > 0) {
+          setLocalItems(res.items);
+        } else {
+          onBackToCart();
+        }
+      }).catch(() => {
+        onBackToCart();
+      }).finally(() => {
+        setIsLoadingCart(false);
+      });
+    }
+  }, [items, directItem, onBackToCart]);
+
   // Calculate order items
   const currentItems: CartItem[] = useMemo(() => {
     if (directItem) {
@@ -143,15 +169,8 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
         shop_slug: directItem.product.shop_slug
       }];
     }
-    return items;
-  }, [directItem, items]);
-
-  // Empty cart guard
-  useEffect(() => {
-    if (!directItem && items.length === 0) {
-      onBackToCart();
-    }
-  }, [items, directItem, onBackToCart]);
+    return localItems.length > 0 ? localItems : items;
+  }, [directItem, localItems, items]);
 
   // Single source of truth: calculateCheckout
   const checkoutCalc: CheckoutCalculation = useMemo(() => {
@@ -391,11 +410,29 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
 
       onSuccess(res.order, res.orders);
     } catch (error: any) {
-      showToast(error.message || 'Lỗi khi đặt hàng', 'error');
+      const msg = error?.message || '';
+      if (msg.includes('permission-denied') || error?.code === 'permission-denied') {
+        showToast('Không thể đặt hàng lúc này, vui lòng thử lại', 'error');
+      } else if (msg.includes('chủ mới') || msg.includes('hết hàng') || msg.includes('tồn kho')) {
+        showToast(msg, 'error');
+      } else {
+        showToast(msg || 'Không thể đặt hàng lúc này, vui lòng thử lại', 'error');
+      }
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  if (isLoadingCart) {
+    return (
+      <div className="min-h-screen bg-[#F5F8EF] flex items-center justify-center p-8">
+        <div className="text-center space-y-3">
+          <div className="w-8 h-8 border-3 border-[#08482D] border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-xs font-semibold text-[#08482D]">Đang lấy thông tin giỏ hàng...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F5F8EF] pb-32 lg:pb-16 pt-4 sm:pt-6">

@@ -260,6 +260,8 @@ export interface Order {
   payment_status: PaymentStatus;
   card_last4?: string;
   card_type?: string;
+  card_brand?: string;
+  card_category?: 'intl' | 'domestic';
   recipient_name: string;
   phone: string;
   address: string;
@@ -310,8 +312,10 @@ export interface Offer {
 }
 
 export interface ChatMessageContext {
-  type: 'product' | 'order';
+  type?: 'product' | 'order' | string;
+  kind?: string;
   id?: any;
+  ref_id?: any;
   product_id?: any;
   order_code?: string;
   title: string;
@@ -335,8 +339,9 @@ export interface ChatMessage {
   context_type?: string;
   context_id?: any;
   is_read?: number | boolean;
-  context_card?: ChatMessageContext;
+  context_card?: ChatMessageContext | null;
   created_at: string;
+  read_at?: string | null;
 }
 
 export interface CheckoutShopBreakdown {

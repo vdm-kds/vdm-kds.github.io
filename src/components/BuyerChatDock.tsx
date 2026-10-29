@@ -44,52 +44,40 @@ export const BuyerChatDock: React.FC<BuyerChatDockProps> = ({ onNavigateToShop }
   // Total unread count for floating badge
   const totalUnread = conversations.reduce((acc, c) => acc + (c.buyer_unread || 0), 0);
 
-  // Load conversations
   const loadConversations = async () => {
     if (!user || user.role !== 'buyer') return;
     try {
       const res = await api.getChatConversations();
       setConversations(res.conversations || []);
-    } catch {
-      // quiet catch
-    }
+    } catch {}
   };
 
-  // Poll conversations every 6s when dock is open or in background
+  // Subscribe to buyer conversations in real-time (Requirement 3)
   useEffect(() => {
     if (!user || user.role !== 'buyer') return;
-    loadConversations();
-    const interval = setInterval(loadConversations, 6000);
-    return () => clearInterval(interval);
+    const unsub = api.subscribeConversations((convs) => {
+      setConversations(convs);
+    });
+    return () => {
+      unsub();
+    };
   }, [user]);
 
-  // Load active conversation messages when selected
+  // Subscribe to active conversation messages in real-time
   useEffect(() => {
     if (!selectedConvId) return;
 
-    let active = true;
-    const loadDetail = async () => {
-      try {
-        setLoading(true);
-        const res = await api.getChatDetail(selectedConvId);
-        if (active) {
-          setActiveMessages(res.messages || []);
-          // update unread in list
-          setConversations(prev => prev.map(c => c.id === selectedConvId ? { ...c, buyer_unread: 0 } : c));
-          setTimeout(scrollToBottom, 100);
-        }
-      } catch {
-        // quiet catch
-      } finally {
-        if (active) setLoading(false);
-      }
-    };
+    setLoading(true);
+    const unsub = api.subscribeMessages(String(selectedConvId), (msgs) => {
+      setActiveMessages(msgs);
+      setLoading(false);
+      // update unread in list
+      setConversations(prev => prev.map(c => c.id === selectedConvId ? { ...c, buyer_unread: 0 } : c));
+      setTimeout(scrollToBottom, 100);
+    });
 
-    loadDetail();
-    const interval = setInterval(loadDetail, 4000);
     return () => {
-      active = false;
-      clearInterval(interval);
+      unsub();
     };
   }, [selectedConvId]);
 
@@ -437,16 +425,16 @@ export const BuyerChatDock: React.FC<BuyerChatDockProps> = ({ onNavigateToShop }
                               </div>
                             )}
 
-                            {/* Message bubble (only for real text messages) */}
-                            {!isContextMsg && msg.content && (
+                            {/* Message bubble */}
+                            {(msg.content || msg.message) && (
                               <div
                                 className={`max-w-[75%] rounded-2xl px-3.5 py-2 text-xs leading-relaxed shadow-xs [overflow-wrap:anywhere] break-words ${
                                   isBuyer
                                     ? 'bg-[#08482D] text-white rounded-tr-none'
-                                    : 'bg-white text-stone-800 border border-stone-200 rounded-tl-none'
+                                    : 'bg-[#DAE7C7] text-[#101410] border border-[#DAE7C7] rounded-tl-none'
                                 }`}
                               >
-                                {msg.content}
+                                {msg.content || msg.message}
                               </div>
                             )}
                             <span className="text-[9px] text-stone-400 mt-0.5 px-1">

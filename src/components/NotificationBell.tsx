@@ -47,12 +47,28 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onSelectOrde
 
   useEffect(() => {
     fetchNotifications(false);
-    // Poll every 10 seconds for real-time notifications
-    const interval = setInterval(() => {
-      fetchNotifications(true);
-    }, 10000);
 
-    return () => clearInterval(interval);
+    // Subscribe to notifications in real-time (Requirement 3)
+    const unsub = api.subscribeNotifications((newItems, newUnread) => {
+      // Detect newly arrived notifications to show toast and animate bell
+      if (newUnread > prevCountRef.current && prevCountRef.current !== 0) {
+        const latest = newItems[0];
+        if (latest) {
+          showToast(`🔔 ${latest.title}: ${latest.message}`, 'info');
+        }
+        setHasShaked(true);
+        setTimeout(() => setHasShaked(false), 1200);
+      }
+      prevCountRef.current = newUnread;
+
+      setNotifications(newItems as any);
+      setUnreadCount(newUnread);
+      setIsLoading(false);
+    });
+
+    return () => {
+      unsub();
+    };
   }, []);
 
   // Close dropdown on click outside
