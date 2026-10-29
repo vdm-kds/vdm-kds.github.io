@@ -16,7 +16,8 @@ import {
   arrayRemove,
   onSnapshot,
   Unsubscribe,
-  DocumentData
+  DocumentData,
+  getFirestore
 } from 'firebase/firestore';
 import {
   createUserWithEmailAndPassword,
@@ -32,6 +33,7 @@ import {
   getActiveFirestore,
   getActiveAuth,
   getOrCreateAccountApp,
+  getAccountAuth,
   getAppKeyFor,
   getActiveAccountKey,
   setActiveAccountKey,
@@ -508,15 +510,21 @@ function normalizeOrderDoc(docData: DocumentData, code: string): Order {
 
 // Check if an account is an owner account
 export async function isAccountOwner(role: 'buyer' | 'seller', username: string, uid: string): Promise<boolean> {
-  const key = `${role}_${username.toLowerCase().trim()}`;
+  const clean = role === 'buyer' ? username.trim().replace(/\D/g, '') : username.toLowerCase().trim();
+  const key = `${role}_${clean}`;
   if (!OWNER_KEYS.includes(key)) return false;
   try {
-    const snap = await getDoc(doc(getDefaultFirestore(), 'usernames', key));
+    const snap = await getDoc(doc(getActiveFirestore(), 'usernames', key));
     if (snap.exists() && snap.data()?.uid === uid) {
       return true;
     }
   } catch {
-    // quiet catch
+    try {
+      const snap = await getDoc(doc(getDefaultFirestore(), 'usernames', key));
+      if (snap.exists() && snap.data()?.uid === uid) {
+        return true;
+      }
+    } catch {}
   }
   return false;
 }
@@ -559,18 +567,23 @@ export class DCCTDatabaseService {
 
     const email = role === 'buyer' ? toBuyerEmail(identifier) : toSellerEmail(identifier);
     const app = getOrCreateAccountApp(role, identifier);
-    const auth = getOrCreateAccountApp(role, identifier) ? getOrCreateAccountApp(role, identifier) : null;
+    const auth = getAccountAuth(app);
 
     let cred: any;
     try {
-      cred = await createUserWithEmailAndPassword(getActiveAuth(), email, payload.password);
+      cred = await createUserWithEmailAndPassword(auth, email, payload.password);
     } catch (err: any) {
       throw new Error(mapFirebaseError(err));
     }
 
+    await auth.authStateReady();
+    if (!auth.currentUser || auth.currentUser.uid !== cred.user.uid) {
+      throw new Error('Không thể xác thực phiên làm việc mới');
+    }
+
     const uid = cred.user.uid;
     const usernameKey = `${role}_${identifier}`;
-    const db = getActiveFirestore();
+    const db = getFirestore(app);
 
     // Verify username uniqueness
     try {
@@ -660,16 +673,22 @@ export class DCCTDatabaseService {
 
     const email = role === 'buyer' ? toBuyerEmail(identifier) : toSellerEmail(identifier);
     const app = getOrCreateAccountApp(role, identifier);
+    const auth = getAccountAuth(app);
 
     let cred: any;
     try {
-      cred = await signInWithEmailAndPassword(getActiveAuth(), email, credentials.password);
+      cred = await signInWithEmailAndPassword(auth, email, credentials.password);
     } catch (err: any) {
       throw new Error(mapFirebaseError(err));
     }
 
+    await auth.authStateReady();
+    if (!auth.currentUser || auth.currentUser.uid !== cred.user.uid) {
+      throw new Error('Không thể xác thực phiên làm việc');
+    }
+
     const uid = cred.user.uid;
-    const db = getActiveFirestore();
+    const db = getFirestore(app);
     const userSnap = await getDoc(doc(db, 'users', uid));
 
     if (!userSnap.exists()) {
@@ -787,13 +806,15 @@ export class DCCTDatabaseService {
 
   async switchAccount(role: 'buyer' | 'seller', username: string): Promise<User> {
     clearActiveListeners();
-    const key = getAppKeyFor(role, username);
-    setActiveAccountKey(key);
-
-    const auth = getActiveAuth();
+    const app = getOrCreateAccountApp(role, username);
+    const auth = getAccountAuth(app);
+    await auth.authStateReady();
     if (!auth.currentUser) {
       throw new Error(`Tài khoản ${username} chưa được đăng nhập trên thiết bị này`);
     }
+
+    const key = getAppKeyFor(role, username);
+    setActiveAccountKey(key);
 
     const res = await this.getMe();
     return res.user;
@@ -3209,7 +3230,10 @@ export class DCCTDatabaseService {
 
   async setPresentationMode(enabled: boolean): Promise<{ presentation_mode: boolean }> {
     const cur = getCurrentUser();
-    if (!cur) throw new Error('Chưa đăng nhập');
+    const activeAuth = getActiveAuth();
+    if (!cur || !activeAuth.currentUser) {
+      throw new Error('Phiên đăng nhập đã hết, vui lòng đăng nhập lại');
+    }
 
     const db = getActiveFirestore();
     await setDoc(
@@ -3228,7 +3252,10 @@ export class DCCTDatabaseService {
 
   async initMarketplaceData(onProgress?: (msg: string) => void): Promise<{ message: string }> {
     const cur = getCurrentUser();
-    if (!cur) throw new Error('Vui lòng đăng nhập tài khoản chủ');
+    const activeAuth = getActiveAuth();
+    if (!cur || !activeAuth.currentUser) {
+      throw new Error('Phiên đăng nhập đã hết, vui lòng đăng nhập lại');
+    }
 
     const db = getActiveFirestore();
     onProgress?.('Kiểm tra tài khoản chủ...');
@@ -3432,7 +3459,10 @@ export class DCCTDatabaseService {
 
   async resetDemoData(): Promise<{ message: string }> {
     const cur = getCurrentUser();
-    if (!cur) throw new Error('Vui lòng đăng nhập tài khoản chủ');
+    const activeAuth = getActiveAuth();
+    if (!cur || !activeAuth.currentUser) {
+      throw new Error('Phiên đăng nhập đã hết, vui lòng đăng nhập lại');
+    }
 
     const db = getActiveFirestore();
 

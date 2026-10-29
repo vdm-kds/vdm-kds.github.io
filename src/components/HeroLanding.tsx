@@ -48,6 +48,28 @@ export const HeroLanding: React.FC<HeroLandingProps> = ({
 
   const categoryMenuRef = useRef<HTMLDivElement>(null);
 
+  // Real Firestore counts (Requirement 6):
+  // X: in-stock items (stock > 0), Y: unique shops with in-stock items
+  const inStockProducts = useMemo(() => {
+    return (products || []).filter((p) => (p.stock || 0) > 0);
+  }, [products]);
+
+  const uniqueShopsCount = useMemo(() => {
+    const shopSet = new Set<string>();
+    inStockProducts.forEach((p) => {
+      const s = String(p.shop_id || p.shop_slug || '').trim();
+      if (s) shopSet.add(s);
+    });
+    return shopSet.size;
+  }, [inStockProducts]);
+
+  const badgeText = useMemo(() => {
+    if (inStockProducts.length === 0 || uniqueShopsCount === 0) {
+      return '♻ Chợ đồ cũ đang chuẩn bị mở cửa';
+    }
+    return `♻ ${inStockProducts.length} món đồ cũ từ ${uniqueShopsCount} shop đang chờ chủ mới`;
+  }, [inStockProducts.length, uniqueShopsCount]);
+
   // Scroll listener for sticky header glassmorphism
   useEffect(() => {
     const handleScroll = () => {
@@ -369,7 +391,7 @@ export const HeroLanding: React.FC<HeroLandingProps> = ({
           onClick={scrollToProducts}
           className="inline-flex items-center justify-center bg-[#DAE7C7] text-[#08482D] rounded-full font-bold px-4 sm:px-5 py-2 shadow-2xs hover:bg-[#c9dcb2] hover:scale-105 transition-all duration-300 text-xs sm:text-sm whitespace-nowrap"
         >
-          <span>♻ {totalProductsCount || products.length || 10} món đồ cũ từ {shopCount || 3} shop đang chờ chủ mới</span>
+          <span>{badgeText}</span>
         </button>
       </div>
 

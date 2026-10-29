@@ -14,7 +14,8 @@ import {
   getStoredAccounts,
   getOrCreateAccountApp,
   getAppKeyFor,
-  StoredAccount
+  StoredAccount,
+  syncAndValidateAccounts
 } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useToast } from './ToastContext';
@@ -124,27 +125,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // On mount: initialize Firebase apps and active session (Section 3)
+  // On mount: clean default app, validate all remembered accounts and active session
   useEffect(() => {
     mountedRef.current = true;
 
-    // 1. Re-initialize all apps stored on this machine
-    const stored = getStoredAccounts();
-    stored.forEach((acc) => {
-      try {
-        getOrCreateAccountApp(acc.role, acc.username);
-      } catch {}
-    });
-
-    // 2. Resolve active account
-    let activeKey = getActiveAccountKey();
-    if (!activeKey && stored.length > 0) {
-      const last = stored[stored.length - 1];
-      activeKey = getAppKeyFor(last.role, last.username);
-      setActiveAccountKey(activeKey);
-    }
-
-    // Timeout guard: max 5 seconds wait (Section 3)
+    // Timeout guard: max 5 seconds wait
     const timeoutTimer = setTimeout(() => {
       setAuthState((prev) => {
         if (prev.status === 'loading') {
@@ -154,27 +139,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
     }, 5000);
 
-    // 3. Listen to Auth state for active app
-    let unsubAuth: (() => void) | null = null;
-    try {
-      const activeAuth = getActiveAuth();
-      unsubAuth = onAuthStateChanged(activeAuth, async (fbUser) => {
-        if (fbUser) {
+    let unsubDb: (() => void) | null = null;
+
+    syncAndValidateAccounts()
+      .then(async ({ activeAccount }) => {
+        if (!mountedRef.current) return;
+        if (activeAccount) {
           await refreshUser();
         } else {
-          if (mountedRef.current) {
-            setAuthState({ status: 'guest', user: null, address: null });
-            setCartCount(0);
-          }
+          setAuthState({ status: 'guest', user: null, address: null });
+          setCartCount(0);
+        }
+        clearTimeout(timeoutTimer);
+      })
+      .catch(() => {
+        if (mountedRef.current) {
+          setAuthState({ status: 'guest', user: null, address: null });
+          setCartCount(0);
         }
         clearTimeout(timeoutTimer);
       });
-    } catch {
-      refreshUser().finally(() => clearTimeout(timeoutTimer));
-    }
 
-    // 4. Subscribe to state changes
-    const unsubDb = subscribeDb(() => {
+    unsubDb = subscribeDb(() => {
       if (mountedRef.current) {
         refreshCartCount();
       }
@@ -183,8 +169,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       mountedRef.current = false;
       clearTimeout(timeoutTimer);
-      if (unsubAuth) unsubAuth();
-      unsubDb();
+      if (unsubDb) unsubDb();
     };
   }, []);
 

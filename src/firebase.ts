@@ -1,19 +1,15 @@
-import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
+import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
 import {
+  initializeAuth,
   getAuth,
   Auth,
   browserLocalPersistence,
-  setPersistence,
-  onAuthStateChanged,
-  User as FirebaseUser,
-  signOut,
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword
+  indexedDBLocalPersistence,
+  signOut
 } from 'firebase/auth';
 import {
   getFirestore,
-  Firestore,
-  enableIndexedDbPersistence
+  Firestore
 } from 'firebase/firestore';
 
 export const firebaseConfig = {
@@ -37,7 +33,7 @@ export function getDefaultFirestore(): Firestore {
 }
 
 export function getDefaultAuth(): Auth {
-  return getAuth(getDefaultApp());
+  return getAccountAuth(getDefaultApp());
 }
 
 // Owner accounts list
@@ -115,38 +111,123 @@ export function setActiveAccountKey(key: string | null): void {
 }
 
 export function getAppKeyFor(role: 'buyer' | 'seller', username: string): string {
-  return 'acc_' + role + '_' + username.toLowerCase().trim();
+  const clean = role === 'buyer' 
+    ? username.trim().replace(/\D/g, '')
+    : username.toLowerCase().trim();
+  return 'acc_' + role + '_' + clean;
+}
+
+// Cache of initialized Auth instances per app name
+const authInstances = new Map<string, Auth>();
+
+export function getAccountAuth(app: FirebaseApp): Auth {
+  if (authInstances.has(app.name)) {
+    return authInstances.get(app.name)!;
+  }
+  let auth: Auth;
+  try {
+    auth = initializeAuth(app, {
+      persistence: [indexedDBLocalPersistence, browserLocalPersistence]
+    });
+  } catch {
+    auth = getAuth(app);
+  }
+  authInstances.set(app.name, auth);
+  return auth;
 }
 
 // Get or initialize a named Firebase App for this account
 export function getOrCreateAccountApp(role: 'buyer' | 'seller', username: string): FirebaseApp {
   const appName = getAppKeyFor(role, username);
   const existing = getApps().find((a) => a.name === appName);
-  if (existing) return existing;
-  return initializeApp(firebaseConfig, appName);
+  const app = existing || initializeApp(firebaseConfig, appName);
+  getAccountAuth(app); // Ensure Auth is initialized with indexedDBLocalPersistence + browserLocalPersistence
+  return app;
 }
 
+// App currently active for read/write
 export function getActiveApp(): FirebaseApp {
   const activeKey = getActiveAccountKey();
   if (activeKey) {
     const existing = getApps().find((a) => a.name === activeKey);
-    if (existing) return existing;
-    // Attempt to recreate from stored accounts
-    const accounts = getStoredAccounts();
-    const found = accounts.find((a) => getAppKeyFor(a.role, a.username) === activeKey);
-    if (found) {
-      return getOrCreateAccountApp(found.role, found.username);
+    if (existing) {
+      const auth = getAccountAuth(existing);
+      if (auth.currentUser) return existing;
+    } else {
+      // Re-create from stored accounts if exists
+      const accounts = getStoredAccounts();
+      const found = accounts.find((a) => getAppKeyFor(a.role, a.username) === activeKey);
+      if (found) {
+        const app = getOrCreateAccountApp(found.role, found.username);
+        const auth = getAccountAuth(app);
+        if (auth.currentUser) return app;
+      }
     }
   }
   return getDefaultApp();
 }
 
 export function getActiveAuth(): Auth {
-  return getAuth(getActiveApp());
+  return getAccountAuth(getActiveApp());
 }
 
 export function getActiveFirestore(): Firestore {
   return getFirestore(getActiveApp());
+}
+
+// Startup verification: cleans default app, verifies all remembered accounts
+export async function syncAndValidateAccounts(): Promise<{ validAccounts: StoredAccount[]; activeAccount: StoredAccount | null }> {
+  // 4. Dọn lỗi cũ: khi tải trang, nếu app [DEFAULT] đang có currentUser thì gọi signOut trên app [DEFAULT]
+  try {
+    const defApp = getDefaultApp();
+    const defAuth = getAccountAuth(defApp);
+    await defAuth.authStateReady();
+    if (defAuth.currentUser) {
+      await signOut(defAuth);
+    }
+  } catch {}
+
+  // 3. Với mỗi tài khoản trong "dcct_accounts", khởi tạo app + auth và await authStateReady()
+  const stored = getStoredAccounts();
+  const validAccounts: StoredAccount[] = [];
+
+  for (const acc of stored) {
+    try {
+      const app = getOrCreateAccountApp(acc.role, acc.username);
+      const auth = getAccountAuth(app);
+      await auth.authStateReady();
+      if (auth.currentUser && auth.currentUser.uid === acc.uid) {
+        validAccounts.push(acc);
+      }
+    } catch {}
+  }
+
+  // Cập nhật lại "dcct_accounts" chỉ giữ các tài khoản còn session hợp lệ
+  try {
+    localStorage.setItem(STORAGE_KEY_ACCOUNTS, JSON.stringify(validAccounts));
+  } catch {}
+
+  // Kiểm tra tài khoản trong "dcct_active"
+  const activeKey = getActiveAccountKey();
+  let activeAccount: StoredAccount | null = null;
+
+  if (activeKey) {
+    const found = validAccounts.find((a) => getAppKeyFor(a.role, a.username) === activeKey);
+    if (found) {
+      const app = getOrCreateAccountApp(found.role, found.username);
+      const auth = getAccountAuth(app);
+      if (auth.currentUser && auth.currentUser.uid === found.uid) {
+        activeAccount = found;
+      }
+    }
+  }
+
+  // Nếu tài khoản trong "dcct_active" không có currentUser thì coi như khách vãng lai
+  if (!activeAccount) {
+    setActiveAccountKey(null);
+  }
+
+  return { validAccounts, activeAccount };
 }
 
 // Hidden email conversions

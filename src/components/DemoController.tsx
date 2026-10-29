@@ -145,9 +145,12 @@ export function DemoController({
   };
 
   const isAccountLoggedIn = (role: 'buyer' | 'seller', username: string) => {
-    return storedAccounts.some(
-      (a) => a.role === role && a.username.toLowerCase() === username.toLowerCase()
-    );
+    const clean = role === 'buyer' ? username.trim().replace(/\D/g, '') : username.trim().toLowerCase();
+    return storedAccounts.some((a) => {
+      if (a.role !== role) return false;
+      const storedClean = a.role === 'buyer' ? (a.phone || a.username).trim().replace(/\D/g, '') : a.username.trim().toLowerCase();
+      return storedClean === clean;
+    });
   };
 
   const handleSwitchAccountRole = async (role: 'buyer' | 'seller', username: string) => {
