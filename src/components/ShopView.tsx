@@ -97,7 +97,7 @@ export const ShopView: React.FC<ShopViewProps> = ({
       // Load saved vouchers
       if (user?.role === 'buyer') {
         const savedRes = await api.getSavedShopVouchers(currentShop.id);
-        const codeSet = new Set<string>(savedRes.vouchers || []);
+        const codeSet = new Set<string>((savedRes.vouchers || []).map((v: any) => typeof v === 'string' ? v : v.code));
         setSavedCouponCodes(codeSet);
       }
 

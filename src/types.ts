@@ -1,8 +1,8 @@
 export type UserRole = 'buyer' | 'seller';
 
 export interface Shop {
-  id: number;
-  owner_user_id: number;
+  id: any;
+  owner_user_id: any;
   name: string;
   slug: string;
   avatar?: string;
@@ -12,7 +12,8 @@ export interface Shop {
   pickup_address: string;
   phone: string;
   created_at: string;
-  follower_ids: number[];
+  follower_ids: any[];
+  follower_count?: number;
   rating_avg?: number;
   review_count?: number;
   response_rate?: number;
@@ -21,11 +22,13 @@ export interface Shop {
 }
 
 export interface User {
-  id: number;
+  id: any;
+  uid: string;
   role: UserRole;
   username: string;
   phone?: string;
   full_name: string;
+  shop_id?: any;
   shop_name?: string;
   avatar_url?: string;
   is_owner?: boolean;
@@ -33,8 +36,8 @@ export interface User {
 }
 
 export interface Address {
-  id: number;
-  user_id: number;
+  id: any;
+  user_id: any;
   recipient_name: string;
   phone: string;
   address_line: string;
@@ -42,7 +45,7 @@ export interface Address {
 }
 
 export interface ProductFlaw {
-  id?: number | string;
+  id?: any;
   description: string;
   photo_url?: string;
   image_url?: string;
@@ -50,9 +53,9 @@ export interface ProductFlaw {
 }
 
 export interface Product {
-  id: number;
-  shop_id: number;
-  seller_id?: number;
+  id: any;
+  shop_id: any;
+  seller_id?: any;
   shop_name?: string;
   shop_slug?: string;
   name: string;
@@ -65,11 +68,13 @@ export interface Product {
   image_url: string;
   images?: string[];
   flaws?: ProductFlaw[];
+  description?: string;
   inspection_date?: string;
   inspector_name?: string;
   inspection_checklist?: string[];
   in_cart_count?: number;
   views_today?: number;
+  view_count?: number;
   similar_products?: Product[];
   rating_avg?: number;
   review_count?: number;
@@ -78,14 +83,15 @@ export interface Product {
 }
 
 export interface Review {
-  id: number;
-  shop_id?: number;
-  order_id: number;
-  product_id: number;
+  id: any;
+  shop_id?: any;
+  order_id: any;
+  product_id: any;
   product_name?: string;
   product_image?: string;
   product_condition_pct?: number;
-  user_id?: number;
+  user_id?: any;
+  user_name?: string;
   buyer_name?: string;
   rating: number;
   comment: string;
@@ -95,11 +101,11 @@ export interface Review {
   video_duration?: number | null;
   video_poster?: string | null;
   is_anonymous?: boolean;
-  author_name: string;
+  author_name?: string;
   author_phone?: string;
   order_code?: string;
   helpful_count?: number;
-  helpful_user_ids?: number[];
+  helpful_user_ids?: any[];
   is_helpful_by_me?: boolean;
   seller_reply?: string | null;
   seller_reply_at?: string | null;
@@ -122,9 +128,9 @@ export interface ReviewsResponse {
 }
 
 export interface Coupon {
-  id: number;
-  shop_id: number;
-  seller_id?: number;
+  id: any;
+  shop_id: any;
+  seller_id?: any;
   shop_name?: string;
   code: string;
   type: 'percent' | 'fixed' | 'shipping';
@@ -138,16 +144,16 @@ export interface Coupon {
 }
 
 export interface CartItem {
-  id: number;
-  shop_id: number;
+  id: any;
+  shop_id?: any;
   shop_name?: string;
   shop_slug?: string;
-  product_id: number;
+  product_id?: any;
   product_name?: string;
   product_image?: string;
   quantity: number;
   name: string;
-  category: string;
+  category?: string;
   price: number;
   original_price: number;
   original_item_price?: number;
@@ -157,8 +163,12 @@ export interface CartItem {
   image_url: string;
   is_negotiated?: boolean | number;
   negotiated_price?: number;
-  offer_id?: number;
+  offer_id?: any;
   is_sold_out?: boolean;
+  user_id?: any;
+  product?: Product;
+  effective_price?: number;
+  created_at?: string;
 }
 
 export type OrderStatus = 'pending' | 'confirmed' | 'shipping' | 'delivered' | 'completed' | 'cancelled';
@@ -166,9 +176,9 @@ export type PaymentMethod = 'card' | 'napas' | 'cod';
 export type PaymentStatus = 'unpaid' | 'paid' | 'refunded' | 'pending';
 
 export interface OrderItem {
-  id: number;
-  order_id: number;
-  product_id: number;
+  id: any;
+  order_id: any;
+  product_id: any;
   product_name: string;
   product_image?: string;
   category?: string;
@@ -179,23 +189,26 @@ export interface OrderItem {
   image_url: string;
   is_negotiated?: boolean | number;
   negotiated_price?: number;
-  offer_id?: number;
+  offer_id?: any;
 }
 
 export interface ShipmentEvent {
-  id: number;
-  order_id: number;
-  status: string;
+  id: any;
+  order_id: any;
+  status?: string;
+  event?: string;
+  label?: string;
   location: string;
   note: string;
   created_at: string;
 }
 
 export interface OrderStatusLog {
-  id: number;
-  order_id: number;
+  id: any;
+  order_id: any;
   from_status?: string;
-  to_status: string;
+  to_status?: string;
+  status?: string;
   actor_role: string;
   actor_name: string;
   note?: string;
@@ -205,15 +218,15 @@ export interface OrderStatusLog {
 export type ReturnStatus = 'pending' | 'approved' | 'rejected' | 'shipping_back' | 'received' | 'refunded';
 
 export interface ReturnRequest {
-  id: number;
-  shop_id: number;
+  id: any;
+  shop_id: any;
   shop_name?: string;
-  order_id: number;
+  order_id: any;
   order_code?: string;
-  buyer_id: number;
+  buyer_id: any;
   buyer_name?: string;
   buyer_phone?: string;
-  product_id: number;
+  product_id: any;
   product_name?: string;
   product_image?: string;
   reason: string;
@@ -228,14 +241,14 @@ export interface ReturnRequest {
 }
 
 export interface Order {
-  id: number;
-  shop_id: number;
+  id: any;
+  shop_id: any;
   shop_name?: string;
   shop_slug?: string;
   code: string;
-  buyer_id: number;
-  user_id?: number;
-  seller_id?: number;
+  buyer_id: any;
+  user_id?: any;
+  seller_id?: any;
   buyer_name?: string;
   buyer_phone?: string;
   subtotal: number;
@@ -271,15 +284,15 @@ export interface Order {
 export type OfferStatus = 'pending' | 'accepted' | 'rejected' | 'countered' | 'expired';
 
 export interface Offer {
-  id: number;
-  shop_id: number;
+  id: any;
+  shop_id: any;
   shop_name?: string;
-  buyer_id: number;
-  user_id?: number;
-  seller_id?: number;
+  buyer_id: any;
+  user_id?: any;
+  seller_id?: any;
   buyer_name?: string;
   buyer_phone?: string;
-  product_id: number;
+  product_id: any;
   product_name?: string;
   product_image?: string;
   product_stock?: number;
@@ -298,8 +311,8 @@ export interface Offer {
 
 export interface ChatMessageContext {
   type: 'product' | 'order';
-  id?: number;
-  product_id?: number;
+  id?: any;
+  product_id?: any;
   order_code?: string;
   title: string;
   subtitle?: string;
@@ -312,19 +325,22 @@ export interface ChatMessageContext {
 }
 
 export interface ChatMessage {
-  id: number;
-  conversation_id: number;
+  id: any;
+  conversation_id: any;
   sender_role: 'buyer' | 'seller';
-  sender_id: number;
-  content: string;
+  sender_id: any;
+  content?: string;
+  message?: string;
   type?: 'text' | 'context';
-  is_read: number | boolean;
+  context_type?: string;
+  context_id?: any;
+  is_read?: number | boolean;
   context_card?: ChatMessageContext;
   created_at: string;
 }
 
 export interface CheckoutShopBreakdown {
-  shop_id: number;
+  shop_id: any;
   shop_name: string;
   shop_slug: string;
   items: CartItem[];
@@ -345,21 +361,21 @@ export interface CheckoutCalculation {
 }
 
 export interface ChatConversation {
-  id: number;
-  shop_id: number;
-  buyer_id: number;
-  seller_id?: number;
+  id: any;
+  shop_id: any;
+  buyer_id: any;
+  seller_id?: any;
   shop_name?: string;
   shop_slug?: string;
   shop_avatar?: string;
   buyer_name?: string;
   buyer_phone?: string;
-  product_id?: number;
+  product_id?: any;
   product_name?: string;
   product_image?: string;
   product_price?: number;
   product_condition_pct?: number;
-  order_id?: number;
+  order_id?: any;
   order_code?: string;
   order_status?: string;
   order_total?: number;
@@ -367,6 +383,7 @@ export interface ChatConversation {
   last_message_at?: string;
   buyer_unread?: number;
   seller_unread?: number;
+  unread_count?: number;
   created_at: string;
   messages?: ChatMessage[];
 }
@@ -377,13 +394,21 @@ export interface SellerStats {
   total_revenue: number;
   low_stock_count: number;
   recent_orders: Order[];
+  orders_pending?: number;
+  orders_confirmed?: number;
+  orders_shipping?: number;
+  orders_completed?: number;
+  orders_cancelled?: number;
+  total_products?: number;
+  rating_avg?: number;
+  total_reviews?: number;
 }
 
 export interface AppNotification {
-  id: number;
-  user_id: number;
+  id: any;
+  user_id: any;
   role?: string;
-  order_id?: number;
+  order_id?: any;
   type?: string;
   title: string;
   message: string;

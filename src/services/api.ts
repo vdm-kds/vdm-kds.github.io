@@ -1,5 +1,5 @@
 import { db, getCurrentSession, setCurrentSession, clearCurrentSession, createVintageProductSvg, isLegacyOrEmptyImage, createShopAvatarSvg } from './db';
-import { Product, CartItem, Order, User, SellerStats, Address, ReturnRequest, Review, NotificationItem, Offer, ChatConversation, ChatMessage, Coupon } from '../types';
+import { Product, CartItem, Order, User, SellerStats, Address, ReturnRequest, Review, NotificationItem, Offer, ChatConversation, ChatMessage, Coupon, CheckoutCalculation, CheckoutShopBreakdown } from '../types';
 
 export { createVintageProductSvg, isLegacyOrEmptyImage, createShopAvatarSvg };
 
@@ -87,22 +87,22 @@ export const api = {
   updateShop: (shopId: number, payload: Partial<any>) =>
     db.updateShop(shopId, payload),
 
-  toggleFollowShop: (shopId: number) =>
+  toggleFollowShop: (shopId: number | string) =>
     db.toggleFollowShop(shopId),
 
   getFollowedShops: () =>
     db.getFollowedShops(),
 
-  saveShopVoucher: (code: string, shopId: number) =>
+  saveShopVoucher: (code: string, shopId: number | string) =>
     db.saveShopVoucher(code, shopId),
 
-  getSavedShopVouchers: (shopId?: number) =>
+  getSavedShopVouchers: (shopId?: number | string) =>
     db.getSavedShopVouchers(shopId),
 
-  listProductsByShop: (shopId: number) =>
+  listProductsByShop: (shopId: number | string) =>
     db.listProductsByShop(shopId),
 
-  listCouponsByShop: (shopId: number) =>
+  listCouponsByShop: (shopId: number | string) =>
     db.listCouponsByShop(shopId),
 
   searchShops: (q: string) =>
@@ -126,17 +126,17 @@ export const api = {
     payment_method: 'card' | 'napas' | 'cod';
     card_last4?: string;
     card_type?: string;
-    direct_items?: Array<{ product_id: number; quantity: number; offer_id?: number }>;
+    direct_items?: Array<{ product_id: number | string; quantity: number; offer_id?: number | string }>;
     coupon_code?: string;
-    shop_coupons?: Record<number, string>;
+    shop_coupons?: Record<number | string, string>;
   }) => {
     let items = orderData.direct_items;
     if (!items || items.length === 0) {
       const cart = await db.getCart();
-      items = cart.items.map((i) => ({ product_id: i.product_id, quantity: i.quantity }));
+      items = cart.items.map((i) => ({ product_id: (i.product_id || i.id) as any, quantity: i.quantity, offer_id: i.offer_id as any }));
     }
-    return db.createOrder({
-      items,
+    const res = await db.createOrder({
+      items: (items || []) as any,
       recipient_name: orderData.recipient_name,
       phone: orderData.phone,
       address: orderData.address,
@@ -149,32 +149,59 @@ export const api = {
         card_type: orderData.card_type
       },
       coupon_code: orderData.coupon_code,
-      shop_coupons: orderData.shop_coupons
+      shop_coupons: orderData.shop_coupons as any
     });
+    return {
+      order: res.orders[0],
+      orders: res.orders,
+      message: res.message
+    };
   },
 
-  cancelOrder: (id: number, reason: string) =>
+  cancelOrder: (id: number | string, reason: string) =>
     db.cancelOrder(id, reason),
 
-  completeOrder: (id: number) =>
-    db.confirmOrderReceived(id),
+  completeOrder: async (id: number | string) => {
+    const res = await db.confirmOrderReceived(id);
+    const orderRes = await db.getOrder(id).catch(() => null);
+    return { message: res.message, order: orderRes?.order };
+  },
 
   // --- REVIEWS ---
-  getProductReviews: (productId: number) =>
-    db.getProductReviews(productId),
+  getProductReviews: async (productId: number | string) => {
+    const res = await db.getProductReviews(productId);
+    const dist: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    for (const r of res.reviews || []) {
+      if (dist[r.rating] !== undefined) dist[r.rating]++;
+    }
+    return {
+      reviews: res.reviews,
+      total_reviews: res.total,
+      average_rating: res.avg,
+      distribution: dist
+    };
+  },
 
   getShopReviews: () =>
     db.getShopReviews(),
 
-  getSellerReviews: () =>
-    db.getSellerReviews(),
+  getSellerReviews: async () => {
+    const res = await db.getSellerReviews();
+    return {
+      ...res,
+      total_reviews: res.total,
+      average_rating: res.avg
+    };
+  },
 
-  getOrderReviewedItems: (orderId: number) =>
-    db.getOrderReviewedItems(orderId),
+  getOrderReviewedItems: async (orderId: number | string) => {
+    const res = await db.getOrderReviewedItems(orderId);
+    return { reviewed_product_ids: res.reviewed_product_ids, reviews: [] as Review[] };
+  },
 
   submitReview: (payload: {
-    order_id: number;
-    product_id: number;
+    order_id: number | string;
+    product_id: number | string;
     rating: number;
     comment: string;
     tags?: string[];
@@ -186,16 +213,18 @@ export const api = {
   }) =>
     db.submitReview(payload as any),
 
-  updateReview: (id: number, payload: any) =>
+  updateReview: (id: number | string, payload: any) =>
     db.updateReview(id, payload),
 
-  toggleHelpfulReview: (id: number) =>
-    db.toggleHelpfulReview(id),
+  toggleHelpfulReview: async (id: number | string) => {
+    const res = await db.toggleHelpfulReview(id);
+    return { helpful_count: res.helpful_count, is_helpful: true };
+  },
 
-  replyReview: (id: number, reply: string) =>
+  replyReview: (id: number | string, reply: string) =>
     db.replyReview(id, reply),
 
-  reportReview: (id: number, reason: string) =>
+  reportReview: (id: number | string, reason: string) =>
     db.reportReview(id, reason),
 
   // --- UPLOAD ---
@@ -203,8 +232,83 @@ export const api = {
     db.uploadFile(dataUrl, type),
 
   // --- COUPONS ---
-  calculateCheckout: (cart: any, couponsByShop?: Record<number, string>) =>
-    db.calculateCheckout(cart, couponsByShop),
+  calculateCheckout: (cartOrItems: any, couponsByShop?: Record<any, string>): CheckoutCalculation => {
+    const rawItems: CartItem[] = Array.isArray(cartOrItems) ? cartOrItems : (cartOrItems?.items || []);
+    const shopMap = new Map<string, CartItem[]>();
+    for (const it of rawItems) {
+      const sId = String(it.shop_id || it.product?.shop_id || it.product?.shop_slug || '1');
+      if (!shopMap.has(sId)) shopMap.set(sId, []);
+      shopMap.get(sId)!.push(it);
+    }
+
+    const shops: CheckoutShopBreakdown[] = [];
+    let grandSubtotal = 0;
+    let grandShipping = 0;
+    let grandDiscount = 0;
+
+    for (const [sId, sItems] of shopMap.entries()) {
+      let subtotal = 0;
+      const shopName = sItems[0]?.shop_name || sItems[0]?.product?.shop_name || 'Đồ Cũ Còn Thương';
+      const shopSlug = sItems[0]?.shop_slug || sItems[0]?.product?.shop_slug || sId;
+
+      for (const i of sItems) {
+        const p = i.effective_price ?? i.price ?? i.product?.price ?? 0;
+        subtotal += p * (i.quantity || 1);
+      }
+
+      const shippingFee = subtotal >= 1000000 || subtotal === 0 ? 0 : 30000;
+      const couponCode = couponsByShop ? (couponsByShop[sId] || (couponsByShop as any)[Number(sId)]) : undefined;
+      let discountAmount = 0;
+
+      if (couponCode) {
+        const upper = String(couponCode).toUpperCase().trim();
+        if (upper === 'FREESHIP' || upper === 'FREESHIP30') {
+          discountAmount = Math.min(shippingFee, 30000);
+        } else if (upper === 'RETRO10' || upper === 'GIAM10') {
+          discountAmount = Math.min(Math.round(subtotal * 0.1), 100000);
+        } else if (upper === 'WELCOME50' || upper === 'GIAM50K') {
+          discountAmount = Math.min(50000, subtotal);
+        } else if (upper === 'SACH20') {
+          discountAmount = Math.min(Math.round(subtotal * 0.2), 50000);
+        }
+      }
+
+      const total = Math.max(0, subtotal + shippingFee - discountAmount);
+      grandSubtotal += subtotal;
+      grandShipping += shippingFee;
+      grandDiscount += discountAmount;
+
+      shops.push({
+        shop_id: sId,
+        shop_name: shopName,
+        shop_slug: shopSlug,
+        items: sItems,
+        subtotal,
+        shipping_fee: shippingFee,
+        coupon_code: couponCode,
+        discount_amount: discountAmount,
+        total,
+        applied_coupon: couponCode ? {
+          id: couponCode,
+          shop_id: sId,
+          code: couponCode,
+          type: 'fixed',
+          value: discountAmount,
+          min_order_amount: 0,
+          is_active: true,
+          usage_count: 0
+        } as any : null
+      });
+    }
+
+    return {
+      shops,
+      subtotal: grandSubtotal,
+      shipping_fee: grandShipping,
+      discount_amount: grandDiscount,
+      grand_total: Math.max(0, grandSubtotal + grandShipping - grandDiscount)
+    };
+  },
 
   validateCoupon: (code: string, subtotal: number, shipping_fee?: number, shop_id?: number) =>
     db.validateCoupon(code, subtotal, shipping_fee, shop_id),
@@ -218,10 +322,10 @@ export const api = {
   createSellerCoupon: (couponData: any) =>
     db.createCoupon(couponData),
 
-  toggleSellerCoupon: (id: number) =>
+  toggleSellerCoupon: (id: number | string) =>
     db.toggleCoupon(id),
 
-  deleteSellerCoupon: (id: number) =>
+  deleteSellerCoupon: (id: number | string) =>
     db.deleteCoupon(id),
 
   // --- ACCOUNT & PROFILE & WISHLIST ---
@@ -234,17 +338,29 @@ export const api = {
   getAddresses: () =>
     db.getAddresses(),
 
-  addAddress: (data: { recipient_name: string; phone: string; address_line: string; is_default?: boolean }) =>
-    db.addAddress(data),
+  addAddress: async (data: { recipient_name: string; phone: string; address_line: string; is_default?: boolean }) => {
+    const res = await db.addAddress(data);
+    const all = await db.getAddresses();
+    return { address: res.address, addresses: all.addresses };
+  },
 
-  updateAddress: (id: number, data: { recipient_name: string; phone: string; address_line: string; is_default?: boolean }) =>
-    db.updateAddress(id, data),
+  updateAddress: async (id: number | string, data: { recipient_name: string; phone: string; address_line: string; is_default?: boolean }) => {
+    const res = await db.updateAddress(Number(id) as any, data);
+    const all = await db.getAddresses();
+    return { address: res.address, addresses: all.addresses };
+  },
 
-  deleteAddress: (id: number) =>
-    db.deleteAddress(id),
+  deleteAddress: async (id: number | string) => {
+    const res = await db.deleteAddress(Number(id) as any);
+    const all = await db.getAddresses();
+    return { message: res.message, addresses: all.addresses };
+  },
 
-  setDefaultAddress: (id: number) =>
-    db.setDefaultAddress(id),
+  setDefaultAddress: async (id: number | string) => {
+    const res = await db.setDefaultAddress(Number(id) as any);
+    const all = await db.getAddresses();
+    return { message: res.message, addresses: all.addresses };
+  },
 
   getWishlist: () =>
     db.getWishlist(),
@@ -252,11 +368,11 @@ export const api = {
   getWishlistIds: () =>
     db.getWishlistIds(),
 
-  toggleWishlist: (productId: number) =>
+  toggleWishlist: (productId: number | string) =>
     db.toggleWishlist(productId),
 
   // --- DEMO CONTROLLER ---
-  switchRole: (targetUserId: number) =>
+  switchRole: (targetUserId: number | string) =>
     db.switchRole(targetUserId),
 
   switchBuyer: () =>
@@ -281,25 +397,25 @@ export const api = {
   getSellerOrders: (status?: string) =>
     db.getSellerOrders(status),
 
-  getSellerOrder: (id: number) =>
+  getSellerOrder: (id: number | string) =>
     db.getOrder(id),
 
-  updateOrderStatus: (id: number, target_status: string, note?: string, cancel_reason?: string) =>
+  updateOrderStatus: (id: number | string, target_status: string, note?: string, cancel_reason?: string) =>
     db.updateOrderStatus(id, target_status, note, cancel_reason),
 
-  bulkConfirmOrders: (orderIds: number[]) =>
+  bulkConfirmOrders: (orderIds: (number | string)[]) =>
     db.bulkConfirmOrders(orderIds),
 
-  bulkHandoverOrders: (orderIds: number[], carrier: string) =>
+  bulkHandoverOrders: (orderIds: (number | string)[], carrier: string) =>
     db.bulkHandoverOrders(orderIds, carrier),
 
-  assignCarrier: (id: number, carrier: string) =>
+  assignCarrier: (id: number | string, carrier: string) =>
     db.assignCarrier(id, carrier),
 
-  addShipmentEvent: (id: number, eventData: { status: string; location: string; note: string }) =>
+  addShipmentEvent: (id: number | string, eventData: { status: string; location: string; note: string }) =>
     db.addShipmentEvent(id, eventData),
 
-  handoverOrder: (id: number, handoverData: { carrier: string; location?: string; note?: string }) =>
+  handoverOrder: (id: number | string, handoverData: { carrier: string; location?: string; note?: string }) =>
     db.handoverOrder(id, handoverData),
 
   // --- NOTIFICATIONS ---
@@ -326,25 +442,25 @@ export const api = {
       message: payload.message
     }),
 
-  acceptOffer: (id: number) =>
+  acceptOffer: (id: number | string) =>
     db.acceptOffer(id),
 
-  counterOffer: (id: number, counter_price: number, seller_note?: string) =>
+  counterOffer: (id: number | string, counter_price: number, seller_note?: string) =>
     db.counterOffer(id, counter_price, seller_note),
 
-  rejectOffer: (id: number, seller_note?: string) =>
+  rejectOffer: (id: number | string, seller_note?: string) =>
     db.rejectOffer(id, seller_note),
 
-  buyerAcceptCounter: (id: number) =>
+  buyerAcceptCounter: (id: number | string) =>
     db.acceptCounterOffer(id),
 
-  buyerRejectCounter: (id: number) =>
+  buyerRejectCounter: (id: number | string) =>
     db.rejectCounterOffer(id),
 
-  cancelOffer: (id: number) =>
+  cancelOffer: (id: number | string) =>
     db.cancelOffer(id),
 
-  getMyOfferForProduct: (productId: number) =>
+  getMyOfferForProduct: (productId: number | string) =>
     db.getMyOfferForProduct(productId),
 
   // --- CHAT (MULTI-SHOP SHOPEE STYLE) ---
@@ -352,17 +468,17 @@ export const api = {
     db.getChatConversations(),
 
   startShopChat: (
-    shopId: number,
+    shopId: number | string,
     context?: {
       type: 'product' | 'order';
-      product_id?: number;
+      product_id?: number | string;
       order_code?: string;
       initial_message?: string;
     }
   ) => db.startShopChat(shopId, context),
 
-  startChat: async (payload: { shop_id?: number; product_id?: number; order_id?: number | string; initial_message?: string }) => {
-    let targetShopId = payload.shop_id;
+  startChat: async (payload: { shop_id?: number | string; product_id?: number | string; order_id?: number | string; initial_message?: string }) => {
+    let targetShopId: number | string | undefined = payload.shop_id;
     if (!targetShopId && payload.product_id) {
       const prodRes = await db.getProduct(payload.product_id);
       targetShopId = prodRes.product.shop_id;
@@ -372,7 +488,7 @@ export const api = {
       targetShopId = ordRes.order.shop_id;
     }
 
-    if (!targetShopId) targetShopId = 1;
+    if (!targetShopId) targetShopId = 'do-cu-con-thuong';
 
     const res = await db.startShopChat(targetShopId, {
       type: payload.product_id ? 'product' : (payload.order_id ? 'order' : 'product'),
@@ -388,17 +504,17 @@ export const api = {
     };
   },
 
-  getChatDetail: (id: number) =>
+  getChatDetail: (id: number | string) =>
     db.getChatDetail(id),
 
-  sendChatMessage: (idOrPayload: number | { conversation_id?: number; shop_id?: number; content: string; context_card?: any }, content?: string) => {
-    if (typeof idOrPayload === 'number') {
+  sendChatMessage: (idOrPayload: number | string | { conversation_id?: number | string; shop_id?: number | string; content: string; context_card?: any }, content?: string) => {
+    if (typeof idOrPayload === 'number' || typeof idOrPayload === 'string') {
       return db.sendChatMessage({ conversation_id: idOrPayload, content: content || '' });
     }
     return db.sendChatMessage(idOrPayload);
   },
 
-  markChatRead: (id: number) =>
+  markChatRead: (id: number | string) =>
     db.markChatRead(id),
 
   // --- RETURNS & REFUNDS ---
@@ -408,22 +524,39 @@ export const api = {
   getSellerReturns: () =>
     db.getSellerReturns(),
 
-  createReturn: (payload: { order_id: number; product_id?: number; reason: string; description: string; images?: string[] }) =>
-    db.requestReturn({
+  createReturn: async (payload: { order_id: number | string; product_id?: number | string; reason: string; description: string; images?: string[] }) => {
+    const res = await db.requestReturn({
       order_id: payload.order_id,
       reason: payload.reason,
       description: payload.description,
       images: payload.images,
       refund_method: 'Chuyển khoản ngân hàng / Ví điện tử'
-    }),
+    });
+    return {
+      message: res.message,
+      return_request: {
+        id: `ret_${Date.now()}`,
+        shop_id: 1,
+        order_id: payload.order_id,
+        buyer_id: 1,
+        product_id: payload.product_id || 1,
+        reason: payload.reason,
+        description: payload.description,
+        status: 'pending',
+        refund_amount: 0,
+        refund_method: 'Ngân hàng',
+        created_at: new Date().toISOString()
+      } as ReturnRequest
+    };
+  },
 
-  updateReturnStatus: (id: number, payload: { status: string; seller_note?: string }) =>
+  updateReturnStatus: (id: number | string, payload: { status: string; seller_note?: string }) =>
     db.updateReturnStatus(id, payload),
 
   // --- SHIPMENT FAST FORWARD ---
   getEligibleShipmentOrders: () =>
     db.getEligibleShipmentOrders(),
 
-  advanceShipmentStep: (order_id: number, step?: number) =>
+  advanceShipmentStep: (order_id: number | string, step?: number) =>
     db.advanceShipmentStep(order_id, step || 1)
 };

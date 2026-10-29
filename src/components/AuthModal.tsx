@@ -8,6 +8,7 @@ interface AuthModalProps {
   isOpen: boolean;
   role?: 'buyer' | 'seller';
   initialIsRegister?: boolean;
+  initialUsername?: string;
   promptMessage?: string;
   onClose: () => void;
   onSuccess: () => void;
@@ -17,6 +18,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   isOpen,
   role = 'buyer',
   initialIsRegister = false,
+  initialUsername,
   promptMessage,
   onClose,
   onSuccess
@@ -32,8 +34,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Field values
-  const [username, setUsername] = useState('');
-  const [phone, setPhone] = useState('');
+  const [username, setUsername] = useState(initialUsername || '');
+  const [phone, setPhone] = useState(initialUsername || '');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -49,12 +51,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     if (isOpen) {
       setActiveRole(role);
       setIsRegister(initialIsRegister);
+      if (initialUsername) {
+        setUsername(initialUsername);
+        setPhone(initialUsername);
+      }
       setFieldErrors({});
       setGeneralError('');
       // Check presentation mode
       api.getPresentationMode().then(res => setPresentationMode(!!res.presentation_mode)).catch(() => {});
     }
-  }, [isOpen, role, initialIsRegister]);
+  }, [isOpen, role, initialIsRegister, initialUsername]);
 
   // Clear specific error on field change
   const handleFieldChange = (field: string, value: string, setter: (val: string) => void) => {

@@ -1,7 +1,22 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { User, Address } from '../types';
-import { api, getStoredToken } from '../services/api';
-import { getCurrentSession, clearCurrentSession, subscribeDb } from '../services/db';
+import { api } from '../services/api';
+import {
+  getCurrentSession,
+  clearCurrentSession,
+  subscribeDb,
+  db
+} from '../services/db';
+import {
+  getActiveAuth,
+  getActiveAccountKey,
+  setActiveAccountKey,
+  getStoredAccounts,
+  getOrCreateAccountApp,
+  getAppKeyFor,
+  StoredAccount
+} from '../firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 import { useToast } from './ToastContext';
 
 export type AuthStatus = 'loading' | 'guest' | 'buyer' | 'seller';
@@ -26,7 +41,8 @@ interface AuthContextType {
   refreshUser: () => Promise<void>;
   refreshCartCount: () => Promise<void>;
   quickLogin: (role: 'buyer' | 'seller') => Promise<void>;
-  switchRole: (targetUserId: number) => Promise<void>;
+  switchRole: (targetUserId: number | string) => Promise<void>;
+  switchAccount: (role: 'buyer' | 'seller', username: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -63,10 +79,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Refresh user from current tab session
+  // Refresh user from active Firebase session
   const refreshUser = async () => {
-    const session = getCurrentSession();
-    if (!session || !session.user) {
+    const activeKey = getActiveAccountKey();
+    if (!activeKey) {
       if (mountedRef.current) {
         setAuthState({
           status: 'guest',
@@ -95,7 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setCartCount(0);
         }
       }
-    } catch {
+    } catch (err) {
       clearCurrentSession();
       if (mountedRef.current) {
         setAuthState({
@@ -108,11 +124,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // On mount: initialize session with max 3s timeout to fallback to 'guest'
+  // On mount: initialize Firebase apps and active session (Section 3)
   useEffect(() => {
     mountedRef.current = true;
 
-    // Timeout guard: if loading takes > 3 seconds, fallback to guest
+    // 1. Re-initialize all apps stored on this machine
+    const stored = getStoredAccounts();
+    stored.forEach((acc) => {
+      try {
+        getOrCreateAccountApp(acc.role, acc.username);
+      } catch {}
+    });
+
+    // 2. Resolve active account
+    let activeKey = getActiveAccountKey();
+    if (!activeKey && stored.length > 0) {
+      const last = stored[stored.length - 1];
+      activeKey = getAppKeyFor(last.role, last.username);
+      setActiveAccountKey(activeKey);
+    }
+
+    // Timeout guard: max 5 seconds wait (Section 3)
     const timeoutTimer = setTimeout(() => {
       setAuthState((prev) => {
         if (prev.status === 'loading') {
@@ -120,14 +152,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         return prev;
       });
-    }, 3000);
+    }, 5000);
 
-    refreshUser().finally(() => {
-      clearTimeout(timeoutTimer);
-    });
+    // 3. Listen to Auth state for active app
+    let unsubAuth: (() => void) | null = null;
+    try {
+      const activeAuth = getActiveAuth();
+      unsubAuth = onAuthStateChanged(activeAuth, async (fbUser) => {
+        if (fbUser) {
+          await refreshUser();
+        } else {
+          if (mountedRef.current) {
+            setAuthState({ status: 'guest', user: null, address: null });
+            setCartCount(0);
+          }
+        }
+        clearTimeout(timeoutTimer);
+      });
+    } catch {
+      refreshUser().finally(() => clearTimeout(timeoutTimer));
+    }
 
-    // Subscribe to cross-tab storage changes
-    const unsubscribe = subscribeDb(() => {
+    // 4. Subscribe to state changes
+    const unsubDb = subscribeDb(() => {
       if (mountedRef.current) {
         refreshCartCount();
       }
@@ -136,7 +183,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       mountedRef.current = false;
       clearTimeout(timeoutTimer);
-      unsubscribe();
+      if (unsubAuth) unsubAuth();
+      unsubDb();
     };
   }, []);
 
@@ -145,11 +193,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const data = await api.login({ username, password, role });
       if (!mountedRef.current) return;
 
-      // Single atomic setState
       setAuthState({
         status: data.user.role === 'seller' ? 'seller' : 'buyer',
         user: data.user,
-        address: null
+        address: data.address || null
       });
 
       if (data.user.role === 'buyer') {
@@ -158,7 +205,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setCartCount(0);
       }
 
-      showToast(`Chào mừng ${data.user.full_name} (${data.user.role === 'seller' ? 'Chủ Tiệm' : 'Khách mua'}) đã quay trở lại!`, 'success');
+      showToast(
+        `Chào mừng ${data.user.full_name} (${data.user.role === 'seller' ? 'Chủ Tiệm' : 'Khách mua'}) đã quay trở lại!`,
+        'success'
+      );
     } catch (error: any) {
       showToast(error.message || 'Đăng nhập thất bại', 'error');
       throw error;
@@ -178,7 +228,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const data = await api.register(payload);
       if (!mountedRef.current) return;
 
-      // Single atomic setState
       setAuthState({
         status: data.user.role === 'seller' ? 'seller' : 'buyer',
         user: data.user,
@@ -199,7 +248,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
-    clearCurrentSession();
+    db.logout().catch(() => {});
     if (mountedRef.current) {
       setAuthState({
         status: 'guest',
@@ -211,17 +260,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     showToast('Đã đăng xuất', 'info');
   };
 
-  const switchRole = async (targetUserId: number) => {
+  const switchAccount = async (role: 'buyer' | 'seller', username: string) => {
     try {
-      // 1. Close all overlays, modals, drawers, chat dock
       window.dispatchEvent(new CustomEvent('close-all-overlays'));
       window.dispatchEvent(new CustomEvent('close-buyer-chat'));
 
-      // 2. Switch session without calling logout
-      const res = await api.switchRole(targetUserId);
+      const newUser = await db.switchAccount(role, username);
       if (!mountedRef.current) return;
 
-      // 3. Atomically update AuthContext state once
+      setAuthState({
+        status: newUser.role === 'seller' ? 'seller' : 'buyer',
+        user: newUser,
+        address: null
+      });
+
+      if (newUser.role === 'buyer') {
+        await refreshCartCount();
+      } else {
+        setCartCount(0);
+      }
+
+      const targetPath = newUser.role === 'seller' ? '/seller' : '/';
+      window.dispatchEvent(new CustomEvent('navigate-path', { detail: { path: targetPath } }));
+
+      showToast(`Đã chuyển sang ${newUser.full_name}`, 'success');
+    } catch (err: any) {
+      showToast(err.message || 'Lỗi chuyển đổi tài khoản', 'error');
+      throw err;
+    }
+  };
+
+  const switchRole = async (targetUserId: number | string) => {
+    try {
+      window.dispatchEvent(new CustomEvent('close-all-overlays'));
+      window.dispatchEvent(new CustomEvent('close-buyer-chat'));
+
+      const res = await api.switchRole(targetUserId as any);
+      if (!mountedRef.current) return;
+
       setAuthState({
         status: res.user.role === 'seller' ? 'seller' : 'buyer',
         user: res.user,
@@ -234,22 +310,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setCartCount(0);
       }
 
-      // 4. Navigate: seller -> /seller, buyer -> /
       const targetPath = res.user.role === 'seller' ? '/seller' : '/';
       window.dispatchEvent(new CustomEvent('navigate-path', { detail: { path: targetPath } }));
 
-      showToast(`Đã chuyển sang vai ${res.role_name}`, 'success');
+      showToast(`Đã chuyển sang ${res.role_name}`, 'success');
     } catch (err: any) {
-      showToast(err.message || 'Lỗi chuyển đổi tài khoản', 'error');
+      showToast(err.message || 'Lỗi chuyển đổi vai', 'error');
       throw err;
     }
   };
 
   const quickLogin = async (targetRole: 'buyer' | 'seller') => {
     if (targetRole === 'seller') {
-      await switchRole(1); // Default seller: Đồ Cũ Còn Thương
+      await switchRole(1);
     } else {
-      await switchRole(2); // Buyer: Nguyễn Văn A
+      await switchRole(2);
     }
   };
 
@@ -267,7 +342,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         refreshUser,
         refreshCartCount,
         quickLogin,
-        switchRole
+        switchRole,
+        switchAccount
       }}
     >
       {children}

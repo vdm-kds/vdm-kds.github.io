@@ -1,1072 +1,531 @@
-import { Product, Order, User, CartItem, Coupon, Offer, ChatConversation, ChatMessage, ChatMessageContext, ReturnRequest, ReturnStatus, Review, NotificationItem, SellerStats, Address, ShipmentEvent, Shop, CheckoutCalculation, CheckoutShopBreakdown } from '../types';
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  query,
+  where,
+  serverTimestamp,
+  runTransaction,
+  writeBatch,
+  increment,
+  arrayUnion,
+  arrayRemove,
+  onSnapshot,
+  Unsubscribe,
+  DocumentData
+} from 'firebase/firestore';
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  deleteUser
+} from 'firebase/auth';
+import {
+  firebaseConfig,
+  getDefaultFirestore,
+  getDefaultAuth,
+  getActiveApp,
+  getActiveFirestore,
+  getActiveAuth,
+  getOrCreateAccountApp,
+  getAppKeyFor,
+  getActiveAccountKey,
+  setActiveAccountKey,
+  getStoredAccounts,
+  saveStoredAccount,
+  removeStoredAccount,
+  StoredAccount,
+  toBuyerEmail,
+  toSellerEmail,
+  mapFirebaseError,
+  OWNER_KEYS
+} from '../firebase';
+import {
+  Product,
+  Order,
+  User,
+  Shop,
+  Coupon,
+  CartItem,
+  ReturnRequest,
+  Review,
+  NotificationItem,
+  Offer,
+  ChatConversation,
+  ChatMessage,
+  Address,
+  ShipmentEvent,
+  SellerStats
+} from '../types';
 
-const DB_KEY = 'dcct_db';
-const SESSION_KEY = 'dcct_session';
-const DB_VERSION = 6;
+// =========================================================================
+// SVG GENERATORS & ICON HELPERS
+// =========================================================================
+export function getProductEmoji(title: string = '', category: string = ''): string {
+  const t = title.toLowerCase();
+  const c = category.toLowerCase();
 
-// Simulated realistic network delay
-export const delay = (ms?: number) =>
-  new Promise((res) => setTimeout(res, ms ?? (150 + Math.random() * 150)));
+  if (t.includes('iphone') || t.includes('điện thoại')) return '📱';
+  if (t.includes('bàn phím') || t.includes('keychron')) return '⌨️';
+  if (t.includes('tai nghe') || t.includes('sony wh') || t.includes('headphone')) return '🎧';
+  if (t.includes('máy ảnh') || t.includes('canon') || t.includes('film')) return '📷';
+  if (t.includes('đồng hồ') || t.includes('casio')) return '⌚';
+  if (t.includes('túi xách') || t.includes('túi da')) return '👜';
+  if (t.includes('áo khoác') || t.includes('denim') || t.includes('áo jacket')) return '🧥';
+  if (t.includes('nồi chiên') || t.includes('philips') || t.includes('bếp')) return '🍳';
+  if (t.includes('sách') || t.includes('nhà giả kim') || t.includes('tiểu thuyết')) return '📖';
+  if (t.includes('guitar') || t.includes('yamaha') || t.includes('đàn')) return '🎸';
 
-export function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/đ/g, 'd')
-    .replace(/[^a-z0-9\s-]/g, '')
-    .trim()
-    .replace(/\s+/g, '-');
-}
+  if (c.includes('thời trang') || c.includes('quần áo')) return '🧥';
+  if (c.includes('máy ảnh')) return '📷';
+  if (c.includes('điện thoại') || c.includes('điện tử')) return '📱';
+  if (c.includes('sách')) return '📖';
+  if (c.includes('nhạc cụ')) return '🎸';
+  if (c.includes('gia dụng')) return '🍳';
+  if (c.includes('phụ kiện')) return '⌚';
 
-export function createShopAvatarSvg(name: string, bg: string = '#08482D', fg: string = '#FAF7F2'): string {
-  const words = name.split(' ').filter(Boolean);
-  const initials = (words.length > 1 ? words[0][0] + words[1][0] : name.slice(0, 2)).toUpperCase();
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
-    <rect width="200" height="200" fill="${bg}" rx="100"/>
-    <text x="100" y="118" font-family="'Be Vietnam Pro', sans-serif" font-size="70" font-weight="800" fill="${fg}" text-anchor="middle" dominant-baseline="middle">${initials}</text>
-  </svg>`;
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-}
-
-export const CATEGORY_EMOJIS: Record<string, string> = {
-  'Thời trang': '🧥',
-  'Điện tử': '🎧',
-  'Máy ảnh': '📷',
-  'Sách': '📖',
-  'Nhạc cụ': '🎸',
-  'Phụ kiện': '⌚',
-  'Gia dụng': '🍳'
-};
-
-// Requirement 5: Product-specific emojis
-// iPhone 📱, bàn phím ⌨️, tai nghe 🎧, máy ảnh 📷, đồng hồ ⌚, túi xách 👜, áo khoác 🧥, nồi chiên 🍳, sách 📖, guitar 🎸
-// Fallback to category emoji for user-created products
-export function getProductEmoji(title?: string, category?: string): string {
-  const t = (title || '').toLowerCase();
-  if (t.includes('iphone') || t.includes('điện thoại') || t.includes('smartphone')) return '📱';
-  if (t.includes('bàn phím') || t.includes('keyboard') || t.includes('keychron')) return '⌨️';
-  if (t.includes('tai nghe') || t.includes('headphone') || t.includes('earphone') || t.includes('sony wh')) return '🎧';
-  if (t.includes('máy ảnh') || t.includes('camera') || t.includes('canon') || t.includes('nikon') || t.includes('film')) return '📷';
-  if (t.includes('đồng hồ') || t.includes('watch') || t.includes('casio')) return '⌚';
-  if (t.includes('túi xách') || t.includes('túi da') || t.includes('balo') || t.includes('bag') || t.includes('ví')) return '👜';
-  if (t.includes('áo khoác') || t.includes('denim') || t.includes('jacket') || t.includes('áo') || t.includes('quần')) return '🧥';
-  if (t.includes('nồi chiên') || t.includes('nồi') || t.includes('chảo') || t.includes('philips')) return '🍳';
-  if (t.includes('sách') || t.includes('nhà giả kim') || t.includes('truyện') || t.includes('book')) return '📖';
-  if (t.includes('guitar') || t.includes('đàn') || t.includes('yamaha')) return '🎸';
-
-  if (category && CATEGORY_EMOJIS[category]) {
-    return CATEGORY_EMOJIS[category];
-  }
   return '📦';
 }
 
-// Vintage Product SVG Generator according to Requirement B1 & Sửa Lỗi 4:
-// - Product-specific emojis
-// - Dynamic owning shop name in subtitle ("{SHOP_NAME} · {VARIANT}")
-// - Gradient #08482D to #2E7D4F
-// - Faint #DAE7C7 circles
-// - Category uppercase in #DAE7C7
-// - Product title in white (#FFFFFF)
-// - Strictly 'Be Vietnam Pro', sans-serif font
-// - 3 distinct variants for product gallery
-export function createVintageProductSvg(title: string, category: string, variant: number = 0, shopName?: string): string {
-  const emoji = getProductEmoji(title, category);
-  const cleanTitle = title && title.length > 24 ? title.substring(0, 24) + '...' : (title || 'Sản phẩm');
-  const safeCategory = (category || 'ĐỒ CŨ').toUpperCase();
-  const safeShopName = (shopName || 'ĐỒ CŨ CÒN THƯƠNG').toUpperCase();
+export function createVintageProductSvg(
+  title: string,
+  category: string,
+  variant: number = 0,
+  shopName?: string
+): string {
+  const angleLabel = variant === 1 ? 'MẶT SAU' : variant === 2 ? 'CẬN CẢNH' : 'MẶT TRƯỚC';
+  const cleanTitle = title.replace(/["<>]/g, '');
+  const cleanCat = category.replace(/["<>]/g, '').toUpperCase();
+  const emoji = getProductEmoji(cleanTitle, cleanCat);
+  const brandSub = (shopName ? shopName.toUpperCase() : 'ĐỒ CŨ CÒN THƯƠNG') + ' · ' + angleLabel;
 
-  let gradId = `vg_${variant}_${Math.random().toString(36).substring(2, 6)}`;
-  let gradStart = '#08482D';
-  let gradEnd = '#2E7D4F';
-  let circles = '';
-  let variantTag = 'ẢNH CHÍNH';
-
-  if (variant === 1) {
-    gradStart = '#0A5335';
-    gradEnd = '#246D43';
-    circles = `
-      <circle cx="440" cy="180" r="170" fill="#DAE7C7" opacity="0.14"/>
-      <circle cx="160" cy="420" r="110" fill="#DAE7C7" opacity="0.08"/>
-    `;
-    variantTag = 'GÓC NGHIÊNG';
-  } else if (variant === 2) {
-    gradStart = '#063D26';
-    gradEnd = '#358A59';
-    circles = `
-      <circle cx="300" cy="210" r="180" fill="#DAE7C7" opacity="0.15"/>
-      <circle cx="480" cy="460" r="95" fill="#DAE7C7" opacity="0.10"/>
-    `;
-    variantTag = 'CHI TIẾT';
-  } else {
-    gradStart = '#08482D';
-    gradEnd = '#2E7D4F';
-    circles = `
-      <circle cx="160" cy="180" r="160" fill="#DAE7C7" opacity="0.13"/>
-      <circle cx="440" cy="380" r="120" fill="#DAE7C7" opacity="0.08"/>
-    `;
-    variantTag = 'MẶT TRƯỚC';
+  const bgPalette = ['#2F3E46', '#473B32', '#333D47', '#544636', '#2B303A', '#3E444B', '#3C493F', '#543D2B'];
+  let hash = 0;
+  for (let i = 0; i < cleanTitle.length; i++) {
+    hash = (hash << 5) - hash + cleanTitle.charCodeAt(i);
+    hash |= 0;
   }
+  const bg = bgPalette[Math.abs(hash + variant) % bgPalette.length];
 
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">
-    <defs>
-      <linearGradient id="${gradId}" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stop-color="${gradStart}"/>
-        <stop offset="100%" stop-color="${gradEnd}"/>
-      </linearGradient>
-    </defs>
-    <rect width="600" height="600" fill="url(#${gradId})"/>
-    ${circles}
-    <text x="300" y="240" font-size="96" text-anchor="middle" dominant-baseline="central">${emoji}</text>
-    <text x="300" y="340" font-family="'Be Vietnam Pro', sans-serif" font-size="20" font-weight="700" fill="#DAE7C7" text-anchor="middle" letter-spacing="3">${safeCategory}</text>
-    <text x="300" y="390" font-family="'Be Vietnam Pro', sans-serif" font-size="24" font-weight="700" fill="#FFFFFF" text-anchor="middle">${cleanTitle}</text>
-    <text x="300" y="430" font-family="'Be Vietnam Pro', sans-serif" font-size="13" font-weight="500" fill="#DAE7C7" opacity="0.8" text-anchor="middle">${safeShopName} · ${variantTag}</text>
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600" width="100%" height="100%">
+  <rect width="600" height="600" fill="${bg}"/>
+  <rect x="24" y="24" width="552" height="552" fill="none" stroke="#FAF7F2" stroke-opacity="0.25" stroke-width="2" rx="16"/>
+  <rect x="36" y="36" width="528" height="528" fill="none" stroke="#FAF7F2" stroke-opacity="0.1" stroke-width="1" rx="12"/>
+  <circle cx="300" cy="270" r="140" fill="#FAF7F2" fill-opacity="0.08"/>
+  <circle cx="300" cy="270" r="100" fill="#FAF7F2" fill-opacity="0.06"/>
+  <text x="300" y="315" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="110" text-anchor="middle">${emoji}</text>
+  <rect x="60" y="55" width="150" height="28" rx="6" fill="#08482D" fill-opacity="0.85"/>
+  <text x="135" y="74" font-family="'Space Mono', monospace, sans-serif" font-size="12" font-weight="bold" fill="#FAF7F2" text-anchor="middle" letter-spacing="1.5">${cleanCat}</text>
+  <rect x="390" y="55" width="150" height="28" rx="6" fill="#FAF7F2" fill-opacity="0.15"/>
+  <text x="465" y="74" font-family="'Space Mono', monospace, sans-serif" font-size="11" font-weight="bold" fill="#FAF7F2" text-anchor="middle" letter-spacing="1">${angleLabel}</text>
+  <text x="300" y="470" font-family="'Fraunces', Georgia, serif" font-size="24" font-weight="bold" fill="#FAF7F2" text-anchor="middle">${cleanTitle.length > 28 ? cleanTitle.slice(0, 26) + '...' : cleanTitle}</text>
+  <text x="300" y="505" font-family="'Space Mono', monospace, sans-serif" font-size="11" fill="#FAF7F2" fill-opacity="0.75" text-anchor="middle" letter-spacing="2">${brandSub}</text>
+  <line x1="180" y1="525" x2="420" y2="525" stroke="#FAF7F2" stroke-opacity="0.2" stroke-width="1"/>
+</svg>`;
+
+  return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+}
+
+export function createShopAvatarSvg(name: string, coverColor: string = '#08482D'): string {
+  const initial = (name.trim().charAt(0) || 'S').toUpperCase();
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="100%" height="100%">
+    <rect width="200" height="200" rx="40" fill="${coverColor}"/>
+    <text x="100" y="125" font-family="system-ui, sans-serif" font-size="76" font-weight="bold" fill="#FFFFFF" text-anchor="middle">${initial}</text>
   </svg>`;
-
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+  return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
 }
 
-export function isLegacyOrEmptyImage(src?: string | null): boolean {
-  if (!src || !src.trim()) return true;
-  if (
-    src.includes('Fraunces') ||
-    src.includes('543D2B') ||
-    src.includes('Space%20Mono') ||
-    src.includes('Plus%20Jakarta') ||
-    src.includes('Plus+Jakarta') ||
-    src.includes('%232F3E46') ||
-    src.includes('%23473B32') ||
-    src.includes('%23333D47') ||
-    src.includes('%23544636') ||
-    src.includes('%232B303A') ||
-    src.includes('%235E412F') ||
-    src.includes('%233E444B') ||
-    src.includes('%233C493F') ||
-    src.includes('%234A3B32')
-  ) {
-    return true;
-  }
-  try {
-    const decoded = decodeURIComponent(src);
-    if (
-      decoded.includes('Fraunces') ||
-      decoded.includes('#543D2B') ||
-      decoded.includes('Plus Jakarta Sans') ||
-      decoded.includes('Space Mono') ||
-      decoded.includes('#2F3E46') ||
-      decoded.includes('#473B32') ||
-      decoded.includes('#333D47') ||
-      decoded.includes('#544636') ||
-      decoded.includes('#2B303A') ||
-      decoded.includes('#5E412F') ||
-      decoded.includes('#3E444B') ||
-      decoded.includes('#3C493F') ||
-      decoded.includes('#4A3B32')
-    ) {
-      return true;
-    }
-  } catch {}
-  return false;
+export function isLegacyOrEmptyImage(src?: string): boolean {
+  if (!src) return true;
+  if (src.startsWith('data:image/svg+xml')) return false;
+  if (src.startsWith('data:image/')) return false;
+  if (src.startsWith('http://') || src.startsWith('https://')) return false;
+  return true;
 }
 
-// Backward compatible SVG placeholder generator
-export function createSvgPlaceholder(title: string, category: string, _bg?: string, _fg?: string, tag: string = 'ẢNH GỐC 1', shopName?: string): string {
-  const variant = tag.includes('2') || tag.includes('SAU') || tag.includes('NGHIÊNG') ? 1 : tag.includes('3') || tag.includes('CẬN') || tag.includes('TIẾT') ? 2 : 0;
+export function createSvgPlaceholder(
+  title: string,
+  category: string,
+  _bg?: string,
+  _fg?: string,
+  tag: string = 'MẶT TRƯỚC',
+  shopName?: string
+): string {
+  const variant = tag.includes('SAU') ? 1 : tag.includes('CẬN') ? 2 : 0;
   return createVintageProductSvg(title, category, variant, shopName);
 }
 
-// Normalized initial sample products
-export const INITIAL_PRODUCTS_SEED = [
-  {
-    name: 'Áo khoác denim cũ size L',
-    category: 'Thời trang',
-    price: 350000,
-    original_price: 1200000,
-    condition_pct: 95,
-    condition_detail: 'Không rách, phai màu nhẹ tự nhiên ở khuỷu tay, form áo đứng và dày dặn',
-    stock: 1,
-    bg: '#2F3E46',
-    flaws: [
-      {
-        description: 'Phai màu nhẹ tự nhiên ở phần khuỷu tay phải do sử dụng, vải denim còn dày 100%',
-        image_url: ''
-      }
-    ]
-  },
-  {
-    name: 'Máy ảnh film Canon AE-1',
-    category: 'Máy ảnh',
-    price: 3200000,
-    original_price: 6000000,
-    condition_pct: 85,
-    condition_detail: 'Cơ tốc chạy tốt, đo sáng nhạy, trầy nhẹ thân máy theo năm tháng',
-    stock: 1,
-    bg: '#473B32',
-    flaws: [
-      {
-        description: 'Vết xước kim loại nhẹ ở đáy máy dài khoảng 1.2cm do cọ xát với bao da',
-        image_url: ''
-      },
-      {
-        description: 'Vòng cao su ống kính hơi mòn gai viền nhẹ nhưng xoay zoom vẫn mượt mà',
-        image_url: ''
-      }
-    ]
-  },
-  {
-    name: 'iPhone 11 64GB',
-    category: 'Điện tử',
-    price: 4500000,
-    original_price: 8000000,
-    condition_pct: 90,
-    condition_detail: 'Pin 84%, máy zin chưa qua sửa chữa, có vài vết xước dăm viền nhẹ',
-    stock: 2,
-    bg: '#333D47',
-    flaws: [
-      {
-        description: 'Xước dăm nhỏ ở viền nhôm góc trên bên trái (~0.8cm), màn hình dán cường lực đẹp',
-        image_url: ''
-      }
-    ]
-  },
-  {
-    name: 'Sách "Nhà giả kim" bản cũ',
-    category: 'Sách',
-    price: 45000,
-    original_price: 79000,
-    condition_pct: 80,
-    condition_detail: 'Giấy ngả ố vàng hoài niệm, chữ in rõ nét, gáy sách chắc chắn không mất trang',
-    stock: 5,
-    bg: '#544636',
-    flaws: [
-      {
-        description: 'Góc mép bìa hơi gấp nếp nhẹ và giấy ngả ố vàng tự nhiên theo năm tháng',
-        image_url: ''
-      }
-    ]
-  },
-  {
-    name: 'Tai nghe Sony WH-1000XM3',
-    category: 'Điện tử',
-    price: 2100000,
-    original_price: 5500000,
-    condition_pct: 88,
-    condition_detail: 'Chống ồn đỉnh cao, pin còn hơn 25h, đệm tai da cừu đã thay mới tinh',
-    stock: 1,
-    bg: '#2B303A',
-    flaws: [
-      {
-        description: 'Vết xước dăm mờ ở mặt cảm ứng tai phải, cảm ứng vuốt chạm vẫn phản hồi 100%',
-        image_url: ''
-      }
-    ]
-  },
-  {
-    name: 'Đàn guitar acoustic Yamaha F310',
-    category: 'Nhạc cụ',
-    price: 1500000,
-    original_price: 2900000,
-    condition_pct: 85,
-    condition_detail: 'Action êm tay, âm vang chuẩn, gỗ đã qua tôi luyện lâu năm, kèm bao da dày',
-    stock: 1,
-    bg: '#5E412F',
-    flaws: [
-      {
-        description: 'Vết cấn dăm nhỏ 0.5cm ở mặt lưng thùng đàn, không nứt vỡ, âm thanh vẫn vang ấm',
-        image_url: ''
-      }
-    ]
-  },
-  {
-    name: 'Bàn phím cơ Keychron K2',
-    category: 'Điện tử',
-    price: 1100000,
-    original_price: 2000000,
-    condition_pct: 92,
-    condition_detail: 'Gateron Brown switch gõ đầm tay, bluetooth mượt mà, đủ keycap và cáp Type-C',
-    stock: 2,
-    bg: '#3E444B',
-    flaws: [
-      {
-        description: 'Keycap phím Space bóng nhẹ do ngón tay gõ nhiều, switch nảy êm',
-        image_url: ''
-      }
-    ]
-  },
-  {
-    name: 'Đồng hồ Casio A168 vintage',
-    category: 'Phụ kiện',
-    price: 450000,
-    original_price: 900000,
-    condition_pct: 90,
-    condition_detail: 'Đã thay pin Maxell chính hãng, đèn Illuminator sáng rực, dây kim loại còn sáng bóng',
-    stock: 3,
-    bg: '#3C493F',
-    flaws: [
-      {
-        description: 'Xước dăm sợi tóc ở mặt kính nhựa gần góc 4 giờ, nhìn nghiêng mới thấy rõ',
-        image_url: ''
-      }
-    ]
-  },
-  {
-    name: 'Nồi chiên không dầu Philips 4.1L',
-    category: 'Gia dụng',
-    price: 900000,
-    original_price: 2300000,
-    condition_pct: 85,
-    condition_detail: 'Lòng nồi men chống dính còn rất tốt, mâm nhiệt sáng, hoạt động êm ái',
-    stock: 1,
-    bg: '#4A3B32',
-    flaws: [
-      {
-        description: 'Vỏ nhựa bên hông có vết cọ xát mờ khi lau chùi, lòng nồi và mâm nhiệt sạch sẽ',
-        image_url: ''
-      }
-    ]
-  },
-  {
-    name: 'Túi xách da thật vintage',
-    category: 'Thời trang',
-    price: 600000,
-    original_price: 1800000,
-    condition_pct: 80,
-    condition_detail: 'Chất da bò thật patina bóng đẹp, khóa đồng vintage nguyên bản, có dấu sờn quai nhẹ',
-    stock: 1,
-    bg: '#543D2B',
-    flaws: [
-      {
-        description: 'Quai đeo có vết sờn nhẹ ở điểm tì vai, đường chỉ may đôi vẫn nguyên vẹn',
-        image_url: ''
-      }
-    ]
+export function slugify(text: string): string {
+  return text
+    .toString()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^\w-]+/g, '')
+    .replace(/--+/g, '-');
+}
+
+// =========================================================================
+// IMAGE & VIDEO UTILITIES (IndexedDB + Canvas Compression)
+// =========================================================================
+export function assertDocSize(data: any): void {
+  const json = JSON.stringify(data);
+  const size = new Blob([json]).size;
+  if (size > 900 * 1024) {
+    throw new Error('Ảnh quá lớn, vui lòng bớt ảnh');
   }
-];
-
-export interface StoredUser extends User {
-  password_hash: string;
-  failed_login_attempts?: number;
-  lockout_until?: string | null;
 }
 
-export interface DCCTDatabase {
-  version: number;
-  users: StoredUser[];
-  addresses: Address[];
-  shops: Shop[];
-  products: Product[];
-  coupons: Coupon[];
-  cart_items: { id: number; user_id: number; product_id: number; quantity: number; created_at: string }[];
-  orders: Order[];
-  shipment_events: ShipmentEvent[];
-  offers: Offer[];
-  chat_conversations: ChatConversation[];
-  chat_messages: ChatMessage[];
-  return_requests: ReturnRequest[];
-  reviews: Review[];
-  notifications: NotificationItem[];
-  wishlist: { user_id: number; product_id: number; created_at: string }[];
-  saved_vouchers?: { user_id: number; coupon_code: string; shop_id: number }[];
-  presentation_mode: boolean;
+export async function compressImage(
+  dataUrlOrFile: string | File | Blob,
+  maxDimension: number = 1024,
+  maxBytes: number = 150 * 1024
+): Promise<string> {
+  let dataUrl: string;
+  if (typeof dataUrlOrFile === 'string') {
+    dataUrl = dataUrlOrFile;
+  } else {
+    dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(dataUrlOrFile);
+    });
+  }
+
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      let width = img.width;
+      let height = img.height;
+      if (width > maxDimension || height > maxDimension) {
+        if (width > height) {
+          height = Math.round((height * maxDimension) / width);
+          width = maxDimension;
+        } else {
+          width = Math.round((width * maxDimension) / height);
+          height = maxDimension;
+        }
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return resolve(dataUrl);
+      ctx.drawImage(img, 0, 0, width, height);
+
+      let quality = 0.85;
+      let result = canvas.toDataURL('image/jpeg', quality);
+
+      while (result.length * 0.75 > maxBytes && quality > 0.3) {
+        quality -= 0.1;
+        result = canvas.toDataURL('image/jpeg', quality);
+      }
+      resolve(result);
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
 }
 
-// -------------------------------------------------------------------------
-// INDEXEDDB FOR MEDIA STORAGE (Photos & Videos)
-// -------------------------------------------------------------------------
-const IDB_NAME = 'dcct_media_db';
-const IDB_STORE = 'media_files';
-
-function openIndexedDb(): Promise<IDBDatabase> {
+// Local IndexedDB for Video review
+const IDB_VIDEO_NAME = 'dcct_video_store';
+function openVideoDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     if (typeof window === 'undefined' || !window.indexedDB) {
       return reject(new Error('IndexedDB not supported'));
     }
-    const req = window.indexedDB.open(IDB_NAME, 1);
+    const req = window.indexedDB.open(IDB_VIDEO_NAME, 1);
     req.onupgradeneeded = () => {
-      const db = req.result;
-      if (!db.objectStoreNames.contains(IDB_STORE)) {
-        db.createObjectStore(IDB_STORE, { keyPath: 'id' });
-      }
+      req.result.createObjectStore('videos', { keyPath: 'id' });
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
 }
 
-export async function saveMediaToIndexedDb(dataUrl: string, type: 'image' | 'video' = 'image'): Promise<string> {
-  const id = `media_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+export async function saveLocalVideo(blob: Blob): Promise<string> {
+  const id = `video_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   try {
-    const idb = await openIndexedDb();
+    const idb = await openVideoDb();
     await new Promise<void>((resolve, reject) => {
-      const tx = idb.transaction(IDB_STORE, 'readwrite');
-      const store = tx.objectStore(IDB_STORE);
-      store.put({ id, type, dataUrl, created_at: new Date().toISOString() });
+      const tx = idb.transaction('videos', 'readwrite');
+      tx.objectStore('videos').put({ id, blob, createdAt: new Date().toISOString() });
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
-    return dataUrl; // return dataUrl directly for immediate image/video rendering
+    return id;
   } catch (err) {
-    console.warn('Could not save to IndexedDB, fallback to direct dataUrl:', err);
-    return dataUrl;
+    console.warn('Could not store video in IndexedDB:', err);
+    return id;
   }
 }
 
-// -------------------------------------------------------------------------
-// NORMALIZATION & SHA-256 HASHING (LỖI 2)
-// -------------------------------------------------------------------------
-export function normalizeUsername(input: string, role: 'buyer' | 'seller'): string {
-  if (role === 'buyer') {
-    // Phone normalization: remove all spaces, dots, dashes, parentheses; +84 -> 0
-    let clean = (input || '').replace(/[\s\.\-\(\)]/g, '');
-    if (clean.startsWith('+84')) clean = '0' + clean.slice(3);
-    else if (clean.startsWith('84') && clean.length === 11) clean = '0' + clean.slice(2);
-    return clean;
-  }
-  // Seller normalization: trim and lowercase
-  return (input || '').trim().toLowerCase();
-}
-
-export async function hashPassword(username: string, password: string): Promise<string> {
-  const normUser = username.trim().toLowerCase();
-  const rawString = `dcct:${normUser}:${password}`;
-  const msgUint8 = new TextEncoder().encode(rawString);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('').toLowerCase();
-  return hex;
-}
-
-// -------------------------------------------------------------------------
-// DATABASE SEED GENERATOR
-// -------------------------------------------------------------------------
-function createInitialDatabase(): DCCTDatabase {
-  const ADMIN_HASH = '6191a72694365846e663b40df7cb85bb190ec7097e0ce49d8bb2aacbd3c37778';
-  const BUYER_HASH = '9122c7069e60a1a744d681c1e5f60786a216e9105a2e2060d5a8ebe3d974fee7';
-  const GOC_SACH_NHAC_HASH = '75aa9cc141b811875290e16b6261685547aaf3686a4f75e8e0e37ddc03015fc8';
-  const RETRO_TECH_HASH = '89b8e95dd91fd76ae4168e8ccd90a445a265061fa2d7d4926966212ec9427e40';
-
-  const users: StoredUser[] = [
-    {
-      id: 1,
-      role: 'seller',
-      username: 'admin',
-      phone: '0901234567',
-      password_hash: ADMIN_HASH,
-      full_name: 'Đồ Cũ Còn Thương',
-      shop_name: 'Đồ Cũ Còn Thương',
-      is_owner: true,
-      created_at: '2026-07-15T08:00:00.000Z'
-    },
-    {
-      id: 2,
-      role: 'buyer',
-      username: '0987654321',
-      phone: '0987654321',
-      password_hash: BUYER_HASH,
-      full_name: 'Nguyễn Văn A',
-      is_owner: true,
-      created_at: '2026-08-01T08:00:00.000Z'
-    },
-    {
-      id: 3,
-      role: 'seller',
-      username: 'goc_sach_nhac',
-      phone: '0902345678',
-      password_hash: GOC_SACH_NHAC_HASH,
-      full_name: 'Góc Sách & Nhạc',
-      shop_name: 'Góc Sách & Nhạc',
-      is_owner: true,
-      created_at: '2026-08-10T09:30:00.000Z'
-    },
-    {
-      id: 4,
-      role: 'seller',
-      username: 'retro_tech',
-      phone: '0903456789',
-      password_hash: RETRO_TECH_HASH,
-      full_name: 'Retro Tech',
-      shop_name: 'Retro Tech',
-      is_owner: true,
-      created_at: '2026-08-01T10:00:00.000Z'
-    }
-  ];
-
-  const shops: Shop[] = [
-    {
-      id: 1,
-      owner_user_id: 1,
-      name: 'Đồ Cũ Còn Thương',
-      slug: 'do-cu-con-thuong',
-      cover_color: '#08482D',
-      avatar: createShopAvatarSvg('Đồ Cũ Còn Thương', '#08482D'),
-      description: 'Tiệm đồ second-hand có câu chuyện: thời trang, phụ kiện, đồ gia dụng đã kiểm định.',
-      pickup_address: '128 Đường Hai Bà Trưng, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh',
-      phone: '0901234567',
-      created_at: '2026-07-15T08:00:00.000Z',
-      follower_ids: [2],
-      rating_avg: 0,
-      review_count: 0,
-      response_rate: 99,
-      joined_text: '3 tháng trước'
-    },
-    {
-      id: 2,
-      owner_user_id: 3,
-      name: 'Góc Sách & Nhạc',
-      slug: 'goc-sach-nhac',
-      cover_color: '#7A4E2D',
-      avatar: createShopAvatarSvg('Góc Sách & Nhạc', '#7A4E2D'),
-      description: 'Sách cũ còn thơm mùi giấy và nhạc cụ đã qua sử dụng, chỉnh âm kỹ trước khi giao.',
-      pickup_address: '45 Đường Đinh Tiên Hoàng, Phường Đa Kao, Quận 1, TP. Hồ Chí Minh',
-      phone: '0902345678',
-      created_at: '2026-08-10T09:30:00.000Z',
-      follower_ids: [],
-      rating_avg: 0,
-      review_count: 0,
-      response_rate: 96,
-      joined_text: '2 tháng trước'
-    },
-    {
-      id: 3,
-      owner_user_id: 4,
-      name: 'Retro Tech',
-      slug: 'retro-tech',
-      cover_color: '#2F4B6B',
-      avatar: createShopAvatarSvg('Retro Tech', '#2F4B6B'),
-      description: 'Đồ công nghệ cũ đã test kỹ: máy ảnh film, điện thoại, tai nghe, bàn phím cơ.',
-      pickup_address: '89 Đường Cách Mạng Tháng 8, Phường 7, Quận 3, TP. Hồ Chí Minh',
-      phone: '0903456789',
-      created_at: '2026-08-01T10:00:00.000Z',
-      follower_ids: [2],
-      rating_avg: 0,
-      review_count: 0,
-      response_rate: 98,
-      joined_text: '2 tháng trước'
-    }
-  ];
-
-  const addresses: Address[] = [
-    {
-      id: 1,
-      user_id: 2,
-      recipient_name: 'Nguyễn Văn A',
-      phone: '0987654321',
-      address_line: '128 Đường Hai Bà Trưng, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh',
-      is_default: true
-    }
-  ];
-
-  const PRODUCT_SHOP_MAPPING: Record<string, { shop_id: number; shop_name: string; shop_slug: string; seller_id: number }> = {
-    'Áo khoác denim cũ size L': { shop_id: 1, shop_name: 'Đồ Cũ Còn Thương', shop_slug: 'do-cu-con-thuong', seller_id: 1 },
-    'Túi xách da thật vintage': { shop_id: 1, shop_name: 'Đồ Cũ Còn Thương', shop_slug: 'do-cu-con-thuong', seller_id: 1 },
-    'Đồng hồ Casio A168 vintage': { shop_id: 1, shop_name: 'Đồ Cũ Còn Thương', shop_slug: 'do-cu-con-thuong', seller_id: 1 },
-    'Nồi chiên không dầu Philips 4.1L': { shop_id: 1, shop_name: 'Đồ Cũ Còn Thương', shop_slug: 'do-cu-con-thuong', seller_id: 1 },
-    'Sách "Nhà giả kim" bản cũ': { shop_id: 2, shop_name: 'Góc Sách & Nhạc', shop_slug: 'goc-sach-nhac', seller_id: 3 },
-    'Đàn guitar acoustic Yamaha F310': { shop_id: 2, shop_name: 'Góc Sách & Nhạc', shop_slug: 'goc-sach-nhac', seller_id: 3 },
-    'Máy ảnh film Canon AE-1': { shop_id: 3, shop_name: 'Retro Tech', shop_slug: 'retro-tech', seller_id: 4 },
-    'iPhone 11 64GB': { shop_id: 3, shop_name: 'Retro Tech', shop_slug: 'retro-tech', seller_id: 4 },
-    'Tai nghe Sony WH-1000XM3': { shop_id: 3, shop_name: 'Retro Tech', shop_slug: 'retro-tech', seller_id: 4 },
-    'Bàn phím cơ Keychron K2': { shop_id: 3, shop_name: 'Retro Tech', shop_slug: 'retro-tech', seller_id: 4 }
-  };
-
-  const products: Product[] = INITIAL_PRODUCTS_SEED.map((item, idx) => {
-    const id = idx + 1;
-    const mapping = PRODUCT_SHOP_MAPPING[item.name] || {
-      shop_id: 1,
-      shop_name: 'Đồ Cũ Còn Thương',
-      shop_slug: 'do-cu-con-thuong',
-      seller_id: 1
-    };
-
-    const img1 = createSvgPlaceholder(item.name, item.category, item.bg, '#FAF7F2', 'MẶT TRƯỚC', mapping.shop_name);
-    const img2 = createSvgPlaceholder(item.name, item.category, item.bg, '#FAF7F2', 'MẶT SAU', mapping.shop_name);
-    const img3 = createSvgPlaceholder(item.name, item.category, item.bg, '#FAF7F2', 'CẬN CẢNH', mapping.shop_name);
-    const img4 = createSvgPlaceholder(item.name, item.category, item.bg, '#FAF7F2', 'CHI TIẾT', mapping.shop_name);
-
-    const flawsWithImg = item.flaws.map((fl, fIdx) => ({
-      id: fIdx + 1,
-      description: fl.description,
-      image_url: createSvgPlaceholder(item.name, 'KHUYẾT ĐIỂM', '#8B261E', '#FAF7F2', `LỖI #${fIdx + 1}`, mapping.shop_name)
-    }));
-
-    return {
-      id,
-      shop_id: mapping.shop_id,
-      seller_id: mapping.seller_id,
-      shop_name: mapping.shop_name,
-      shop_slug: mapping.shop_slug,
-      name: item.name,
-      category: item.category,
-      price: item.price,
-      original_price: item.original_price,
-      condition_pct: item.condition_pct,
-      condition_detail: item.condition_detail,
-      stock: item.stock,
-      image_url: img1,
-      images: [img1, img2, img3, img4],
-      flaws: flawsWithImg,
-      inspection_date: '2026-10-20',
-      inspector_name: 'Trần Minh Tuấn (KTV Chuyên Sâu)',
-      inspection_checklist: [
-        '✓ Hoạt động hoàn hảo mọi tính năng',
-        '✓ Đã vệ sinh & khử khuẩn chuyên sâu',
-        '✓ Đúng nguồn gốc và đúng như ảnh chụp thực tế'
-      ],
-      created_at: new Date(Date.now() - (10 - idx) * 86400000).toISOString()
-    };
-  });
-
-  const coupons: Coupon[] = [
-    {
-      id: 1,
-      shop_id: 1,
-      seller_id: 1,
-      shop_name: 'Đồ Cũ Còn Thương',
-      code: 'DOCU10',
-      type: 'percent',
-      value: 10,
-      max_discount: 100000,
-      min_order_amount: 300000,
-      is_active: true,
-      usage_count: 0,
-      description: 'Giảm 10% tối đa 100.000đ cho đơn từ 300.000đ'
-    },
-    {
-      id: 2,
-      shop_id: 1,
-      seller_id: 1,
-      shop_name: 'Đồ Cũ Còn Thương',
-      code: 'FREESHIP',
-      type: 'shipping',
-      value: 100,
-      max_discount: 30000,
-      min_order_amount: 0,
-      is_active: true,
-      usage_count: 0,
-      description: 'Miễn phí vận chuyển tối đa 30.000đ'
-    },
-    {
-      id: 3,
-      shop_id: 2,
-      seller_id: 3,
-      shop_name: 'Góc Sách & Nhạc',
-      code: 'SACHHAY',
-      type: 'fixed',
-      value: 15000,
-      max_discount: 15000,
-      min_order_amount: 100000,
-      is_active: true,
-      usage_count: 0,
-      description: 'Giảm 15.000đ cho đơn từ 100.000đ'
-    },
-    {
-      id: 4,
-      shop_id: 3,
-      seller_id: 4,
-      shop_name: 'Retro Tech',
-      code: 'TECH50',
-      type: 'fixed',
-      value: 50000,
-      max_discount: 50000,
-      min_order_amount: 1000000,
-      is_active: true,
-      usage_count: 0,
-      description: 'Giảm 50.000đ cho đơn từ 1.000.000đ'
-    }
-  ];
-
-  // 1 Initial completed order for user 2 to test review & return immediately
-  const sampleOrder: Order = {
-    id: 1,
-    shop_id: 3,
-    seller_id: 4,
-    shop_name: 'Retro Tech',
-    shop_slug: 'retro-tech',
-    code: 'DCCT-20261024-9988',
-    buyer_id: 2,
-    user_id: 2,
-    status: 'completed',
-    payment_method: 'card',
-    payment_status: 'paid',
-    card_type: 'Visa **** 1111',
-    buyer_name: 'Nguyễn Văn A',
-    recipient_name: 'Nguyễn Văn A',
-    phone: '0987654321',
-    address: '128 Đường Hai Bà Trưng, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh',
-    note: 'Kiểm tra kỹ trước khi giao',
-    carrier: 'Giao Hàng Nhanh',
-    tracking_code: 'GHN-88992211VN',
-    items_count: 1,
-    subtotal: 4500000,
-    shipping_fee: 0,
-    discount_amount: 50000,
-    total: 4450000,
-    coupon_code: 'TECH50',
-    created_at: new Date(Date.now() - 3 * 86400000).toISOString(),
-    completed_at: new Date(Date.now() - 1 * 86400000).toISOString(),
-    updated_at: new Date(Date.now() - 1 * 86400000).toISOString(),
-    items: [
-      {
-        id: 1,
-        order_id: 1,
-        product_id: 8, // iPhone 11
-        product_name: 'iPhone 11 64GB',
-        product_image: products[7]?.image_url || '',
-        image_url: products[7]?.image_url || '',
-        price: 4500000,
-        original_price: 8000000,
-        quantity: 1,
-        condition_pct: 90
-      }
-    ],
-    shipment_events: [
-      {
-        id: 1,
-        order_id: 1,
-        status: 'Đã tạo đơn hàng',
-        location: 'Retro Tech Hub',
-        note: 'Đơn hàng đã được thanh toán và chuyển đến người bán',
-        created_at: new Date(Date.now() - 3 * 86400000).toISOString()
-      },
-      {
-        id: 2,
-        order_id: 1,
-        status: 'Đã bàn giao cho đơn vị vận chuyển',
-        location: 'Kho Tân Bình, TP.HCM',
-        note: 'Bưu tá đã nhận kiện hàng nguyên seal',
-        created_at: new Date(Date.now() - 2 * 86400000).toISOString()
-      },
-      {
-        id: 3,
-        order_id: 1,
-        status: 'Giao hàng thành công',
-        location: 'Quận 1, TP.HCM',
-        note: 'Người nhận đã ký nhận kiện hàng nguyên vẹn',
-        created_at: new Date(Date.now() - 1 * 86400000).toISOString()
-      }
-    ]
-  };
-
-  const notifications: NotificationItem[] = [
-    {
-      id: 1,
-      user_id: 2,
-      role: 'buyer',
-      title: 'Đơn hàng hoàn tất',
-      message: 'Đơn hàng #DCCT-20261024-9988 của Retro Tech đã giao thành công. Hãy đánh giá món đồ nhé!',
-      order_id: 1,
-      is_read: false,
-      created_at: new Date(Date.now() - 86400000).toISOString()
-    }
-  ];
-
-  return {
-    version: DB_VERSION,
-    users,
-    addresses,
-    shops,
-    products,
-    coupons,
-    cart_items: [],
-    orders: [sampleOrder],
-    shipment_events: sampleOrder.shipment_events || [],
-    offers: [],
-    chat_conversations: [],
-    chat_messages: [],
-    return_requests: [],
-    reviews: [],
-    notifications,
-    wishlist: [],
-    saved_vouchers: [],
-    presentation_mode: false
-  };
-}
-
-// -------------------------------------------------------------------------
-// DATABASE INSTANCE & PERSISTENCE
-// -------------------------------------------------------------------------
-const dbListeners: Set<() => void> = new Set();
-
-export function subscribeDb(listener: () => void): () => void {
-  dbListeners.add(listener);
-  return () => {
-    dbListeners.delete(listener);
-  };
-}
-
-function notifyDbSubscribers() {
-  dbListeners.forEach((l) => {
-    try {
-      l();
-    } catch (err) {
-      console.error('Error in DB listener:', err);
-    }
-  });
-}
-
-// Setup cross-tab sync via window 'storage' event
-if (typeof window !== 'undefined') {
-  window.addEventListener('storage', (e) => {
-    if (e.key === DB_KEY) {
-      notifyDbSubscribers();
-    }
-  });
-}
-
-export function checkExpiredOffers(database: DCCTDatabase): boolean {
-  if (!database || !Array.isArray(database.offers)) return false;
-  let modified = false;
-  const now = Date.now();
-  for (const offer of database.offers) {
-    if (offer.status === 'pending') {
-      const expTime = offer.expires_at
-        ? new Date(offer.expires_at).getTime()
-        : new Date(offer.created_at).getTime() + 24 * 3600 * 1000;
-      if (now >= expTime) {
-        offer.status = 'expired';
-        modified = true;
-        const buyerId = offer.buyer_id || offer.user_id;
-        if (buyerId && Array.isArray(database.notifications)) {
-          const rawPrice = offer.offered_price || (offer as any).price || 0;
-          const formattedPrice = rawPrice.toLocaleString('vi-VN') + 'đ';
-          const notifMsg = `Lời trả giá ${formattedPrice} cho món "${offer.product_name}" đã hết hạn 24 giờ. Bạn có thể trả giá lại.`;
-          const alreadyNotified = database.notifications.some(
-            (n) => n.user_id === buyerId && n.title === 'Lời trả giá hết hạn' && n.message === notifMsg
-          );
-          if (!alreadyNotified) {
-            database.notifications.unshift({
-              id: (database.notifications.reduce((max, n) => Math.max(max, n.id), 0) || 0) + 1,
-              user_id: buyerId,
-              role: 'buyer',
-              title: 'Lời trả giá hết hạn',
-              message: notifMsg,
-              is_read: false,
-              created_at: new Date().toISOString()
-            });
-          }
-        }
-      }
-    }
-  }
-  return modified;
-}
-
-export function getDb(): DCCTDatabase {
-  if (typeof window === 'undefined') {
-    return createInitialDatabase();
-  }
-
-  const raw = localStorage.getItem(DB_KEY);
-  if (!raw) {
-    const initial = createInitialDatabase();
-    localStorage.setItem(DB_KEY, JSON.stringify(initial));
-    return initial;
-  }
-
+export async function getLocalVideo(id: string): Promise<Blob | null> {
   try {
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object' || typeof parsed.version !== 'number' || !Array.isArray(parsed.shops) || parsed.shops.length === 0) {
-      const initial = createInitialDatabase();
-      localStorage.setItem(DB_KEY, JSON.stringify(initial));
-      return initial;
-    }
-
-    let modified = false;
-
-    // Version 5 migration: Convert old "Đang hỏi về: ..." to type 'context', upgrade legacy/dark SVG images
-    if (parsed.version < DB_VERSION) {
-      parsed.version = DB_VERSION;
-      if (Array.isArray(parsed.chat_messages)) {
-        for (const m of parsed.chat_messages) {
-          if (m.context_card || (m.content && m.content.startsWith('Đang hỏi về:'))) {
-            m.type = 'context';
-            m.content = '';
-            m.is_read = true;
-          } else if (!m.type) {
-            m.type = 'text';
-          }
-        }
-      }
-      if (Array.isArray(parsed.chat_conversations) && Array.isArray(parsed.chat_messages)) {
-        const convIdsWithRealMessages = new Set(
-          parsed.chat_messages.filter((m: any) => m.type === 'text' && m.content && m.content.trim()).map((m: any) => m.conversation_id)
-        );
-        parsed.chat_conversations = parsed.chat_conversations.filter((c: any) => convIdsWithRealMessages.has(c.id));
-      }
-      if (Array.isArray(parsed.products)) {
-        for (const p of parsed.products) {
-          const shopObj = parsed.shops?.find((s: Shop) => s.id === p.shop_id);
-          const shopName = shopObj?.name || p.shop_name || 'ĐỒ CŨ CÒN THƯƠNG';
-          p.image_url = createVintageProductSvg(p.name, p.category, 0, shopName);
-          p.images = [
-            createVintageProductSvg(p.name, p.category, 0, shopName),
-            createVintageProductSvg(p.name, p.category, 1, shopName),
-            createVintageProductSvg(p.name, p.category, 2, shopName)
-          ];
-          if (Array.isArray(p.flaws)) {
-            p.flaws.forEach((fl: any, fIdx: number) => {
-              fl.image_url = createVintageProductSvg(p.name, 'LỖI SẢN PHẨM', fIdx % 3, shopName);
-            });
-          }
-        }
-      }
-
-      // Reset fake ratings on shops with 0 real reviews
-      if (Array.isArray(parsed.shops) && Array.isArray(parsed.reviews)) {
-        for (const s of parsed.shops) {
-          const realRevs = parsed.reviews.filter((r: Review) => r.shop_id === s.id);
-          if (realRevs.length === 0) {
-            s.rating_avg = 0;
-            s.review_count = 0;
-          }
-        }
-      }
-      modified = true;
-    }
-
-    const arrayKeys: (keyof DCCTDatabase)[] = [
-      'users', 'addresses', 'shops', 'products', 'coupons', 'cart_items',
-      'orders', 'shipment_events', 'offers', 'chat_conversations',
-      'chat_messages', 'return_requests', 'reviews', 'notifications', 'wishlist'
-    ];
-    for (const key of arrayKeys) {
-      if (!Array.isArray(parsed[key])) {
-        (parsed as any)[key] = [];
-        modified = true;
-      }
-    }
-
-    // Auto-expire offers pending > 24 hours and notify buyer
-    if (checkExpiredOffers(parsed)) {
-      modified = true;
-    }
-
-    if (modified) {
-      localStorage.setItem(DB_KEY, JSON.stringify(parsed));
-    }
-    return parsed as DCCTDatabase;
-  } catch {
-    const initial = createInitialDatabase();
-    localStorage.setItem(DB_KEY, JSON.stringify(initial));
-    return initial;
-  }
-}
-
-export function saveDb(data: DCCTDatabase): void {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem(DB_KEY, JSON.stringify(data));
-  notifyDbSubscribers();
-}
-
-// -------------------------------------------------------------------------
-// SESSION MANAGEMENT (PER-TAB via sessionStorage)
-// -------------------------------------------------------------------------
-export function getCurrentSession(): { user: User; token: string } | null {
-  if (typeof window === 'undefined') return null;
-  const raw = sessionStorage.getItem(SESSION_KEY);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw);
+    const idb = await openVideoDb();
+    return new Promise((resolve) => {
+      const tx = idb.transaction('videos', 'readonly');
+      const req = tx.objectStore('videos').get(id);
+      req.onsuccess = () => resolve(req.result ? req.result.blob : null);
+      req.onerror = () => resolve(null);
+    });
   } catch {
     return null;
   }
 }
 
-export function setCurrentSession(user: User): string {
-  if (typeof window === 'undefined') return '';
-  const token = `token_${user.role}_${user.id}_${Date.now()}`;
-  const session = { user, token };
-  sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
-  return token;
+// =========================================================================
+// CURRENT IN-MEMORY SESSION & SUBSCRIBERS
+// =========================================================================
+let cachedCurrentUser: User | null = null;
+const stateSubscribers = new Set<() => void>();
+const activeListeners: Unsubscribe[] = [];
+
+export function clearActiveListeners(): void {
+  activeListeners.forEach((unsub) => {
+    try {
+      unsub();
+    } catch {}
+  });
+  activeListeners.length = 0;
+}
+
+export function registerActiveListener(unsub: Unsubscribe): void {
+  activeListeners.push(unsub);
+}
+
+export function subscribeDb(callback: () => void): () => void {
+  stateSubscribers.add(callback);
+  return () => {
+    stateSubscribers.delete(callback);
+  };
+}
+
+function notifySubscribers(): void {
+  stateSubscribers.forEach((cb) => {
+    try {
+      cb();
+    } catch {
+      // quiet catch
+    }
+  });
+}
+
+export function getCurrentUser(): User | null {
+  return cachedCurrentUser;
+}
+
+export function getCurrentSession(): { token: string; user: User } | null {
+  if (!cachedCurrentUser) return null;
+  return {
+    token: cachedCurrentUser.uid || String(cachedCurrentUser.id),
+    user: cachedCurrentUser
+  };
+}
+
+export function setCurrentSession(user: User | null): void {
+  cachedCurrentUser = user;
+  notifySubscribers();
 }
 
 export function clearCurrentSession(): void {
-  if (typeof window === 'undefined') return;
-  sessionStorage.removeItem(SESSION_KEY);
+  clearActiveListeners();
+  cachedCurrentUser = null;
+  setActiveAccountKey(null);
+  notifySubscribers();
 }
 
-// -------------------------------------------------------------------------
-// HIGH LEVEL DOMAIN API METHODS (ALL ASYNC WITH DELAY)
-// -------------------------------------------------------------------------
+// Normalizer from Firestore user doc to User interface
+function normalizeUserDoc(docData: DocumentData, uid: string): User {
+  return {
+    id: uid as any,
+    uid,
+    role: docData.role || 'buyer',
+    username: docData.username || '',
+    phone: docData.phone || '',
+    full_name: docData.fullName || docData.full_name || '',
+    shop_id: docData.shopId || null,
+    shop_name: docData.shopName || undefined,
+    is_owner: false,
+    created_at: docData.createdAt?.toDate ? docData.createdAt.toDate().toISOString() : new Date().toISOString()
+  };
+}
 
-export const db = {
-  // --- AUTH ---
-  async login(credentials: { username: string; password: string; role: 'buyer' | 'seller' }): Promise<{ token: string; user: User }> {
-    await delay();
-    const { username, password, role } = credentials;
-    if (!username || !password || !role) {
-      throw new Error('Vui lòng cung cấp đầy đủ thông tin đăng nhập');
+// Normalizer from Firestore shop doc to Shop interface
+function normalizeShopDoc(docData: DocumentData, slug: string): Shop {
+  return {
+    id: slug as any,
+    owner_user_id: docData.ownerUid as any,
+    name: docData.name,
+    slug: docData.slug || slug,
+    description: docData.description || '',
+    avatar: docData.avatar || createShopAvatarSvg(docData.name, docData.coverColor),
+    cover_color: docData.coverColor || '#08482D',
+    cover_image: docData.coverImage || '',
+    pickup_address: docData.pickupAddress || '',
+    phone: docData.phone || '',
+    follower_ids: (docData.followerUids || []).map((u: string) => u as any),
+    follower_count: docData.followerCount || (docData.followerUids ? docData.followerUids.length : 0),
+    rating_avg: docData.ratingAvg || 0,
+    review_count: docData.ratingCount || 0,
+    response_rate: 98,
+    joined_text: 'Đang hoạt động',
+    created_at: docData.createdAt?.toDate ? docData.createdAt.toDate().toISOString() : new Date().toISOString()
+  };
+}
+
+// Normalizer from Firestore product doc to Product interface
+function normalizeProductDoc(docData: DocumentData, id: string): Product {
+  const images = Array.isArray(docData.images) && docData.images.length > 0 ? docData.images : [];
+  const primaryImg = images[0] || createVintageProductSvg(docData.name, docData.category, 0, docData.shopName);
+  return {
+    id: id as any,
+    shop_id: docData.shopId as any,
+    seller_id: docData.ownerUid as any,
+    shop_name: docData.shopName || 'Đồ Cũ Còn Thương',
+    shop_slug: docData.shopId || 'do-cu-con-thuong',
+    name: docData.name,
+    category: docData.category,
+    price: Number(docData.price || 0),
+    original_price: Number(docData.originalPrice || docData.price || 0),
+    condition_pct: Number(docData.conditionPct || 90),
+    condition_detail: docData.conditionNote || '',
+    stock: Number(docData.stock || 1),
+    image_url: primaryImg,
+    images: images.length > 0 ? images : [primaryImg],
+    flaws: Array.isArray(docData.defects) ? docData.defects.map((d: any, idx: number) => ({
+      id: idx + 1,
+      description: typeof d === 'string' ? d : d.text || '',
+      image_url: typeof d === 'object' && d.image ? d.image : ''
+    })) : [],
+    inspection_date: docData.inspection?.date || '2026-10-20',
+    inspector_name: docData.inspection?.inspector || 'Trần Minh Tuấn (KTV Chuyên Sâu)',
+    inspection_checklist: docData.inspection?.checks || [
+      '✓ Hoạt động hoàn hảo mọi tính năng',
+      '✓ Đã vệ sinh & khử khuẩn chuyên sâu',
+      '✓ Đúng nguồn gốc và đúng như ảnh chụp thực tế'
+    ],
+    rating_avg: docData.ratingAvg || 0,
+    review_count: docData.ratingCount || 0,
+    view_count: docData.viewCount || 0,
+    created_at: docData.createdAt?.toDate ? docData.createdAt.toDate().toISOString() : new Date().toISOString()
+  };
+}
+
+// Normalizer from Firestore coupon doc to Coupon interface
+function normalizeCouponDoc(docData: DocumentData, code: string): Coupon {
+  return {
+    id: code as any,
+    shop_id: docData.shopId as any,
+    seller_id: docData.ownerUid as any,
+    shop_name: docData.shopName || '',
+    code: docData.code || code,
+    type: docData.type === 'freeship' ? 'shipping' : docData.type,
+    value: Number(docData.value || 0),
+    max_discount: Number(docData.maxDiscount || 0),
+    min_order_amount: Number(docData.minOrder || 0),
+    is_active: docData.active !== false,
+    usage_count: docData.usedCount || 0,
+    description: docData.type === 'freeship' || docData.type === 'shipping'
+      ? `Miễn phí vận chuyển tối đa ${(docData.maxDiscount || 30000).toLocaleString('vi-VN')}đ`
+      : docData.type === 'percent'
+      ? `Giảm ${docData.value}% tối đa ${(docData.maxDiscount || 0).toLocaleString('vi-VN')}đ`
+      : `Giảm ${(docData.value || 0).toLocaleString('vi-VN')}đ`
+  };
+}
+
+// Normalizer from Firestore order doc to Order interface
+function normalizeOrderDoc(docData: DocumentData, code: string): Order {
+  return {
+    id: code as any,
+    code: docData.code || code,
+    shop_id: docData.shopId as any,
+    seller_id: docData.sellerUid as any,
+    shop_name: docData.shopName || '',
+    shop_slug: docData.shopId || '',
+    buyer_id: docData.buyerUid as any,
+    user_id: docData.buyerUid as any,
+    buyer_name: docData.buyerName || docData.receiver || '',
+    buyer_phone: docData.buyerPhone || docData.phone || '',
+    recipient_name: docData.receiver || docData.buyerName || '',
+    phone: docData.phone || '',
+    address: docData.address || '',
+    note: docData.note || '',
+    subtotal: Number(docData.subtotal || 0),
+    shipping_fee: Number(docData.shippingFee || 0),
+    discount_amount: Number(docData.discount || 0),
+    coupon_code: docData.couponCode || undefined,
+    total: Number(docData.total || 0),
+    payment_method: docData.paymentMethod || 'card',
+    payment_status: docData.paymentStatus || 'pending',
+    card_type: docData.cardBrand ? `${docData.cardBrand} **** ${docData.cardLast4 || '1111'}` : undefined,
+    status: docData.status || 'pending',
+    carrier: docData.carrier || undefined,
+    tracking_code: docData.trackingCode || undefined,
+    cancel_reason: docData.cancelReason || undefined,
+    items: Array.isArray(docData.items) ? docData.items.map((it: any, idx: number) => ({
+      id: idx + 1,
+      order_id: code as any,
+      product_id: it.productId as any,
+      product_name: it.name,
+      condition_pct: it.conditionPct || 90,
+      price: it.price,
+      quantity: it.qty,
+      image_url: it.icon ? createVintageProductSvg(it.name, '', 0, docData.shopName) : ''
+    })) : [],
+    shipment_events: Array.isArray(docData.shipmentEvents) ? docData.shipmentEvents.map((ev: any, idx: number) => ({
+      id: idx + 1,
+      order_id: code as any,
+      event: ev.event,
+      label: ev.label,
+      location: ev.location,
+      note: ev.note,
+      created_at: ev.at
+    })) : [],
+    status_logs: Array.isArray(docData.logs) ? docData.logs.map((lg: any, idx: number) => ({
+      id: idx + 1,
+      order_id: code as any,
+      status: lg.status,
+      actor_role: lg.actorRole,
+      actor_name: lg.actorName,
+      note: lg.note,
+      created_at: lg.at
+    })) : [],
+    items_count: Array.isArray(docData.items) ? docData.items.length : 0,
+    created_at: docData.createdAt?.toDate ? docData.createdAt.toDate().toISOString() : new Date().toISOString(),
+    updated_at: docData.updatedAt?.toDate ? docData.updatedAt.toDate().toISOString() : new Date().toISOString()
+  };
+}
+
+// Check if an account is an owner account
+export async function isAccountOwner(role: 'buyer' | 'seller', username: string, uid: string): Promise<boolean> {
+  const key = `${role}_${username.toLowerCase().trim()}`;
+  if (!OWNER_KEYS.includes(key)) return false;
+  try {
+    const snap = await getDoc(doc(getDefaultFirestore(), 'usernames', key));
+    if (snap.exists() && snap.data()?.uid === uid) {
+      return true;
     }
+  } catch {
+    // quiet catch
+  }
+  return false;
+}
 
-    const normUsername = normalizeUsername(username, role);
-    const database = getDb();
-
-    const user = database.users.find(
-      (u) =>
-        u.role === role &&
-        (normalizeUsername(u.username, role) === normUsername ||
-          (u.phone && normalizeUsername(u.phone, 'buyer') === normUsername))
-    );
-
-    if (!user) {
-      throw new Error('Sai tên đăng nhập hoặc mật khẩu');
-    }
-
-    // Check brute force lockout
-    if (user.lockout_until) {
-      const lockTime = new Date(user.lockout_until).getTime();
-      if (!isNaN(lockTime) && lockTime > Date.now()) {
-        throw new Error('Bạn đã nhập sai quá nhiều lần, vui lòng thử lại sau 5 phút');
-      }
-    }
-
-    const inputHash = await hashPassword(user.username, password);
-
-    // Self-healing migration for plain passwords or corrupted promises
-    let isMatch = false;
-    if (user.password_hash === inputHash) {
-      isMatch = true;
-    } else if (user.password_hash === password) {
-      // Plain text migration to hash
-      user.password_hash = inputHash;
-      isMatch = true;
-    } else if (user.password_hash === '[object Promise]') {
-      // Corrupted promise fix
-      user.password_hash = inputHash;
-      isMatch = true;
-    }
-
-    if (!isMatch) {
-      user.failed_login_attempts = (user.failed_login_attempts || 0) + 1;
-      if (user.failed_login_attempts >= 5) {
-        user.failed_login_attempts = 0;
-        user.lockout_until = new Date(Date.now() + 5 * 60 * 1000).toISOString();
-        saveDb(database);
-        throw new Error('Bạn đã nhập sai quá nhiều lần, vui lòng thử lại sau 5 phút');
-      } else {
-        saveDb(database);
-        throw new Error('Sai tên đăng nhập hoặc mật khẩu');
-      }
-    }
-
-    // Success -> reset attempts
-    user.failed_login_attempts = 0;
-    user.lockout_until = null;
-    saveDb(database);
-
-    const safeUser: User = {
-      id: user.id,
-      role: user.role,
-      username: user.username,
-      full_name: user.full_name,
-      phone: user.phone,
-      is_owner: Boolean(user.is_owner),
-      shop_name: user.shop_name
-    };
-
-    const token = setCurrentSession(safeUser);
-    return { token, user: safeUser };
-  },
+// =========================================================================
+// MAIN DATABASE CLASS IMPLEMENTATION
+// =========================================================================
+export class DCCTDatabaseService {
+  // --- AUTHENTICATION & MULTI-ACCOUNT ---
 
   async register(payload: {
     username?: string;
@@ -1077,515 +536,275 @@ export const db = {
     address?: string;
     shop_name?: string;
   }): Promise<{ token: string; user: User }> {
-    await delay();
-    const database = getDb();
-
-    // Check presentation mode
-    if (database.presentation_mode) {
-      throw new Error('Tạm dừng đăng ký trong buổi thuyết trình');
-    }
-
-    const { role, password, full_name, address, shop_name } = payload;
-    if (!password || password.length < 8) {
-      throw new Error('Mật khẩu phải có tối thiểu 8 ký tự');
-    }
-    if (!full_name || full_name.trim().length === 0) {
-      throw new Error('Vui lòng nhập họ và tên');
-    }
-
-    let usernameToUse = '';
-    let phoneToUse = '';
+    const role = payload.role;
+    let identifier = '';
 
     if (role === 'buyer') {
-      const rawPhone = payload.phone || payload.username || '';
-      const cleanPhone = normalizeUsername(rawPhone, 'buyer');
-      if (!/^0\d{9}$/.test(cleanPhone)) {
+      const cleanPhone = (payload.phone || '').trim().replace(/\D/g, '');
+      if (cleanPhone.length !== 10 || !cleanPhone.startsWith('0')) {
         throw new Error('Số điện thoại phải gồm 10 chữ số và bắt đầu bằng số 0');
       }
-      usernameToUse = cleanPhone;
-      phoneToUse = cleanPhone;
-
-      // Check existing
-      const existing = database.users.find(
-        (u) => u.role === 'buyer' && (u.username === usernameToUse || u.phone === phoneToUse)
-      );
-      if (existing) {
-        throw new Error('Số điện thoại này đã được đăng ký tài khoản');
-      }
+      identifier = cleanPhone;
     } else {
-      // Seller
-      const cleanUsername = normalizeUsername(payload.username || '', 'seller');
-      if (!cleanUsername || cleanUsername.length < 3 || cleanUsername.length > 30) {
-        throw new Error('Tên đăng nhập người bán phải từ 3 đến 30 ký tự');
+      const cleanUsername = (payload.username || '').trim().toLowerCase();
+      if (!/^[a-z0-9_]{3,30}$/.test(cleanUsername)) {
+        throw new Error('Tên đăng nhập phải từ 3-30 ký tự, chỉ gồm chữ thường, số và dấu gạch dưới');
       }
-      if (!/^[a-z0-9_]+$/.test(cleanUsername)) {
-        throw new Error('Tên đăng nhập chỉ gồm chữ thường, số và dấu gạch dưới');
-      }
-      usernameToUse = cleanUsername;
-      phoneToUse = payload.phone ? normalizeUsername(payload.phone, 'buyer') : '';
-
-      const existing = database.users.find(
-        (u) => u.role === 'seller' && u.username === usernameToUse
-      );
-      if (existing) {
-        throw new Error('Tên đăng nhập này đã tồn tại, vui lòng chọn tên khác');
-      }
+      identifier = cleanUsername;
     }
 
-    const hashed = await hashPassword(usernameToUse, password);
+    if (!payload.password || payload.password.length < 8) {
+      throw new Error('Mật khẩu phải có tối thiểu 8 ký tự');
+    }
 
-    const newId = (database.users.reduce((max, u) => Math.max(max, u.id), 0) || 0) + 1;
-    const newUser: StoredUser = {
-      id: newId,
-      role,
-      username: usernameToUse,
-      phone: phoneToUse,
-      full_name: full_name.trim(),
-      password_hash: hashed,
-      is_owner: false,
-      shop_name: role === 'seller' ? (shop_name?.trim() || `Shop của ${full_name.trim()}`) : undefined
-    };
+    const email = role === 'buyer' ? toBuyerEmail(identifier) : toSellerEmail(identifier);
+    const app = getOrCreateAccountApp(role, identifier);
+    const auth = getOrCreateAccountApp(role, identifier) ? getOrCreateAccountApp(role, identifier) : null;
 
-    database.users.push(newUser);
+    let cred: any;
+    try {
+      cred = await createUserWithEmailAndPassword(getActiveAuth(), email, payload.password);
+    } catch (err: any) {
+      throw new Error(mapFirebaseError(err));
+    }
 
-    if (role === 'buyer' && address && address.trim()) {
-      database.addresses.push({
-        id: (database.addresses.reduce((max, a) => Math.max(max, a.id), 0) || 0) + 1,
-        user_id: newId,
-        recipient_name: full_name.trim(),
-        phone: phoneToUse,
-        address_line: address.trim(),
-        is_default: true
+    const uid = cred.user.uid;
+    const usernameKey = `${role}_${identifier}`;
+    const db = getActiveFirestore();
+
+    // Verify username uniqueness
+    try {
+      const usernameRef = doc(db, 'usernames', usernameKey);
+      const existingUserSnap = await getDoc(usernameRef);
+      if (existingUserSnap.exists()) {
+        await deleteUser(cred.user);
+        throw new Error(role === 'buyer' ? 'Số điện thoại này đã được sử dụng' : 'Tên đăng nhập đã được sử dụng');
+      }
+
+      await setDoc(usernameRef, {
+        uid,
+        createdAt: serverTimestamp()
       });
+    } catch (err: any) {
+      try {
+        await deleteUser(cred.user);
+      } catch {}
+      throw new Error(err.message || 'Tên đăng nhập đã được sử dụng');
     }
 
-    saveDb(database);
-
-    const safeUser: User = {
-      id: newUser.id,
-      role: newUser.role,
-      username: newUser.username,
-      full_name: newUser.full_name,
-      phone: newUser.phone,
-      is_owner: false,
-      shop_name: newUser.shop_name
+    // Create user document
+    const isOwner = OWNER_KEYS.includes(usernameKey);
+    const userDocData = {
+      uid,
+      role,
+      username: identifier,
+      fullName: payload.full_name,
+      phone: role === 'buyer' ? identifier : (payload.phone || ''),
+      shopId: null,
+      addresses: payload.address ? [{
+        id: 1,
+        receiver: payload.full_name,
+        phone: role === 'buyer' ? identifier : (payload.phone || ''),
+        address: payload.address,
+        isDefault: true
+      }] : [],
+      wishlist: [],
+      followingShops: [],
+      savedCoupons: [],
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
     };
 
-    const token = setCurrentSession(safeUser);
-    return { token, user: safeUser };
-  },
+    await setDoc(doc(db, 'users', uid), userDocData);
+
+    const userObj: User = {
+      id: uid as any,
+      uid,
+      role,
+      username: identifier,
+      phone: role === 'buyer' ? identifier : (payload.phone || ''),
+      full_name: payload.full_name,
+      shop_id: null,
+      is_owner: isOwner,
+      created_at: new Date().toISOString()
+    };
+
+    saveStoredAccount({
+      role,
+      username: identifier,
+      fullName: payload.full_name,
+      uid,
+      phone: role === 'buyer' ? identifier : payload.phone,
+      shopId: null
+    });
+
+    setActiveAccountKey(getAppKeyFor(role, identifier));
+    setCurrentSession(userObj);
+
+    return { token: uid, user: userObj };
+  }
+
+  async login(credentials: {
+    username: string;
+    password: string;
+    role: 'buyer' | 'seller';
+  }): Promise<{ token: string; user: User; address?: Address }> {
+    const role = credentials.role;
+    let identifier = '';
+
+    if (role === 'buyer') {
+      identifier = credentials.username.trim().replace(/\D/g, '');
+    } else {
+      identifier = credentials.username.trim().toLowerCase();
+    }
+
+    const email = role === 'buyer' ? toBuyerEmail(identifier) : toSellerEmail(identifier);
+    const app = getOrCreateAccountApp(role, identifier);
+
+    let cred: any;
+    try {
+      cred = await signInWithEmailAndPassword(getActiveAuth(), email, credentials.password);
+    } catch (err: any) {
+      throw new Error(mapFirebaseError(err));
+    }
+
+    const uid = cred.user.uid;
+    const db = getActiveFirestore();
+    const userSnap = await getDoc(doc(db, 'users', uid));
+
+    if (!userSnap.exists()) {
+      throw new Error('Sai tên đăng nhập hoặc mật khẩu');
+    }
+
+    const userData = userSnap.data();
+    const isOwner = await isAccountOwner(role, identifier, uid);
+    const userObj = normalizeUserDoc(userData, uid);
+    userObj.is_owner = isOwner;
+
+    // If seller, resolve shop
+    if (role === 'seller') {
+      try {
+        const shopsRef = collection(db, 'shops');
+        const q = query(shopsRef, where('ownerUid', '==', uid));
+        const shopSnap = await getDocs(q);
+        if (!shopSnap.empty) {
+          const s = shopSnap.docs[0];
+          userObj.shop_id = s.id as any;
+          userObj.shop_name = s.data().name;
+        }
+      } catch {}
+    }
+
+    saveStoredAccount({
+      role,
+      username: identifier,
+      fullName: userObj.full_name,
+      uid,
+      phone: userObj.phone,
+      shopId: (userObj.shop_id as any) || null,
+      shopName: userObj.shop_name
+    });
+
+    setActiveAccountKey(getAppKeyFor(role, identifier));
+    setCurrentSession(userObj);
+
+    const firstAddress = userData.addresses && userData.addresses.length > 0 ? {
+      id: 1,
+      user_id: uid as any,
+      recipient_name: userData.addresses[0].receiver,
+      phone: userData.addresses[0].phone,
+      address_line: userData.addresses[0].address,
+      is_default: true
+    } : undefined;
+
+    return { token: uid, user: userObj, address: firstAddress };
+  }
 
   async getMe(): Promise<{ user: User; address?: Address }> {
-    await delay(50);
-    const session = getCurrentSession();
-    if (!session || !session.user) {
+    const activeKey = getActiveAccountKey();
+    if (!activeKey) {
+      clearCurrentSession();
       throw new Error('Chưa đăng nhập');
     }
-    const database = getDb();
-    const user = database.users.find((u) => u.id === session.user.id);
-    if (!user) {
+
+    const auth = getActiveAuth();
+    const firebaseUser = auth.currentUser;
+    if (!firebaseUser) {
+      clearCurrentSession();
+      throw new Error('Phiên đăng nhập đã hết hạn');
+    }
+
+    const db = getActiveFirestore();
+    const userSnap = await getDoc(doc(db, 'users', firebaseUser.uid));
+    if (!userSnap.exists()) {
       clearCurrentSession();
       throw new Error('Không tìm thấy tài khoản');
     }
 
-    const address = database.addresses.find((a) => a.user_id === user.id && a.is_default);
+    const userData = userSnap.data();
+    const userObj = normalizeUserDoc(userData, firebaseUser.uid);
+    userObj.is_owner = await isAccountOwner(userObj.role, userObj.username, firebaseUser.uid);
 
-    const safeUser: User = {
-      id: user.id,
-      role: user.role,
-      username: user.username,
-      full_name: user.full_name,
-      phone: user.phone,
-      is_owner: Boolean(user.is_owner),
-      shop_name: user.shop_name
-    };
-
-    return { user: safeUser, address };
-  },
-
-  async changePassword(data: { old_password?: string; new_password?: string; confirm_password?: string }): Promise<{ message: string }> {
-    await delay();
-    const session = getCurrentSession();
-    if (!session || !session.user) {
-      throw new Error('Vui lòng đăng nhập');
-    }
-    if (!data.old_password || !data.new_password) {
-      throw new Error('Vui lòng nhập đầy đủ mật khẩu');
-    }
-    if (data.new_password.length < 8) {
-      throw new Error('Mật khẩu mới phải có tối thiểu 8 ký tự');
-    }
-    if (data.new_password !== data.confirm_password) {
-      throw new Error('Xác nhận mật khẩu mới không khớp');
+    if (userObj.role === 'seller') {
+      try {
+        const shopsRef = collection(db, 'shops');
+        const q = query(shopsRef, where('ownerUid', '==', firebaseUser.uid));
+        const shopSnap = await getDocs(q);
+        if (!shopSnap.empty) {
+          const s = shopSnap.docs[0];
+          userObj.shop_id = s.id as any;
+          userObj.shop_name = s.data().name;
+        }
+      } catch {}
     }
 
-    const database = getDb();
-    const user = database.users.find((u) => u.id === session.user.id);
-    if (!user) throw new Error('Không tìm thấy tài khoản');
+    setCurrentSession(userObj);
 
-    const oldHash = await hashPassword(user.username, data.old_password);
-    if (user.password_hash !== oldHash && user.password_hash !== data.old_password) {
-      throw new Error('Mật khẩu hiện tại không chính xác');
+    const firstAddress = userData.addresses && userData.addresses.length > 0 ? {
+      id: 1,
+      user_id: firebaseUser.uid as any,
+      recipient_name: userData.addresses[0].receiver,
+      phone: userData.addresses[0].phone,
+      address_line: userData.addresses[0].address,
+      is_default: true
+    } : undefined;
+
+    return { user: userObj, address: firstAddress };
+  }
+
+  async logout(): Promise<void> {
+    try {
+      const auth = getActiveAuth();
+      await signOut(auth);
+    } catch {}
+
+    const cur = getCurrentUser();
+    if (cur) {
+      removeStoredAccount(cur.role, cur.username);
+    }
+    clearCurrentSession();
+  }
+
+  async switchAccount(role: 'buyer' | 'seller', username: string): Promise<User> {
+    clearActiveListeners();
+    const key = getAppKeyFor(role, username);
+    setActiveAccountKey(key);
+
+    const auth = getActiveAuth();
+    if (!auth.currentUser) {
+      throw new Error(`Tài khoản ${username} chưa được đăng nhập trên thiết bị này`);
     }
 
-    user.password_hash = await hashPassword(user.username, data.new_password);
-    saveDb(database);
-    return { message: 'Đổi mật khẩu thành công' };
-  },
+    const res = await this.getMe();
+    return res.user;
+  }
 
-  async switchRole(targetUserId: number): Promise<{ message: string; token: string; user: User; role_name: string }> {
-    await delay(50);
-    const database = getDb();
-    const targetUser = database.users.find((u) => u.id === Number(targetUserId));
-    if (!targetUser) throw new Error('Không tìm thấy tài khoản');
-    if (!targetUser.is_owner) throw new Error('Tài khoản không phải là tài khoản chủ');
-
-    const session = getCurrentSession();
-    if (session?.user && !session.user.is_owner) {
-      throw new Error('Chỉ tài khoản chủ mới có thể đổi vai');
-    }
-
-    const shop = database.shops.find((s) => s.owner_user_id === targetUser.id);
-    const safeUser: User = {
-      id: targetUser.id,
-      role: targetUser.role,
-      username: targetUser.username,
-      full_name: targetUser.full_name,
-      phone: targetUser.phone,
-      shop_name: shop?.name || targetUser.shop_name,
-      is_owner: true
-    };
-    const token = setCurrentSession(safeUser);
-    const roleName = targetUser.role === 'seller' ? (shop?.name || targetUser.full_name) : targetUser.full_name;
-    return {
-      message: `Đã chuyển sang vai ${roleName}`,
-      token,
-      user: safeUser,
-      role_name: roleName
-    };
-  },
-
-  async switchBuyer(): Promise<{ message: string; token: string; user: User }> {
-    const res = await this.switchRole(2);
-    return { message: res.message, token: res.token, user: res.user };
-  },
-
-  async switchSeller(targetUsername: string = 'admin'): Promise<{ message: string; token: string; user: User }> {
-    let targetUserId = 1;
-    if (targetUsername === 'goc_sach_nhac') targetUserId = 3;
-    else if (targetUsername === 'retro_tech') targetUserId = 4;
-    const res = await this.switchRole(targetUserId);
-    return { message: res.message, token: res.token, user: res.user };
-  },
-
-  async resetDemo(): Promise<{ message: string }> {
-    await delay(200);
-    const fresh = createInitialDatabase();
-    saveDb(fresh);
-    return { message: 'Đã khôi phục dữ liệu ban đầu thành công' };
-  },
-
-  async getPresentationMode(): Promise<{ presentation_mode: boolean }> {
-    await delay(50);
-    const database = getDb();
-    return { presentation_mode: Boolean(database.presentation_mode) };
-  },
-
-  async setPresentationMode(enabled: boolean): Promise<{ message: string; presentation_mode: boolean }> {
-    await delay(100);
-    const database = getDb();
-    database.presentation_mode = Boolean(enabled);
-    saveDb(database);
-    return {
-      message: database.presentation_mode ? 'Đã bật Chế độ thuyết trình' : 'Đã tắt Chế độ thuyết trình',
-      presentation_mode: database.presentation_mode
-    };
-  },
-
-  // --- SHOPS HELPER ---
-  checkSellerShopOwnership(session: any, database: DCCTDatabase, targetShopId?: number): Shop {
-    if (!session || !session.user || session.user.role !== 'seller') {
-      throw new Error('Vui lòng đăng nhập tài khoản người bán');
-    }
-    const sellerShop = database.shops.find((s) => s.owner_user_id === session.user.id);
-    if (!sellerShop) {
-      throw new Error('Bạn chưa thiết lập shop');
-    }
-    if (targetShopId !== undefined && sellerShop.id !== targetShopId) {
-      throw new Error('Bạn không có quyền thao tác dữ liệu của shop khác');
-    }
-    return sellerShop;
-  },
-
-  // --- SHOPS DOMAIN API ---
-  async getShops(): Promise<{ shops: Shop[] }> {
-    await delay(60);
-    const database = getDb();
-    const populated = database.shops.map((s) => {
-      const prods = database.products.filter((p) => p.shop_id === s.id);
-      return {
-        ...s,
-        product_count: prods.length
-      };
-    });
-    return { shops: populated };
-  },
-
-  async getShopBySlug(slug: string): Promise<{ shop: Shop; products: Product[]; coupons: Coupon[] }> {
-    await delay(80);
-    const database = getDb();
-    const shop = database.shops.find((s) => s.slug === slug);
-    if (!shop) throw new Error('Không tìm thấy shop này');
-
-    const products = database.products.filter((p) => p.shop_id === shop.id).map(p => ({
-      ...p,
-      shop_name: shop.name,
-      shop_slug: shop.slug
-    }));
-    const coupons = database.coupons.filter((c) => c.shop_id === shop.id && c.is_active);
-
-    return {
-      shop: {
-        ...shop,
-        product_count: products.length
-      },
-      products,
-      coupons
-    };
-  },
-
-  async getShopById(id: number): Promise<{ shop: Shop }> {
-    await delay(50);
-    const database = getDb();
-    const shop = database.shops.find((s) => s.id === Number(id));
-    if (!shop) throw new Error('Không tìm thấy shop');
-    const prods = database.products.filter((p) => p.shop_id === shop.id);
-    return { shop: { ...shop, product_count: prods.length } };
-  },
-
-  async getShopByOwnerUserId(userId: number): Promise<{ shop: Shop | null }> {
-    await delay(50);
-    const database = getDb();
-    const shop = database.shops.find((s) => s.owner_user_id === Number(userId));
-    if (!shop) return { shop: null };
-    const prods = database.products.filter((p) => p.shop_id === shop.id);
-    return { shop: { ...shop, product_count: prods.length } };
-  },
-
-  async createShop(payload: {
-    name: string;
-    slug?: string;
-    description?: string;
-    avatar?: string;
-    cover_image?: string;
-    cover_color?: string;
-    pickup_address?: string;
-    phone?: string;
-  }): Promise<{ shop: Shop; message: string }> {
-    await delay(120);
-    const session = getCurrentSession();
-    if (!session || !session.user || session.user.role !== 'seller') {
-      throw new Error('Vui lòng đăng nhập tài khoản người bán');
-    }
-    const database = getDb();
-    const existingShop = database.shops.find((s) => s.owner_user_id === session.user.id);
-    if (existingShop) {
-      throw new Error('Tài khoản này đã có shop');
-    }
-
-    const name = payload.name.trim();
-    if (!name) throw new Error('Vui lòng nhập tên shop');
-
-    let targetSlug = (payload.slug || slugify(name)).trim();
-    if (!targetSlug) targetSlug = `shop-${Date.now()}`;
-
-    if (database.shops.some((s) => s.slug === targetSlug)) {
-      throw new Error('Đường dẫn shop đã tồn tại, vui lòng chọn đường dẫn khác');
-    }
-
-    const coverColor = payload.cover_color || '#08482D';
-    const newShopId = (database.shops.reduce((max, s) => Math.max(max, s.id), 0) || 0) + 1;
-    const newShop: Shop = {
-      id: newShopId,
-      owner_user_id: session.user.id,
-      name,
-      slug: targetSlug,
-      description: payload.description?.trim() || '',
-      avatar: payload.avatar || createShopAvatarSvg(name, coverColor),
-      cover_image: payload.cover_image,
-      cover_color: coverColor,
-      pickup_address: (payload.pickup_address || '').trim(),
-      phone: (payload.phone || session.user.phone || '').trim(),
-      created_at: new Date().toISOString(),
-      follower_ids: [],
-      rating_avg: 5.0,
-      review_count: 0,
-      response_rate: 100,
-      joined_text: 'Vừa tham gia',
-      product_count: 0
-    };
-
-    database.shops.push(newShop);
-
-    // Update user shop_name
-    const user = database.users.find((u) => u.id === session.user.id);
-    if (user) {
-      user.shop_name = name;
-      session.user.shop_name = name;
-      setCurrentSession(session.user);
-    }
-
-    saveDb(database);
-    return { shop: newShop, message: 'Thiết lập shop thành công!' };
-  },
-
-  async updateShop(shopId: number, payload: Partial<Shop>): Promise<{ shop: Shop; message: string }> {
-    await delay(100);
-    const session = getCurrentSession();
-    const database = getDb();
-    const shop = database.shops.find((s) => s.id === Number(shopId));
-    if (!shop) throw new Error('Không tìm thấy shop');
-
-    if (!session || !session.user || (session.user.role === 'seller' && shop.owner_user_id !== session.user.id)) {
-      throw new Error('Bạn không có quyền thao tác dữ liệu của shop khác');
-    }
-
-    if (payload.slug && payload.slug !== shop.slug) {
-      const cleanSlug = slugify(payload.slug);
-      if (database.shops.some((s) => s.id !== shop.id && s.slug === cleanSlug)) {
-        throw new Error('Đường dẫn shop đã tồn tại');
-      }
-      shop.slug = cleanSlug;
-    }
-
-    if (payload.name) {
-      shop.name = payload.name.trim();
-      const user = database.users.find((u) => u.id === shop.owner_user_id);
-      if (user) user.shop_name = shop.name;
-    }
-    if (payload.description !== undefined) shop.description = payload.description.trim();
-    if (payload.avatar !== undefined) shop.avatar = payload.avatar;
-    if (payload.cover_image !== undefined) shop.cover_image = payload.cover_image;
-    if (payload.cover_color !== undefined) shop.cover_color = payload.cover_color;
-    if (payload.pickup_address !== undefined) shop.pickup_address = payload.pickup_address.trim();
-    if (payload.phone !== undefined) shop.phone = payload.phone.trim();
-
-    saveDb(database);
-    return { shop, message: 'Đã cập nhật thông tin shop thành công' };
-  },
-
-  async toggleFollowShop(shopId: number): Promise<{ is_following: boolean; follower_count: number; message: string }> {
-    await delay(80);
-    const session = getCurrentSession();
-    if (!session || !session.user || session.user.role !== 'buyer') {
-      throw new Error('Vui lòng đăng nhập tài khoản người mua để theo dõi shop');
-    }
-    const database = getDb();
-    const shop = database.shops.find((s) => s.id === Number(shopId));
-    if (!shop) throw new Error('Không tìm thấy shop');
-
-    if (shop.owner_user_id === session.user.id) {
-      throw new Error('Bạn không thể theo dõi chính shop của mình');
-    }
-
-    shop.follower_ids = shop.follower_ids || [];
-    const idx = shop.follower_ids.indexOf(session.user.id);
-    let isFollowing = false;
-
-    if (idx >= 0) {
-      shop.follower_ids.splice(idx, 1);
-      isFollowing = false;
-    } else {
-      shop.follower_ids.push(session.user.id);
-      isFollowing = true;
-    }
-
-    saveDb(database);
-    return {
-      is_following: isFollowing,
-      follower_count: shop.follower_ids.length,
-      message: isFollowing ? `Đã theo dõi ${shop.name}` : `Đã bỏ theo dõi ${shop.name}`
-    };
-  },
-
-  async getFollowedShops(): Promise<{ shops: Shop[] }> {
-    await delay(60);
-    const session = getCurrentSession();
-    if (!session || !session.user) return { shops: [] };
-    const database = getDb();
-    const followed = database.shops.filter((s) => (s.follower_ids || []).includes(session.user.id));
-    return {
-      shops: followed.map((s) => ({
-        ...s,
-        product_count: database.products.filter((p) => p.shop_id === s.id).length
-      }))
-    };
-  },
-
-  async saveShopVoucher(couponCode: string, shopId: number): Promise<{ message: string; saved: boolean }> {
-    await delay(50);
-    const session = getCurrentSession();
-    if (!session || !session.user) throw new Error('Vui lòng đăng nhập để lưu mã');
-    const database = getDb();
-    database.saved_vouchers = database.saved_vouchers || [];
-    const code = couponCode.toUpperCase().trim();
-
-    const exists = database.saved_vouchers.some(
-      (v) => v.user_id === session.user.id && v.coupon_code === code && v.shop_id === shopId
-    );
-    if (exists) {
-      return { message: 'Mã giảm giá đã có trong ví của bạn', saved: true };
-    }
-
-    database.saved_vouchers.push({
-      user_id: session.user.id,
-      coupon_code: code,
-      shop_id: shopId
-    });
-    saveDb(database);
-    return { message: 'Đã lưu mã giảm giá vào ví', saved: true };
-  },
-
-  async getSavedShopVouchers(shopId?: number): Promise<{ vouchers: string[] }> {
-    await delay(40);
-    const session = getCurrentSession();
-    if (!session || !session.user) return { vouchers: [] };
-    const database = getDb();
-    let list = (database.saved_vouchers || []).filter((v) => v.user_id === session.user.id);
-    if (shopId) {
-      list = list.filter((v) => v.shop_id === shopId);
-    }
-    return { vouchers: list.map((v) => v.coupon_code) };
-  },
-
-  async listProductsByShop(shopId: number): Promise<{ products: Product[] }> {
-    await delay(50);
-    const database = getDb();
-    const shop = database.shops.find((s) => s.id === Number(shopId));
-    const list = database.products
-      .filter((p) => p.shop_id === Number(shopId))
-      .sort((a, b) => {
-        const aInStock = a.stock > 0 ? 1 : 0;
-        const bInStock = b.stock > 0 ? 1 : 0;
-        if (aInStock !== bInStock) return bInStock - aInStock;
-        return new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime();
-      })
-      .map((p) => ({
-        ...p,
-        shop_name: shop?.name || p.shop_name,
-        shop_slug: shop?.slug || p.shop_slug
-      }));
-    return { products: list };
-  },
-
-  async listCouponsByShop(shopId: number): Promise<{ coupons: Coupon[] }> {
-    await delay(40);
-    const database = getDb();
-    const list = database.coupons.filter((c) => c.shop_id === Number(shopId) && c.is_active);
-    return { coupons: list };
-  },
+  async changePassword(data: { old_password?: string; new_password?: string }): Promise<{ message: string }> {
+    throw new Error('Để đổi mật khẩu, vui lòng liên hệ quản trị viên hoặc sử dụng tính năng gửi email đặt lại');
+  }
 
   // --- PRODUCTS ---
+
   async getProducts(params?: {
     category?: string;
     search?: string;
@@ -1594,2387 +813,2754 @@ export const db = {
     max_price?: number;
     min_condition?: number;
     in_stock?: boolean;
-    shop_id?: number;
+    shop_id?: string | number;
   }): Promise<{ products: Product[] }> {
-    await delay();
-    const database = getDb();
-    let list = [...database.products];
+    const db = getActiveFirestore();
+    const productsRef = collection(db, 'products');
 
+    let q = query(productsRef);
     if (params?.shop_id) {
-      list = list.filter((p) => p.shop_id === Number(params.shop_id));
+      q = query(productsRef, where('shopId', '==', String(params.shop_id)));
     }
+
+    const snap = await getDocs(q);
+    let list: Product[] = [];
+
+    snap.forEach((d) => {
+      const data = d.data();
+      if (data.isActive !== false) {
+        list.push(normalizeProductDoc(data, d.id));
+      }
+    });
+
     if (params?.category && params.category !== 'Tất cả') {
-      list = list.filter((p) => p.category === params.category);
+      list = list.filter((p) => p.category.toLowerCase() === params.category!.toLowerCase());
     }
-    if (params?.search && params.search.trim()) {
-      const q = params.search.toLowerCase().trim();
+
+    if (params?.search) {
+      const s = params.search.toLowerCase().trim();
       list = list.filter(
         (p) =>
-          p.name.toLowerCase().includes(q) ||
-          p.condition_detail.toLowerCase().includes(q) ||
-          p.category.toLowerCase().includes(q) ||
-          (p.shop_name && p.shop_name.toLowerCase().includes(q))
+          p.name.toLowerCase().includes(s) ||
+          p.category.toLowerCase().includes(s) ||
+          (p.shop_name && p.shop_name.toLowerCase().includes(s))
       );
     }
-    if (params?.min_price !== undefined && !isNaN(params.min_price)) {
+
+    if (params?.min_price !== undefined) {
       list = list.filter((p) => p.price >= params.min_price!);
     }
-    if (params?.max_price !== undefined && !isNaN(params.max_price)) {
+    if (params?.max_price !== undefined) {
       list = list.filter((p) => p.price <= params.max_price!);
     }
-    if (params?.min_condition !== undefined && !isNaN(params.min_condition)) {
+    if (params?.min_condition !== undefined) {
       list = list.filter((p) => p.condition_pct >= params.min_condition!);
     }
     if (params?.in_stock) {
       list = list.filter((p) => p.stock > 0);
     }
 
-    list.sort((a, b) => {
-      const aInStock = a.stock > 0 ? 1 : 0;
-      const bInStock = b.stock > 0 ? 1 : 0;
-      if (aInStock !== bInStock) return bInStock - aInStock; // available items first, out of stock last
+    if (params?.sort === 'price_asc') {
+      list.sort((a, b) => a.price - b.price);
+    } else if (params?.sort === 'price_desc') {
+      list.sort((a, b) => b.price - a.price);
+    } else if (params?.sort === 'condition') {
+      list.sort((a, b) => b.condition_pct - a.condition_pct);
+    } else {
+      list.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+    }
 
-      if (params?.sort === 'price_asc') {
-        return a.price - b.price;
-      } else if (params?.sort === 'price_desc') {
-        return b.price - a.price;
-      } else if (params?.sort === 'condition') {
-        return b.condition_pct - a.condition_pct;
-      } else {
-        // newest
-        return new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime();
-      }
-    });
+    return { products: list };
+  }
 
-    const populated = list.map((p) => {
-      const shop = database.shops.find((s) => s.id === p.shop_id);
-      return {
-        ...p,
-        shop_name: p.shop_name || shop?.name || 'Đồ Cũ Còn Thương',
-        shop_slug: p.shop_slug || shop?.slug || 'do-cu-con-thuong'
-      };
-    });
+  async getProduct(id: number | string): Promise<{ product: Product }> {
+    const db = getActiveFirestore();
+    const snap = await getDoc(doc(db, 'products', String(id)));
+    if (!snap.exists()) {
+      throw new Error('Sản phẩm không tồn tại hoặc đã bị xóa');
+    }
+    return { product: normalizeProductDoc(snap.data(), snap.id) };
+  }
 
-    return { products: populated };
-  },
+  async getAutocomplete(queryStr: string): Promise<{
+    suggestions: Array<{ id: number; name: string; price: number; condition_pct: number; image_url: string; shop_name?: string }>;
+    shops: Array<{ id: number; name: string; slug: string; avatar: string }>;
+  }> {
+    const q = queryStr.toLowerCase().trim();
+    if (!q) return { suggestions: [], shops: [] };
 
-  async getProduct(id: number): Promise<{ product: Product }> {
-    await delay();
-    const database = getDb();
-    const found = database.products.find((p) => p.id === Number(id));
-    if (!found) throw new Error('Không tìm thấy sản phẩm');
+    const { products } = await this.getProducts();
+    const matchedProducts = products
+      .filter((p) => p.name.toLowerCase().includes(q) || p.category.toLowerCase().includes(q))
+      .slice(0, 5)
+      .map((p) => ({
+        id: p.id as any,
+        name: p.name,
+        price: p.price,
+        condition_pct: p.condition_pct,
+        image_url: p.image_url,
+        shop_name: p.shop_name
+      }));
 
-    const shop = database.shops.find((s) => s.id === found.shop_id);
-    return {
-      product: {
-        ...found,
-        shop_name: found.shop_name || shop?.name || 'Đồ Cũ Còn Thương',
-        shop_slug: found.shop_slug || shop?.slug || 'do-cu-con-thuong'
-      }
-    };
-  },
+    const { shops } = await this.getShops();
+    const matchedShops = shops
+      .filter((s) => s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q))
+      .slice(0, 3)
+      .map((s) => ({
+        id: s.id as any,
+        name: s.name,
+        slug: s.slug,
+        avatar: s.avatar || ''
+      }));
+
+    return { suggestions: matchedProducts, shops: matchedShops };
+  }
 
   async createProduct(data: Partial<Product>): Promise<{ product: Product }> {
-    await delay();
-    const database = getDb();
-    const session = getCurrentSession();
-    const sellerShop = this.checkSellerShopOwnership(session, database);
+    const cur = getCurrentUser();
+    if (!cur || cur.role !== 'seller') {
+      throw new Error('Chỉ người bán mới được đăng sản phẩm');
+    }
 
-    const newId = (database.products.reduce((max, p) => Math.max(max, p.id), 0) || 0) + 1;
-    const newProd: Product = {
-      id: newId,
-      shop_id: sellerShop.id,
-      seller_id: session!.user.id,
-      shop_name: sellerShop.name,
-      shop_slug: sellerShop.slug,
+    const db = getActiveFirestore();
+    let shopId = cur.shop_id ? String(cur.shop_id) : 'do-cu-con-thuong';
+    let shopName = cur.shop_name || 'Đồ Cũ Còn Thương';
+
+    const rawImages = data.images || (data.image_url ? [data.image_url] : []);
+    const compressedImages: string[] = [];
+    for (const img of rawImages.slice(0, 4)) {
+      if (img.startsWith('data:image/svg+xml')) {
+        compressedImages.push(img);
+      } else {
+        const comp = await compressImage(img, 1024, 150 * 1024);
+        compressedImages.push(comp);
+      }
+    }
+
+    const docId = `prod_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const productDoc = {
+      shopId,
+      ownerUid: cur.uid,
+      shopName,
       name: data.name || 'Sản phẩm mới',
-      category: data.category || 'Thời trang',
-      price: Number(data.price) || 100000,
-      original_price: Number(data.original_price) || Number(data.price) || 200000,
-      condition_pct: Number(data.condition_pct) || 90,
-      condition_detail: data.condition_detail || 'Độ mới rất tốt',
-      stock: Number(data.stock) || 1,
-      image_url: data.image_url || createSvgPlaceholder(data.name || 'Sản phẩm', data.category || 'Đồ cũ'),
-      images: Array.isArray(data.images) && data.images.length > 0 ? data.images : [data.image_url || ''],
-      flaws: data.flaws || [],
-      inspection_date: data.inspection_date || new Date().toISOString().split('T')[0],
-      inspector_name: data.inspector_name || 'Nguyễn Văn Minh (KTV-04)',
-      inspection_checklist: [
-        '✓ Hoạt động hoàn hảo mọi tính năng',
-        '✓ Đã vệ sinh & khử khuẩn chuyên sâu',
-        '✓ Đúng nguồn gốc và đúng như ảnh chụp thực tế'
-      ],
-      created_at: new Date().toISOString()
+      category: data.category || 'Khác',
+      price: Number(data.price || 0),
+      originalPrice: Number(data.original_price || data.price || 0),
+      conditionPct: Number(data.condition_pct || 90),
+      conditionNote: data.condition_detail || '',
+      description: data.description || data.condition_detail || '',
+      defects: (data.flaws || []).map((f) => ({ text: f.description, image: f.image_url || '' })),
+      inspection: {
+        date: data.inspection_date || new Date().toISOString().slice(0, 10),
+        inspector: data.inspector_name || 'KTV Chuyên Sâu',
+        checks: data.inspection_checklist || ['Đã kiểm định hoạt động']
+      },
+      images: compressedImages,
+      icon: getProductEmoji(data.name, data.category),
+      stock: Number(data.stock ?? 1),
+      sold: 0,
+      viewCount: 0,
+      viewDate: '',
+      ratingAvg: 0,
+      ratingCount: 0,
+      isActive: true,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
     };
 
-    database.products.unshift(newProd);
-    saveDb(database);
-    return { product: newProd };
-  },
+    assertDocSize(productDoc);
+    await setDoc(doc(db, 'products', docId), productDoc);
 
-  async updateProduct(id: number, data: Partial<Product>): Promise<{ product: Product }> {
-    await delay();
-    const database = getDb();
-    const session = getCurrentSession();
-    const idx = database.products.findIndex((p) => p.id === Number(id));
-    if (idx === -1) throw new Error('Không tìm thấy sản phẩm');
+    return { product: normalizeProductDoc(productDoc, docId) };
+  }
 
-    this.checkSellerShopOwnership(session, database, database.products[idx].shop_id);
-
-    database.products[idx] = { ...database.products[idx], ...data };
-    saveDb(database);
-    return { product: database.products[idx] };
-  },
-
-  async deleteProduct(id: number): Promise<{ message: string }> {
-    await delay();
-    const database = getDb();
-    const session = getCurrentSession();
-    const prod = database.products.find((p) => p.id === Number(id));
-    if (!prod) throw new Error('Không tìm thấy sản phẩm');
-
-    this.checkSellerShopOwnership(session, database, prod.shop_id);
-
-    database.products = database.products.filter((p) => p.id !== Number(id));
-    saveDb(database);
-    return { message: 'Đã xóa sản phẩm thành công' };
-  },
-
-  // --- CART ---
-  async getCart(): Promise<{
-    items: CartItem[];
-    subtotal: number;
-    shipping_fee: number;
-    total: number;
-    item_count: number;
-    shops: Array<{
-      shop_id: number;
-      shop_name: string;
-      shop_slug: string;
-      items: CartItem[];
-      subtotal: number;
-      shipping_fee: number;
-      total: number;
-    }>;
-  }> {
-    await delay(80);
-    const session = getCurrentSession();
-    if (!session || !session.user || session.user.role !== 'buyer') {
-      return { items: [], subtotal: 0, shipping_fee: 0, total: 0, item_count: 0, shops: [] };
-    }
-    const database = getDb();
-    const userCart = database.cart_items.filter((c) => c.user_id === session.user.id);
-
-    const items: CartItem[] = [];
-    for (const c of userCart) {
-      const prod = database.products.find((p) => p.id === c.product_id);
-      if (prod) {
-        const shop = database.shops.find((s) => s.id === prod.shop_id);
-        items.push({
-          id: c.id,
-          product_id: prod.id,
-          shop_id: prod.shop_id || 1,
-          shop_name: prod.shop_name || shop?.name || 'Đồ Cũ Còn Thương',
-          shop_slug: prod.shop_slug || shop?.slug || 'do-cu-con-thuong',
-          name: prod.name,
-          product_name: prod.name,
-          category: prod.category,
-          condition_detail: prod.condition_detail,
-          image_url: prod.image_url,
-          product_image: prod.image_url,
-          price: prod.price,
-          original_price: prod.original_price,
-          condition_pct: prod.condition_pct,
-          quantity: c.quantity,
-          stock: prod.stock
-        });
-      }
+  async updateProduct(id: number | string, data: Partial<Product>): Promise<{ product: Product }> {
+    const cur = getCurrentUser();
+    if (!cur || cur.role !== 'seller') {
+      throw new Error('Chỉ người bán mới được sửa sản phẩm');
     }
 
-    // Group items by shop
-    const shopMap = new Map<number, CartItem[]>();
-    for (const it of items) {
-      const sId = it.shop_id;
-      if (!shopMap.has(sId)) {
-        shopMap.set(sId, []);
-      }
-      shopMap.get(sId)!.push(it);
+    const db = getActiveFirestore();
+    const ref = doc(db, 'products', String(id));
+    const snap = await getDoc(ref);
+    if (!snap.exists()) {
+      throw new Error('Sản phẩm không tồn tại');
     }
 
-    const shopBreakdown: Array<{
-      shop_id: number;
-      shop_name: string;
-      shop_slug: string;
-      items: CartItem[];
-      subtotal: number;
-      shipping_fee: number;
-      total: number;
-    }> = [];
+    const updatePayload: any = {
+      updatedAt: serverTimestamp()
+    };
+    if (data.name !== undefined) updatePayload.name = data.name;
+    if (data.price !== undefined) updatePayload.price = Number(data.price);
+    if (data.original_price !== undefined) updatePayload.originalPrice = Number(data.original_price);
+    if (data.condition_pct !== undefined) updatePayload.conditionPct = Number(data.condition_pct);
+    if (data.condition_detail !== undefined) updatePayload.conditionNote = data.condition_detail;
+    if (data.stock !== undefined) updatePayload.stock = Number(data.stock);
 
-    let grandSubtotal = 0;
-    let grandShippingFee = 0;
+    assertDocSize(updatePayload);
+    await updateDoc(ref, updatePayload);
 
-    shopMap.forEach((shopItems, sId) => {
-      const shopObj = database.shops.find((s) => s.id === sId);
-      const sSubtotal = shopItems.reduce((sum, i) => sum + i.price * i.quantity, 0);
-      const sShipping = sSubtotal >= 1000000 || sSubtotal === 0 ? 0 : 30000;
-      grandSubtotal += sSubtotal;
-      grandShippingFee += sShipping;
+    const updatedSnap = await getDoc(ref);
+    return { product: normalizeProductDoc(updatedSnap.data()!, String(id)) };
+  }
 
-      shopBreakdown.push({
-        shop_id: sId,
-        shop_name: shopItems[0]?.shop_name || shopObj?.name || 'Đồ Cũ Còn Thương',
-        shop_slug: shopItems[0]?.shop_slug || shopObj?.slug || 'do-cu-con-thuong',
-        items: shopItems,
-        subtotal: sSubtotal,
-        shipping_fee: sShipping,
-        total: sSubtotal + sShipping
-      });
+  async deleteProduct(id: number | string): Promise<{ message: string }> {
+    const cur = getCurrentUser();
+    if (!cur || cur.role !== 'seller') {
+      throw new Error('Chỉ người bán mới được xóa sản phẩm');
+    }
+    const db = getActiveFirestore();
+    await updateDoc(doc(db, 'products', String(id)), {
+      isActive: false,
+      updatedAt: serverTimestamp()
     });
+    return { message: 'Đã xóa sản phẩm' };
+  }
 
+  async recordProductView(productId: number | string): Promise<void> {
+    const cur = getCurrentUser();
+    if (!cur) return;
+
+    const today = new Date().toISOString().slice(0, 10);
+    const key = `dcct_view_${cur.uid}_${productId}_${today}`;
+    if (localStorage.getItem(key)) return;
+
+    try {
+      const db = getActiveFirestore();
+      const ref = doc(db, 'products', String(productId));
+      const snap = await getDoc(ref);
+      if (!snap.exists()) return;
+
+      const data = snap.data();
+      if (data.viewDate !== today) {
+        await updateDoc(ref, { viewCount: 1, viewDate: today });
+      } else {
+        await updateDoc(ref, { viewCount: increment(1) });
+      }
+      localStorage.setItem(key, '1');
+    } catch {
+      // quiet catch
+    }
+  }
+
+  // --- CART (carts/{uid}) ---
+
+  async getCart(): Promise<{ items: CartItem[]; item_count: number; total_price: number; subtotal: number; shipping_fee: number; total: number }> {
+    const cur = getCurrentUser();
+    if (!cur || cur.role !== 'buyer') {
+      return { items: [], item_count: 0, total_price: 0, subtotal: 0, shipping_fee: 0, total: 0 };
+    }
+
+    const db = getActiveFirestore();
+    const cartSnap = await getDoc(doc(db, 'carts', cur.uid));
+    if (!cartSnap.exists()) {
+      return { items: [], item_count: 0, total_price: 0, subtotal: 0, shipping_fee: 0, total: 0 };
+    }
+
+    const data = cartSnap.data();
+    const rawItems = Array.isArray(data.items) ? data.items : [];
+    const items: CartItem[] = [];
+    let totalPrice = 0;
+
+    for (const it of rawItems) {
+      try {
+        const prodSnap = await getDoc(doc(db, 'products', String(it.productId)));
+        if (prodSnap.exists() && prodSnap.data()?.isActive !== false) {
+          const p = normalizeProductDoc(prodSnap.data()!, prodSnap.id);
+          const effectivePrice = it.negotiatedPrice ? Number(it.negotiatedPrice) : p.price;
+          totalPrice += effectivePrice * it.qty;
+          items.push({
+            id: it.productId as any,
+            user_id: cur.uid as any,
+            product_id: it.productId as any,
+            product_name: p.name,
+            product_image: p.image_url,
+            quantity: it.qty,
+            name: p.name,
+            category: p.category,
+            price: effectivePrice,
+            original_price: p.original_price,
+            condition_pct: p.condition_pct,
+            condition_detail: p.condition_detail,
+            stock: p.stock,
+            image_url: p.image_url,
+            shop_id: p.shop_id,
+            shop_name: p.shop_name,
+            shop_slug: p.shop_slug,
+            created_at: new Date().toISOString(),
+            product: p,
+            effective_price: effectivePrice,
+            offer_id: it.offerId,
+            is_negotiated: !!it.negotiatedPrice,
+            negotiated_price: it.negotiatedPrice
+          });
+        }
+      } catch {}
+    }
+
+    const shippingFee = totalPrice >= 1000000 || totalPrice === 0 ? 0 : 30000;
     return {
       items,
-      subtotal: grandSubtotal,
-      shipping_fee: grandShippingFee,
-      total: grandSubtotal + grandShippingFee,
-      item_count: items.reduce((acc, i) => acc + i.quantity, 0),
-      shops: shopBreakdown
+      item_count: items.reduce((sum, i) => sum + i.quantity, 0),
+      total_price: totalPrice,
+      subtotal: totalPrice,
+      shipping_fee: shippingFee,
+      total: totalPrice + shippingFee
     };
-  },
+  }
 
-  async addToCart(productId: number, quantity: number = 1): Promise<{ message: string }> {
-    await delay();
-    const session = getCurrentSession();
-    if (!session || !session.user || session.user.role !== 'buyer') {
-      throw new Error('Vui lòng đăng nhập bằng tài khoản người mua');
-    }
-    const database = getDb();
-    if (database.presentation_mode && !session.user.is_owner) {
-      throw new Error('Cửa hàng đang tạm dừng nhận đơn trong buổi thuyết trình');
+  async addToCart(productId: number | string, quantity: number = 1, offerId?: number, negotiatedPrice?: number): Promise<{ message: string }> {
+    const cur = getCurrentUser();
+    if (!cur || cur.role !== 'buyer') {
+      throw new Error('Vui lòng đăng nhập tài khoản người mua để thêm vào giỏ hàng');
     }
 
-    const prod = database.products.find((p) => p.id === Number(productId));
-    if (!prod) throw new Error('Không tìm thấy sản phẩm');
-    if (prod.stock <= 0) throw new Error('Sản phẩm đã hết hàng');
+    const db = getActiveFirestore();
+    const cartRef = doc(db, 'carts', cur.uid);
+    const cartSnap = await getDoc(cartRef);
+    let items = cartSnap.exists() && Array.isArray(cartSnap.data()?.items) ? cartSnap.data()!.items : [];
 
-    // Rule: Buyer cannot buy from their own shop
-    const shop = database.shops.find((s) => s.id === prod.shop_id);
-    if (shop && shop.owner_user_id === session.user.id) {
-      throw new Error('Bạn không thể tự mua sản phẩm của chính shop mình');
-    }
-
-    const existing = database.cart_items.find(
-      (c) => c.user_id === session.user.id && c.product_id === prod.id
-    );
-
-    if (existing) {
-      existing.quantity = Math.min(prod.stock, existing.quantity + quantity);
+    const existingIdx = items.findIndex((i: any) => String(i.productId) === String(productId));
+    if (existingIdx >= 0) {
+      items[existingIdx].qty += quantity;
+      if (offerId) items[existingIdx].offerId = offerId;
+      if (negotiatedPrice) items[existingIdx].negotiatedPrice = negotiatedPrice;
     } else {
-      const newId = (database.cart_items.reduce((max, c) => Math.max(max, c.id), 0) || 0) + 1;
-      database.cart_items.push({
-        id: newId,
-        user_id: session.user.id,
-        product_id: prod.id,
-        quantity: Math.min(prod.stock, quantity),
-        created_at: new Date().toISOString()
+      const prodSnap = await getDoc(doc(db, 'products', String(productId)));
+      const shopId = prodSnap.exists() ? prodSnap.data()?.shopId || 'do-cu-con-thuong' : 'do-cu-con-thuong';
+      items.push({
+        productId: String(productId),
+        shopId,
+        qty: quantity,
+        negotiatedPrice: negotiatedPrice || null,
+        offerId: offerId || null
       });
     }
 
-    saveDb(database);
+    await setDoc(cartRef, { items, updatedAt: serverTimestamp() });
     return { message: 'Đã thêm vào giỏ hàng' };
-  },
+  }
 
-  async updateCartQty(cartId: number, quantity: number): Promise<{ message: string }> {
-    await delay();
-    const session = getCurrentSession();
-    if (!session || !session.user) throw new Error('Vui lòng đăng nhập');
-    const database = getDb();
+  async updateCartQty(productId: number | string, quantity: number): Promise<{ message: string }> {
+    const cur = getCurrentUser();
+    if (!cur || cur.role !== 'buyer') throw new Error('Chưa đăng nhập');
 
-    if (quantity <= 0) {
-      database.cart_items = database.cart_items.filter((c) => c.id !== Number(cartId));
-    } else {
-      const item = database.cart_items.find((c) => c.id === Number(cartId) && c.user_id === session.user.id);
-      if (item) item.quantity = quantity;
-    }
-    saveDb(database);
-    return { message: 'Đã cập nhật giỏ hàng' };
-  },
+    const db = getActiveFirestore();
+    const cartRef = doc(db, 'carts', cur.uid);
+    const cartSnap = await getDoc(cartRef);
+    if (!cartSnap.exists()) return { message: 'Thành công' };
 
-  async removeFromCart(cartId: number): Promise<{ message: string }> {
-    await delay();
-    const session = getCurrentSession();
-    if (!session || !session.user) throw new Error('Vui lòng đăng nhập');
-    const database = getDb();
-    database.cart_items = database.cart_items.filter((c) => c.id !== Number(cartId));
-    saveDb(database);
-    return { message: 'Đã xóa sản phẩm khỏi giỏ hàng' };
-  },
-
-  async clearCart(): Promise<{ message: string }> {
-    await delay();
-    const session = getCurrentSession();
-    if (!session || !session.user) return { message: 'Xong' };
-    const database = getDb();
-    database.cart_items = database.cart_items.filter((c) => c.user_id !== session.user.id);
-    saveDb(database);
-    return { message: 'Đã dọn sạch giỏ hàng' };
-  },
-
-  // --- COUPONS ---
-  calculateCheckout(
-    cartInput: CartItem[] | { items: CartItem[] },
-    couponsByShop: Record<number, string> = {}
-  ): CheckoutCalculation {
-    const database = getDb();
-    const rawItems: CartItem[] = Array.isArray(cartInput) ? cartInput : (cartInput?.items || []);
-
-    const shopMap = new Map<number, CartItem[]>();
-    for (const it of rawItems) {
-      const sId = it.shop_id || 1;
-      if (!shopMap.has(sId)) {
-        shopMap.set(sId, []);
+    let items = (cartSnap.data()?.items || []).filter((i: any) => {
+      if (String(i.productId) === String(productId)) {
+        if (quantity <= 0) return false;
+        i.qty = quantity;
       }
-      shopMap.get(sId)!.push(it);
+      return true;
+    });
+
+    await setDoc(cartRef, { items, updatedAt: serverTimestamp() });
+    return { message: 'Đã cập nhật số lượng' };
+  }
+
+  async removeFromCart(productId: number | string): Promise<{ message: string }> {
+    return this.updateCartQty(productId, 0);
+  }
+
+  async clearCart(): Promise<void> {
+    const cur = getCurrentUser();
+    if (!cur) return;
+    const db = getActiveFirestore();
+    await setDoc(doc(db, 'carts', cur.uid), { items: [], updatedAt: serverTimestamp() });
+  }
+
+  // --- SHOPS ---
+
+  async getShops(): Promise<{ shops: Shop[] }> {
+    const db = getActiveFirestore();
+    const snap = await getDocs(collection(db, 'shops'));
+    const shops: Shop[] = [];
+    snap.forEach((d) => {
+      shops.push(normalizeShopDoc(d.data(), d.id));
+    });
+    return { shops };
+  }
+
+  async getShopBySlug(slug: string): Promise<{ shop: Shop }> {
+    const db = getActiveFirestore();
+    const snap = await getDoc(doc(db, 'shops', slug));
+    if (!snap.exists()) {
+      throw new Error('Cửa hàng không tồn tại');
+    }
+    return { shop: normalizeShopDoc(snap.data(), snap.id) };
+  }
+
+  async getShopById(id: number | string): Promise<{ shop: Shop }> {
+    return this.getShopBySlug(String(id));
+  }
+
+  async getShopByOwnerUserId(userId: number | string): Promise<{ shop: Shop }> {
+    const db = getActiveFirestore();
+    const q = query(collection(db, 'shops'), where('ownerUid', '==', String(userId)));
+    const snap = await getDocs(q);
+    if (snap.empty) {
+      throw new Error('Chưa thiết lập cửa hàng');
+    }
+    const d = snap.docs[0];
+    return { shop: normalizeShopDoc(d.data(), d.id) };
+  }
+
+  async createShop(payload: {
+    name: string;
+    slug?: string;
+    description?: string;
+    avatar?: string;
+    cover_color?: string;
+    cover_image?: string;
+    pickup_address?: string;
+    phone?: string;
+  }): Promise<{ shop: Shop; message?: string }> {
+    const cur = getCurrentUser();
+    if (!cur || cur.role !== 'seller') {
+      throw new Error('Chỉ tài khoản người bán mới được tạo cửa hàng');
     }
 
-    const shopBreakdowns: CheckoutShopBreakdown[] = [];
-    let grandSubtotal = 0;
-    let grandShipping = 0;
-    let grandDiscount = 0;
+    const db = getActiveFirestore();
+    const slug = slugify(payload.slug || payload.name);
+    const shopRef = doc(db, 'shops', slug);
+    const existing = await getDoc(shopRef);
+    if (existing.exists()) {
+      throw new Error('Tên đường dẫn (slug) cửa hàng này đã tồn tại, vui lòng chọn tên khác');
+    }
 
-    shopMap.forEach((items, shopId) => {
-      const shopObj = database.shops.find((s) => s.id === shopId);
-      const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-      const shipping_fee = (subtotal >= 1000000 || subtotal === 0) ? 0 : 30000;
+    const shopDoc = {
+      slug,
+      ownerUid: cur.uid,
+      name: payload.name,
+      description: payload.description || '',
+      avatar: payload.avatar || createShopAvatarSvg(payload.name, payload.cover_color),
+      coverColor: payload.cover_color || '#08482D',
+      coverImage: payload.cover_image || '',
+      pickupAddress: payload.pickup_address || '',
+      phone: payload.phone || '',
+      followerUids: [],
+      followerCount: 0,
+      ratingAvg: 0,
+      ratingCount: 0,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    };
 
-      let discount_amount = 0;
-      let validCouponCode: string | undefined = undefined;
-      let appliedCoupon: Coupon | null = null;
+    assertDocSize(shopDoc);
+    await setDoc(shopRef, shopDoc);
 
-      const code = (couponsByShop[shopId] || '').trim().toUpperCase();
-      if (code) {
-        const cpn = database.coupons.find(
-          (c) => c.shop_id === shopId && c.code.toUpperCase() === code && c.is_active
-        );
-        if (cpn) {
-          if (subtotal >= (cpn.min_order_amount || 0)) {
-            if (cpn.type === 'percent') {
-              let d = Math.round(subtotal * (cpn.value / 100));
-              if (cpn.max_discount && d > cpn.max_discount) d = cpn.max_discount;
-              discount_amount = d;
-              validCouponCode = cpn.code;
-              appliedCoupon = cpn;
-            } else if (cpn.type === 'fixed') {
-              discount_amount = Math.min(subtotal, cpn.value);
-              validCouponCode = cpn.code;
-              appliedCoupon = cpn;
-            } else if (cpn.type === 'shipping') {
-              if (shipping_fee > 0) {
-                discount_amount = Math.min(shipping_fee, cpn.value || shipping_fee);
-                validCouponCode = cpn.code;
-                appliedCoupon = cpn;
-              }
-            }
-          }
-        }
+    await updateDoc(doc(db, 'users', cur.uid), {
+      shopId: slug,
+      updatedAt: serverTimestamp()
+    });
+
+    cur.shop_id = slug as any;
+    cur.shop_name = payload.name;
+    setCurrentSession(cur);
+
+    return { shop: normalizeShopDoc(shopDoc, slug), message: 'Thiết lập shop thành công!' };
+  }
+
+  async updateShop(shopId: number | string, payload: Partial<Shop>): Promise<{ shop: Shop }> {
+    const cur = getCurrentUser();
+    if (!cur || cur.role !== 'seller') throw new Error('Chỉ người bán mới được cập nhật shop');
+
+    const db = getActiveFirestore();
+    const ref = doc(db, 'shops', String(shopId));
+    const updates: any = { updatedAt: serverTimestamp() };
+
+    if (payload.name) updates.name = payload.name;
+    if (payload.description !== undefined) updates.description = payload.description;
+    if (payload.avatar) updates.avatar = payload.avatar;
+    if (payload.cover_color) updates.coverColor = payload.cover_color;
+    if (payload.cover_image !== undefined) updates.coverImage = payload.cover_image;
+    if (payload.pickup_address !== undefined) updates.pickupAddress = payload.pickup_address;
+    if (payload.phone !== undefined) updates.phone = payload.phone;
+
+    assertDocSize(updates);
+    await updateDoc(ref, updates);
+    const snap = await getDoc(ref);
+    return { shop: normalizeShopDoc(snap.data()!, snap.id) };
+  }
+
+  async toggleFollowShop(shopId: number | string): Promise<{ is_following: boolean; follower_count: number; message: string }> {
+    const cur = getCurrentUser();
+    if (!cur) throw new Error('Vui lòng đăng nhập để theo dõi cửa hàng');
+
+    const db = getActiveFirestore();
+    const shopRef = doc(db, 'shops', String(shopId));
+    const userRef = doc(db, 'users', cur.uid);
+
+    let isFollowing = false;
+    let count = 0;
+
+    await runTransaction(db, async (txn) => {
+      const sSnap = await txn.get(shopRef);
+      if (!sSnap.exists()) throw new Error('Shop không tồn tại');
+      const followers: string[] = sSnap.data().followerUids || [];
+      const idx = followers.indexOf(cur.uid);
+
+      if (idx >= 0) {
+        txn.update(shopRef, {
+          followerUids: arrayRemove(cur.uid),
+          followerCount: increment(-1)
+        });
+        txn.update(userRef, {
+          followingShops: arrayRemove(String(shopId))
+        });
+        isFollowing = false;
+        count = Math.max(0, followers.length - 1);
+      } else {
+        txn.update(shopRef, {
+          followerUids: arrayUnion(cur.uid),
+          followerCount: increment(1)
+        });
+        txn.update(userRef, {
+          followingShops: arrayUnion(String(shopId))
+        });
+        isFollowing = true;
+        count = followers.length + 1;
       }
-
-      const total = Math.max(0, subtotal + shipping_fee - discount_amount);
-      grandSubtotal += subtotal;
-      grandShipping += shipping_fee;
-      grandDiscount += discount_amount;
-
-      shopBreakdowns.push({
-        shop_id: shopId,
-        shop_name: items[0]?.shop_name || shopObj?.name || 'Đồ Cũ Còn Thương',
-        shop_slug: items[0]?.shop_slug || shopObj?.slug || 'do-cu-con-thuong',
-        items,
-        subtotal,
-        shipping_fee,
-        coupon_code: discount_amount > 0 ? validCouponCode : undefined,
-        discount_amount,
-        total,
-        applied_coupon: appliedCoupon
-      });
     });
 
     return {
-      shops: shopBreakdowns,
-      subtotal: grandSubtotal,
-      shipping_fee: grandShipping,
-      discount_amount: grandDiscount,
-      grand_total: grandSubtotal + grandShipping - grandDiscount
+      is_following: isFollowing,
+      follower_count: count,
+      message: isFollowing ? 'Đã theo dõi cửa hàng' : 'Đã hủy theo dõi cửa hàng'
     };
-  },
+  }
 
-  async validateCoupon(code: string, subtotal: number, shippingFee?: number, shopId?: number): Promise<{ valid: boolean; discount_amount: number; coupon: Coupon; message: string }> {
-    await delay(30);
-    const cleanCode = (code || '').toUpperCase().trim();
-    const database = getDb();
-    let cpn = database.coupons.find((c) => c.code.toUpperCase() === cleanCode && c.is_active);
+  async getFollowedShops(): Promise<{ shops: Shop[] }> {
+    const cur = getCurrentUser();
+    if (!cur) return { shops: [] };
+    const db = getActiveFirestore();
+    const userSnap = await getDoc(doc(db, 'users', cur.uid));
+    const following = userSnap.data()?.followingShops || [];
 
-    if (shopId && cpn && cpn.shop_id !== shopId) {
-      throw new Error('Mã giảm giá này không thuộc về shop này');
+    const shops: Shop[] = [];
+    for (const sId of following) {
+      try {
+        const sSnap = await getDoc(doc(db, 'shops', sId));
+        if (sSnap.exists()) shops.push(normalizeShopDoc(sSnap.data(), sSnap.id));
+      } catch {}
     }
+    return { shops };
+  }
 
-    if (!cpn) {
-      throw new Error('Mã giảm giá không tồn tại hoặc đã hết hạn');
+  async listProductsByShop(shopId: number | string): Promise<{ products: Product[] }> {
+    return this.getProducts({ shop_id: shopId });
+  }
+
+  async listCouponsByShop(shopId: number | string): Promise<{ coupons: Coupon[] }> {
+    const db = getActiveFirestore();
+    const q = query(collection(db, 'coupons'), where('shopId', '==', String(shopId)));
+    const snap = await getDocs(q);
+    const coupons: Coupon[] = [];
+    snap.forEach((d) => {
+      coupons.push(normalizeCouponDoc(d.data(), d.id));
+    });
+    return { coupons };
+  }
+
+  async saveShopVoucher(code: string, shopId: number | string): Promise<{ message: string }> {
+    const cur = getCurrentUser();
+    if (!cur) throw new Error('Vui lòng đăng nhập');
+    const db = getActiveFirestore();
+    await updateDoc(doc(db, 'users', cur.uid), {
+      savedCoupons: arrayUnion(code.toUpperCase().trim())
+    });
+    return { message: 'Đã lưu mã giảm giá vào ví voucher' };
+  }
+
+  async getSavedShopVouchers(shopId?: number | string): Promise<{ vouchers: Coupon[] }> {
+    const cur = getCurrentUser();
+    if (!cur) return { vouchers: [] };
+    const db = getActiveFirestore();
+    const userSnap = await getDoc(doc(db, 'users', cur.uid));
+    const saved = userSnap.data()?.savedCoupons || [];
+
+    const list: Coupon[] = [];
+    for (const code of saved) {
+      try {
+        const snap = await getDoc(doc(db, 'coupons', code));
+        if (snap.exists()) {
+          const c = normalizeCouponDoc(snap.data(), snap.id);
+          if (!shopId || String(c.shop_id) === String(shopId)) {
+            list.push(c);
+          }
+        }
+      } catch {}
     }
-    if (subtotal < (cpn.min_order_amount || 0)) {
-      throw new Error(`Đơn hàng của shop phải từ ${(cpn.min_order_amount || 0).toLocaleString('vi-VN')}đ để dùng mã này`);
-    }
+    return { vouchers: list };
+  }
 
-    const actualShippingFee = shippingFee !== undefined ? shippingFee : (subtotal >= 1000000 ? 0 : 30000);
-
-    let discount = 0;
-    if (cpn.type === 'shipping') {
-      if (actualShippingFee <= 0) {
-        throw new Error('Phần hàng của shop này đã được miễn phí vận chuyển');
-      }
-      discount = Math.min(actualShippingFee, 30000);
-    } else if (cpn.type === 'percent') {
-      discount = Math.round((subtotal * cpn.value) / 100);
-      if (cpn.max_discount && discount > cpn.max_discount) {
-        discount = cpn.max_discount;
-      }
-    } else if (cpn.type === 'fixed') {
-      discount = Math.min(subtotal, cpn.value);
-    }
-
+  async searchShops(queryStr: string): Promise<{ shops: Shop[] }> {
+    const { shops } = await this.getShops();
+    const s = queryStr.toLowerCase().trim();
     return {
-      valid: true,
-      discount_amount: discount,
-      coupon: cpn,
-      message: 'Áp dụng mã giảm giá thành công'
+      shops: shops.filter((sh) => sh.name.toLowerCase().includes(s) || sh.description.toLowerCase().includes(s))
     };
-  },
+  }
 
-  // --- ORDERS (MULTI-SHOP SUPPORT) ---
+  // --- ORDERS (BUYER & SELLER) & CHECKOUT TRANSACTION (Section 6) ---
+
   async createOrder(payload: {
-    items: { product_id: number; quantity: number }[];
+    items: Array<{ product_id: number | string; quantity: number; offer_id?: number }>;
     recipient_name: string;
     phone: string;
     address: string;
     note?: string;
-    payment_method: 'cod' | 'card';
+    payment_method: 'card' | 'napas' | 'cod';
     card_info?: { number: string; expiry: string; cvv: string; card_type?: string };
     coupon_code?: string;
     shop_coupons?: Record<number, string>;
-  }): Promise<{ message: string; order: Order; orders: Order[]; total_amount: number }> {
-    await delay();
-    const session = getCurrentSession();
-    if (!session || !session.user || session.user.role !== 'buyer') {
-      throw new Error('Vui lòng đăng nhập tài khoản người mua');
+  }): Promise<{ orders: Order[]; message: string }> {
+    const cur = getCurrentUser();
+    if (!cur || cur.role !== 'buyer') {
+      throw new Error('Vui lòng đăng nhập tài khoản người mua để đặt hàng');
     }
 
-    const database = getDb();
-    if (database.presentation_mode && !session.user.is_owner) {
-      throw new Error('Cửa hàng đang tạm dừng nhận đơn trong buổi thuyết trình');
-    }
-
-    if (!payload.items || payload.items.length === 0) {
-      throw new Error('Giỏ hàng trống');
-    }
-    if (!payload.recipient_name || !payload.phone || !payload.address) {
-      throw new Error('Vui lòng điền đầy đủ thông tin giao hàng');
-    }
-
-    // Prepare fullCartItems for calculateCheckout
-    const fullItems: CartItem[] = [];
-    for (const it of payload.items) {
-      const prod = database.products.find((p) => p.id === it.product_id);
-      if (!prod) throw new Error(`Sản phẩm #${it.product_id} không tồn tại`);
-      if (prod.stock < it.quantity) throw new Error(`Sản phẩm "${prod.name}" không đủ số lượng tồn kho`);
-
-      const sId = prod.shop_id || 1;
-      const shopObj = database.shops.find((s) => s.id === sId);
-      if (shopObj && shopObj.owner_user_id === session.user.id) {
-        throw new Error('Bạn không thể tự mua sản phẩm của chính shop mình');
-      }
-
-      fullItems.push({
-        id: it.product_id,
-        shop_id: sId,
-        shop_name: shopObj?.name,
-        shop_slug: shopObj?.slug,
-        product_id: prod.id,
-        quantity: it.quantity,
-        name: prod.name,
-        category: prod.category,
-        price: prod.price,
-        original_price: prod.original_price,
-        condition_pct: prod.condition_pct,
-        condition_detail: prod.condition_detail,
-        stock: prod.stock,
-        image_url: prod.image_url
-      });
-    }
-
-    const couponsByShop = payload.shop_coupons || (payload.coupon_code ? { 1: payload.coupon_code } : {});
-    const calc = this.calculateCheckout(fullItems, couponsByShop);
-
+    const db = getActiveFirestore();
     const createdOrders: Order[] = [];
 
-    for (const shopBreakdown of calc.shops) {
-      const shopObj = database.shops.find((s) => s.id === shopBreakdown.shop_id);
+    const productsMap = new Map<string, any>();
+    for (const it of payload.items) {
+      const snap = await getDoc(doc(db, 'products', String(it.product_id)));
+      if (!snap.exists()) throw new Error('Sản phẩm không tồn tại');
+      productsMap.set(String(it.product_id), { snap, data: snap.data() });
+    }
 
-      const orderItems = shopBreakdown.items.map((it: CartItem, idx: number) => {
-        const prod = database.products.find((p) => p.id === it.product_id)!;
-        prod.stock = Math.max(0, prod.stock - it.quantity);
-
-        return {
-          id: (database.orders.length * 10) + idx + 1,
-          order_id: 0,
-          product_id: prod.id,
-          product_name: prod.name,
-          product_image: prod.image_url,
-          image_url: prod.image_url,
-          price: prod.price,
-          original_price: prod.original_price,
-          quantity: it.quantity,
-          condition_pct: prod.condition_pct
-        };
-      });
-
-      if (shopBreakdown.applied_coupon) {
-        const cpnInDb = database.coupons.find((c) => c.id === shopBreakdown.applied_coupon!.id);
-        if (cpnInDb) cpnInDb.usage_count = (cpnInDb.usage_count || 0) + 1;
+    await runTransaction(db, async (txn) => {
+      for (const it of payload.items) {
+        const pRef = doc(db, 'products', String(it.product_id));
+        const pSnap = await txn.get(pRef);
+        if (!pSnap.exists() || pSnap.data().isActive === false) {
+          throw new Error('Sản phẩm không tồn tại hoặc đã ngừng bán');
+        }
+        const pData = pSnap.data();
+        if (pData.stock < it.quantity) {
+          throw new Error(`${pData.name} vừa có chủ mới`);
+        }
       }
 
-      const newOrderId = (database.orders.reduce((max, o) => Math.max(max, o.id), 0) || 0) + 1;
-      const orderCode = `DCCT-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`;
+      let couponData: any = null;
+      if (payload.coupon_code) {
+        const cRef = doc(db, 'coupons', payload.coupon_code.toUpperCase().trim());
+        const cSnap = await txn.get(cRef);
+        if (cSnap.exists()) {
+          couponData = cSnap.data();
+        }
+      }
 
-      const newOrder: Order = {
-        id: newOrderId,
-        shop_id: shopBreakdown.shop_id,
-        seller_id: shopObj?.owner_user_id || 1,
-        shop_name: shopObj?.name || 'Đồ Cũ Còn Thương',
-        shop_slug: shopObj?.slug || 'do-cu-con-thuong',
-        code: orderCode,
-        buyer_id: session.user.id,
-        user_id: session.user.id,
-        status: 'pending',
-        payment_method: payload.payment_method,
-        payment_status: payload.payment_method === 'card' ? 'paid' : 'pending',
-        card_type: payload.payment_method === 'card' ? (payload.card_info?.card_type || 'Thẻ quốc tế') : undefined,
-        buyer_name: session.user.full_name,
-        recipient_name: payload.recipient_name.trim(),
-        phone: payload.phone.trim(),
-        address: payload.address.trim(),
-        note: payload.note?.trim(),
-        items_count: orderItems.length,
-        subtotal: shopBreakdown.subtotal,
-        shipping_fee: shopBreakdown.shipping_fee,
-        discount_amount: shopBreakdown.discount_amount,
-        total: shopBreakdown.total,
-        coupon_code: shopBreakdown.discount_amount > 0 ? shopBreakdown.coupon_code : undefined,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        items: orderItems.map((i: any) => ({ ...i, order_id: newOrderId })),
-        shipment_events: [
-          {
-            id: (database.shipment_events.reduce((max, e) => Math.max(max, e.id), 0) || 0) + 1,
-            order_id: newOrderId,
-            status: 'Đã tạo đơn hàng',
-            location: shopObj?.name || 'Hệ thống Đồ Cũ Còn Thương',
-            note: 'Đơn hàng đã được ghi nhận và gửi đến shop xử lý',
-            created_at: new Date().toISOString()
+      const shopGroups = new Map<string, any[]>();
+      for (const it of payload.items) {
+        const pData = productsMap.get(String(it.product_id))!.data;
+        const sId = pData.shopId || 'do-cu-con-thuong';
+        if (!shopGroups.has(sId)) shopGroups.set(sId, []);
+        shopGroups.get(sId)!.push({ it, pData });
+      }
+
+      const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+      let orderIndex = 0;
+
+      for (const [shopId, group] of shopGroups.entries()) {
+        orderIndex++;
+        const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+        const orderCode = `DCCT-${todayStr}-${randomSuffix}`;
+        const shopSnap = await txn.get(doc(db, 'shops', shopId));
+        const shopData = shopSnap.exists() ? shopSnap.data() : { name: 'Đồ Cũ Còn Thương', ownerUid: 'seller_admin' };
+
+        let subtotal = 0;
+        const orderItems = group.map(({ it, pData }) => {
+          const itemPrice = Number(pData.price || 0);
+          subtotal += itemPrice * it.quantity;
+          return {
+            productId: String(it.product_id),
+            name: pData.name,
+            icon: pData.icon || getProductEmoji(pData.name, pData.category),
+            conditionPct: pData.conditionPct || 90,
+            price: itemPrice,
+            qty: it.quantity,
+            negotiated: !!it.offer_id
+          };
+        });
+
+        const shippingFee = subtotal >= 1000000 ? 0 : 30000;
+        let discount = 0;
+        let appliedCoupon: string | null = null;
+
+        if (couponData && (!couponData.shopId || couponData.shopId === shopId)) {
+          if (subtotal >= (couponData.minOrder || 0)) {
+            appliedCoupon = couponData.code;
+            if (couponData.type === 'freeship' || couponData.type === 'shipping') {
+              discount = Math.min(shippingFee, couponData.maxDiscount || 30000);
+            } else if (couponData.type === 'percent') {
+              discount = Math.min(Math.round((subtotal * couponData.value) / 100), couponData.maxDiscount || 999999999);
+            } else {
+              discount = couponData.value || 0;
+            }
           }
-        ]
-      };
+        }
 
-      database.orders.unshift(newOrder);
-      createdOrders.push(newOrder);
+        const total = Math.max(0, subtotal + shippingFee - discount);
 
-      // Create notifications for buyer and seller of this shop
-      database.notifications.unshift({
-        id: (database.notifications.reduce((max, n) => Math.max(max, n.id), 0) || 0) + 1,
-        user_id: session.user.id,
-        role: 'buyer',
-        title: 'Đặt hàng thành công',
-        message: `Đơn hàng #${orderCode} tại ${shopObj?.name} trị giá ${shopBreakdown.total.toLocaleString('vi-VN')}đ đã được gửi tới shop.`,
-        order_id: newOrderId,
-        is_read: false,
-        created_at: new Date().toISOString()
-      });
+        const orderDoc = {
+          code: orderCode,
+          checkoutId: `chk_${Date.now()}_${orderIndex}`,
+          buyerUid: cur.uid,
+          buyerName: cur.full_name,
+          buyerPhone: cur.phone,
+          shopId,
+          shopName: shopData.name || 'Đồ Cũ Còn Thương',
+          sellerUid: shopData.ownerUid || 'seller_admin',
+          items: orderItems,
+          subtotal,
+          shippingFee,
+          couponCode: appliedCoupon,
+          discount,
+          total,
+          paymentMethod: payload.payment_method === 'cod' ? 'cod' : 'card',
+          paymentStatus: payload.payment_method === 'cod' ? 'pending' : 'paid',
+          cardBrand: payload.payment_method === 'card' ? 'Visa' : null,
+          cardLast4: payload.payment_method === 'card' ? '1111' : null,
+          receiver: payload.recipient_name,
+          phone: payload.phone,
+          address: payload.address,
+          note: payload.note || '',
+          status: 'pending',
+          carrier: 'Giao Hàng Nhanh',
+          trackingCode: `GHN-${Date.now().toString().slice(-6)}VN`,
+          logs: [{
+            status: 'pending',
+            actorRole: 'buyer',
+            actorName: cur.full_name,
+            note: 'Khách hàng tạo đơn hàng',
+            at: new Date().toISOString()
+          }],
+          shipmentEvents: [{
+            event: 'created',
+            label: 'Đơn hàng đã được tạo',
+            location: payload.address,
+            note: 'Chờ người bán xác nhận',
+            at: new Date().toISOString()
+          }],
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        };
 
-      database.notifications.unshift({
-        id: (database.notifications.reduce((max, n) => Math.max(max, n.id), 0) || 0) + 2,
-        user_id: shopObj?.owner_user_id || 1,
-        role: 'seller',
-        title: 'Đơn hàng mới chờ duyệt',
-        message: `Đơn hàng mới #${orderCode} (${shopBreakdown.items.length} món, ${shopBreakdown.total.toLocaleString('vi-VN')}đ) đang chờ bạn xác nhận.`,
-        order_id: newOrderId,
-        is_read: false,
-        created_at: new Date().toISOString()
-      });
-    }
+        txn.set(doc(db, 'orders', orderCode), orderDoc);
 
-    // Remove ordered items from cart
-    const orderedPids = new Set(payload.items.map((i) => i.product_id));
-    database.cart_items = database.cart_items.filter(
-      (c) => c.user_id !== session.user.id || !orderedPids.has(c.product_id)
-    );
+        for (const { it } of group) {
+          const pRef = doc(db, 'products', String(it.product_id));
+          txn.update(pRef, {
+            stock: increment(-it.quantity),
+            sold: increment(it.quantity),
+            updatedAt: serverTimestamp()
+          });
 
-    saveDb(database);
-    return {
-      message: 'Đặt hàng thành công',
-      order: createdOrders[0],
-      orders: createdOrders,
-      total_amount: calc.grand_total
-    };
-  },
+          if (it.offer_id) {
+            txn.update(doc(db, 'offers', String(it.offer_id)), {
+              status: 'used'
+            });
+          }
+        }
 
-  async getMyOrders(status?: string): Promise<{ orders: Order[] }> {
-    await delay();
-    const session = getCurrentSession();
-    if (!session || !session.user) return { orders: [] };
-    const database = getDb();
-    let userOrders = database.orders.filter((o) => o.user_id === session.user.id);
-    if (status && status !== 'all') {
-      userOrders = userOrders.filter((o) => o.status === status);
-    }
-    return { orders: userOrders };
-  },
+        if (appliedCoupon) {
+          txn.update(doc(db, 'coupons', appliedCoupon), {
+            usedCount: increment(1)
+          });
+        }
 
-  async getOrder(codeOrId: string | number): Promise<{ order: Order }> {
-    await delay();
-    const database = getDb();
-    const found = database.orders.find(
-      (o) => o.id === Number(codeOrId) || o.code === String(codeOrId)
-    );
-    if (!found) throw new Error('Không tìm thấy đơn hàng');
-    return { order: found };
-  },
+        const buyerNotifId = `notif_buyer_${Date.now()}_${orderIndex}`;
+        txn.set(doc(db, 'notifications', buyerNotifId), {
+          toUid: cur.uid,
+          fromUid: shopData.ownerUid || 'system',
+          type: 'order_status',
+          title: 'Đặt hàng thành công',
+          body: `Đơn hàng #${orderCode} tại ${shopData.name} trị giá ${total.toLocaleString('vi-VN')}đ đã được gửi tới shop.`,
+          link: `/orders?code=${orderCode}`,
+          isRead: false,
+          createdAt: serverTimestamp()
+        });
 
-  async confirmOrderReceived(orderId: number): Promise<{ message: string; order: Order }> {
-    await delay();
-    const session = getCurrentSession();
-    if (!session || !session.user) throw new Error('Vui lòng đăng nhập');
-    const database = getDb();
-    const ord = database.orders.find((o) => o.id === Number(orderId) && o.user_id === session.user.id);
-    if (!ord) throw new Error('Không tìm thấy đơn hàng');
+        const sellerNotifId = `notif_seller_${Date.now()}_${orderIndex}`;
+        txn.set(doc(db, 'notifications', sellerNotifId), {
+          toUid: shopData.ownerUid || 'seller_admin',
+          fromUid: cur.uid,
+          type: 'new_order',
+          title: 'Đơn hàng mới chờ duyệt',
+          body: `Đơn hàng mới #${orderCode} (${orderItems.length} món, ${total.toLocaleString('vi-VN')}đ) đang chờ bạn xác nhận.`,
+          link: `/seller?order=${orderCode}`,
+          isRead: false,
+          createdAt: serverTimestamp()
+        });
 
-    ord.status = 'completed';
-    ord.completed_at = new Date().toISOString();
-    if (ord.payment_status === 'pending') {
-      ord.payment_status = 'paid';
-    }
+        createdOrders.push(normalizeOrderDoc(orderDoc, orderCode));
+      }
 
-    ord.shipment_events = ord.shipment_events || [];
-    ord.shipment_events.push({
-      id: (database.shipment_events.reduce((max, e) => Math.max(max, e.id), 0) || 0) + 1,
-      order_id: ord.id,
-      status: 'Đã hoàn thành',
-      location: ord.address,
-      note: 'Khách hàng đã xác nhận đã nhận được hàng nguyên vẹn',
-      created_at: new Date().toISOString()
+      txn.set(doc(db, 'carts', cur.uid), { items: [], updatedAt: serverTimestamp() });
     });
 
-    saveDb(database);
-    return { message: 'Đã xác nhận nhận hàng thành công', order: ord };
-  },
+    return { orders: createdOrders, message: 'Đặt hàng thành công' };
+  }
 
-  async cancelOrder(orderId: number, reason?: string): Promise<{ message: string }> {
-    await delay();
-    const session = getCurrentSession();
-    if (!session || !session.user) throw new Error('Vui lòng đăng nhập');
-    const database = getDb();
-    const ord = database.orders.find((o) => o.id === Number(orderId) && o.user_id === session.user.id);
-    if (!ord) throw new Error('Không tìm thấy đơn hàng');
+  async getMyOrders(statusFilter?: string): Promise<{ orders: Order[] }> {
+    const cur = getCurrentUser();
+    if (!cur) return { orders: [] };
 
-    if (ord.status !== 'pending' && ord.status !== 'confirmed') {
-      throw new Error('Đơn hàng đã được bàn giao vận chuyển, không thể hủy');
+    const db = getActiveFirestore();
+    const ordersRef = collection(db, 'orders');
+
+    const q = query(ordersRef, where('buyerUid', '==', cur.uid));
+    const snap = await getDocs(q);
+    let orders: Order[] = [];
+
+    snap.forEach((d) => {
+      orders.push(normalizeOrderDoc(d.data(), d.id));
+    });
+
+    if (statusFilter && statusFilter !== 'all') {
+      orders = orders.filter((o) => o.status === statusFilter);
     }
+    orders.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-    ord.status = 'cancelled';
-    ord.cancel_reason = reason || 'Khách hàng yêu cầu hủy';
-
-    // Restore stock
-    for (const item of ord.items || []) {
-      const prod = database.products.find((p) => p.id === item.product_id);
-      if (prod) prod.stock += item.quantity;
-    }
-
-    saveDb(database);
-    return { message: 'Đã hủy đơn hàng thành công' };
-  },
-
-  // --- SELLER ORDERS & STATS ---
-  async getSellerStats(): Promise<{ stats: SellerStats }> {
-    await delay();
-    const session = getCurrentSession();
-    const database = getDb();
-    const sellerShop = this.checkSellerShopOwnership(session, database);
-
-    const orders = database.orders.filter((o) => o.shop_id === sellerShop.id);
-
-    const total_revenue = orders
-      .filter((o) => o.payment_status === 'paid' && o.status !== 'cancelled')
-      .reduce((acc, o) => acc + o.total, 0);
-
-    const status_counts: Record<string, number> = {
-      pending: 0,
-      confirmed: 0,
-      shipping: 0,
-      delivered: 0,
-      completed: 0,
-      cancelled: 0
-    };
-
-    for (const o of orders) {
-      if (status_counts[o.status] !== undefined) {
-        status_counts[o.status]++;
-      }
-    }
-
-    const low_stock_count = database.products.filter((p) => p.shop_id === sellerShop.id && p.stock <= 1).length;
-
-    return {
-      stats: {
-        total_revenue,
-        total_orders: orders.length,
-        status_counts: status_counts as any,
-        low_stock_count,
-        recent_orders: orders.slice(0, 5)
-      }
-    };
-  },
-
-  async getSellerOrders(status?: string): Promise<{ orders: Order[] }> {
-    await delay();
-    const session = getCurrentSession();
-    const database = getDb();
-    const sellerShop = this.checkSellerShopOwnership(session, database);
-
-    let orders = database.orders.filter((o) => o.shop_id === sellerShop.id);
-    if (status && status !== 'all') {
-      orders = orders.filter((o) => o.status === status);
-    }
     return { orders };
-  },
+  }
 
-  async updateOrderStatus(orderId: number, target_status: string, note?: string, cancel_reason?: string): Promise<{ message: string; order: Order }> {
-    await delay();
-    const session = getCurrentSession();
-    const database = getDb();
-    const ord = database.orders.find((o) => o.id === Number(orderId));
-    if (!ord) throw new Error('Không tìm thấy đơn hàng');
+  async getSellerOrders(statusFilter?: string): Promise<{ orders: Order[] }> {
+    const cur = getCurrentUser();
+    if (!cur || cur.role !== 'seller') return { orders: [] };
 
-    const sellerShop = this.checkSellerShopOwnership(session, database, ord.shop_id);
+    const db = getActiveFirestore();
+    const ordersRef = collection(db, 'orders');
 
-    ord.status = target_status as any;
-    if (cancel_reason) ord.cancel_reason = cancel_reason;
+    const q = query(ordersRef, where('sellerUid', '==', cur.uid));
+    const snap = await getDocs(q);
+    let orders: Order[] = [];
 
-    if (target_status === 'cancelled') {
-      // restore stock
-      for (const it of ord.items || []) {
-        const prod = database.products.find((p) => p.id === it.product_id);
-        if (prod) prod.stock += it.quantity;
-      }
-    }
-
-    ord.shipment_events = ord.shipment_events || [];
-    const statusMap: Record<string, string> = {
-      confirmed: 'Đã xác nhận đơn hàng',
-      shipping: 'Đang giao hàng',
-      delivered: 'Giao hàng thành công',
-      completed: 'Đã hoàn thành',
-      cancelled: 'Đã hủy đơn'
-    };
-
-    ord.shipment_events.push({
-      id: (database.shipment_events.reduce((max, e) => Math.max(max, e.id), 0) || 0) + 1,
-      order_id: ord.id,
-      status: statusMap[target_status] || target_status,
-      location: `Kho ${sellerShop.name}`,
-      note: note || `Đơn hàng chuyển trạng thái sang ${target_status}`,
-      created_at: new Date().toISOString()
+    snap.forEach((d) => {
+      orders.push(normalizeOrderDoc(d.data(), d.id));
     });
 
-    saveDb(database);
-    return { message: 'Đã cập nhật trạng thái đơn hàng', order: ord };
-  },
+    if (statusFilter && statusFilter !== 'all') {
+      orders = orders.filter((o) => o.status === statusFilter);
+    }
+    orders.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-  async assignCarrier(orderId: number, carrier: string): Promise<{ tracking_code: string; order: Order }> {
-    await delay();
-    const session = getCurrentSession();
-    const database = getDb();
-    const ord = database.orders.find((o) => o.id === Number(orderId));
-    if (!ord) throw new Error('Không tìm thấy đơn hàng');
+    return { orders };
+  }
 
-    const sellerShop = this.checkSellerShopOwnership(session, database, ord.shop_id);
+  async getOrder(code: string | number): Promise<{ order: Order }> {
+    const db = getActiveFirestore();
+    const snap = await getDoc(doc(db, 'orders', String(code)));
+    if (!snap.exists()) {
+      throw new Error('Đơn hàng không tồn tại');
+    }
+    return { order: normalizeOrderDoc(snap.data(), snap.id) };
+  }
 
-    const carrierPrefixMap: Record<string, string> = {
-      'Giao Hàng Nhanh': 'GHN',
-      'Giao Hàng Tiết Kiệm': 'GHTK',
-      'Viettel Post': 'VTP',
-      'J&T Express': 'JNT',
-      'SPX Express': 'SPX'
-    };
-    const prefix = carrierPrefixMap[carrier] || 'VN';
-    const tracking_code = `${prefix}-${Math.floor(100000 + Math.random() * 900000)}VN`;
+  async cancelOrder(code: string | number, reason?: string): Promise<{ message: string }> {
+    const cur = getCurrentUser();
+    if (!cur) throw new Error('Chưa đăng nhập');
 
-    ord.carrier = carrier;
-    ord.tracking_code = tracking_code;
-    ord.status = 'confirmed';
+    const db = getActiveFirestore();
+    const orderRef = doc(db, 'orders', String(code));
 
-    ord.shipment_events = ord.shipment_events || [];
-    ord.shipment_events.push({
-      id: (database.shipment_events.reduce((max, e) => Math.max(max, e.id), 0) || 0) + 1,
-      order_id: ord.id,
-      status: 'Đã gán đối tác vận chuyển',
-      location: `Kho ${sellerShop.name}`,
-      note: `Đã phân công ${carrier}. Mã vận đơn: ${tracking_code}`,
-      created_at: new Date().toISOString()
+    await runTransaction(db, async (txn) => {
+      const snap = await txn.get(orderRef);
+      if (!snap.exists()) throw new Error('Đơn hàng không tồn tại');
+      const oData = snap.data();
+
+      if (oData.status === 'shipping' || oData.status === 'completed' || oData.status === 'cancelled') {
+        throw new Error('Đơn hàng không thể hủy ở trạng thái hiện tại');
+      }
+
+      const logs = oData.logs || [];
+      logs.push({
+        status: 'cancelled',
+        actorRole: cur.role,
+        actorName: cur.full_name,
+        note: `Hủy đơn: ${reason || 'Khách yêu cầu hủy'}`,
+        at: new Date().toISOString()
+      });
+
+      txn.update(orderRef, {
+        status: 'cancelled',
+        cancelReason: reason || 'Hủy bởi người dùng',
+        cancelledBy: cur.role,
+        logs,
+        updatedAt: serverTimestamp()
+      });
+
+      for (const it of oData.items || []) {
+        if (it.productId) {
+          const pRef = doc(db, 'products', String(it.productId));
+          txn.update(pRef, {
+            stock: increment(it.qty || 1),
+            sold: increment(-(it.qty || 1)),
+            updatedAt: serverTimestamp()
+          });
+        }
+      }
     });
 
-    saveDb(database);
-    return { tracking_code, order: ord };
-  },
+    return { message: 'Đã hủy đơn hàng thành công' };
+  }
 
-  async addShipmentEvent(orderId: number, payload: { status: string; location: string; note?: string }): Promise<{ message: string; event: ShipmentEvent }> {
-    await delay();
-    const session = getCurrentSession();
-    const database = getDb();
-    const ord = database.orders.find((o) => o.id === Number(orderId));
-    if (!ord) throw new Error('Không tìm thấy đơn hàng');
+  async confirmOrderReceived(code: string | number): Promise<{ message: string }> {
+    return this.updateOrderStatus(String(code), 'completed', 'Khách hàng đã nhận được hàng');
+  }
 
-    this.checkSellerShopOwnership(session, database, ord.shop_id);
+  async updateOrderStatus(code: string | number, status: string, note?: string, cancel_reason?: string): Promise<{ message: string }> {
+    const cur = getCurrentUser();
+    if (!cur) throw new Error('Chưa đăng nhập');
 
-    const newEvt: ShipmentEvent = {
-      id: (database.shipment_events.reduce((max, e) => Math.max(max, e.id), 0) || 0) + 1,
-      order_id: ord.id,
-      status: payload.status,
-      location: payload.location,
-      note: payload.note || '',
-      created_at: new Date().toISOString()
+    const db = getActiveFirestore();
+    const orderRef = doc(db, 'orders', String(code));
+    const snap = await getDoc(orderRef);
+    if (!snap.exists()) throw new Error('Đơn không tồn tại');
+
+    const oData = snap.data();
+    const logs = oData.logs || [];
+    logs.push({
+      status,
+      actorRole: cur.role,
+      actorName: cur.full_name,
+      note: note || `Cập nhật trạng thái sang ${status}`,
+      at: new Date().toISOString()
+    });
+
+    const updates: any = {
+      status,
+      logs,
+      updatedAt: serverTimestamp()
     };
-
-    ord.shipment_events = ord.shipment_events || [];
-    ord.shipment_events.push(newEvt);
-
-    if (payload.status.includes('Giao hàng thành công')) {
-      ord.status = 'delivered';
-      if (ord.payment_status === 'pending') {
-        ord.payment_status = 'paid';
-      }
-    } else if (payload.status.includes('Đang giao hàng')) {
-      ord.status = 'shipping';
+    if (cancel_reason) updates.cancelReason = cancel_reason;
+    if (status === 'completed') {
+      updates.completedAt = new Date().toISOString();
+      updates.paymentStatus = 'paid';
+    } else if (status === 'delivered') {
+      updates.deliveredAt = new Date().toISOString();
     }
 
-    saveDb(database);
-    return { message: 'Đã thêm sự kiện vận chuyển', event: newEvt };
-  },
+    await updateDoc(orderRef, updates);
+    return { message: 'Cập nhật thành công' };
+  }
 
-  async advanceShipmentStep(orderId: number, step: number): Promise<{ message: string; order: Order }> {
-    await delay();
-    const session = getCurrentSession();
-    const database = getDb();
-    const ord = database.orders.find((o) => o.id === Number(orderId));
-    if (!ord) throw new Error('Không tìm thấy đơn hàng');
+  async assignCarrier(code: string | number, carrier: string): Promise<{ message: string; tracking_code: string }> {
+    const db = getActiveFirestore();
+    const orderRef = doc(db, 'orders', String(code));
+    const tracking_code = `VN${carrier.slice(0, 3).toUpperCase()}${Date.now().toString().slice(-6)}`;
+    await updateDoc(orderRef, {
+      carrier,
+      tracking_code,
+      updatedAt: serverTimestamp()
+    });
+    return { message: 'Đã gán đơn vị vận chuyển', tracking_code };
+  }
 
-    const sellerShop = this.checkSellerShopOwnership(session, database, ord.shop_id);
+  async handoverOrder(code: string | number, handoverData: { carrier: string; location?: string; note?: string }): Promise<{ message: string }> {
+    const db = getActiveFirestore();
+    const orderRef = doc(db, 'orders', String(code));
+    const snap = await getDoc(orderRef);
+    if (!snap.exists()) throw new Error('Đơn không tồn tại');
 
-    ord.shipment_events = ord.shipment_events || [];
-    const eventId = (database.shipment_events.reduce((max, e) => Math.max(max, e.id), 0) || 0) + 1;
+    const events = snap.data().shipmentEvents || [];
+    events.push({
+      event: 'dispatched',
+      label: `Đã bàn giao cho ${handoverData.carrier}`,
+      location: handoverData.location || 'Kho người bán',
+      note: handoverData.note || 'Kiện hàng đã lấy thành công',
+      at: new Date().toISOString()
+    });
 
-    if (step === 1) {
-      ord.status = 'confirmed';
-      ord.shipment_events.push({
-        id: eventId,
-        order_id: ord.id,
-        status: 'Đã bàn giao cho đơn vị vận chuyển',
-        location: sellerShop.pickup_address || 'Kho Tân Bình, TP.HCM',
-        note: 'Kiện hàng đã bọc chống sốc và bàn giao cho bưu tá',
-        created_at: new Date().toISOString()
-      });
-    } else if (step === 2) {
-      ord.status = 'shipping';
-      ord.shipment_events.push({
-        id: eventId,
-        order_id: ord.id,
-        status: 'Đã đến kho phân loại trung tâm',
-        location: 'Kho phân loại Củ Chi, TP.HCM',
-        note: 'Đang kiểm đếm và phân tuyến phát hàng',
-        created_at: new Date().toISOString()
-      });
-    } else if (step === 3) {
-      ord.status = 'shipping';
-      ord.shipment_events.push({
-        id: eventId,
-        order_id: ord.id,
-        status: 'Đang giao hàng',
-        location: ord.address,
-        note: 'Bưu tá đang trên đường giao hàng đến bạn',
-        created_at: new Date().toISOString()
-      });
-    } else if (step === 4) {
-      ord.status = 'delivered';
-      if (ord.payment_status === 'pending') {
-        ord.payment_status = 'paid';
-      }
-      ord.shipment_events.push({
-        id: eventId,
-        order_id: ord.id,
-        status: 'Giao hàng thành công',
-        location: ord.address,
-        note: 'Kiện hàng đã được phát tận tay người nhận',
-        created_at: new Date().toISOString()
-      });
-    }
+    await updateDoc(orderRef, {
+      carrier: handoverData.carrier,
+      status: 'shipping',
+      shipmentEvents: events,
+      updatedAt: serverTimestamp()
+    });
 
-    saveDb(database);
-    return { message: 'Đã cập nhật bước vận chuyển', order: ord };
-  },
+    return { message: 'Đã bàn giao đơn vị vận chuyển' };
+  }
 
-  async bulkConfirmOrders(orderIds: number[]): Promise<{ message: string; confirmed_count: number }> {
-    await delay();
-    const session = getCurrentSession();
-    const database = getDb();
-    const sellerShop = this.checkSellerShopOwnership(session, database);
-
-    let count = 0;
+  async bulkConfirmOrders(orderIds: Array<string | number>): Promise<{ message: string }> {
     for (const id of orderIds) {
-      const ord = database.orders.find((o) => o.id === Number(id));
-      if (ord && ord.shop_id === sellerShop.id && ord.status === 'pending') {
-        ord.status = 'confirmed';
-        count++;
-      }
+      await this.updateOrderStatus(String(id), 'confirmed', 'Duyệt đơn hàng loạt');
     }
-    saveDb(database);
-    return { message: `Đã duyệt ${count} đơn hàng`, confirmed_count: count };
-  },
+    return { message: `Đã duyệt ${orderIds.length} đơn hàng` };
+  }
 
-  // --- OFFERS / TRẢ GIÁ (Requirement 1) ---
-  async createOffer(payload: { productId?: number; product_id?: number; offeredPrice?: number; offered_price?: number; price?: number; message?: string }): Promise<{ message: string; offer: Offer }> {
-    await delay();
-    const session = getCurrentSession();
-    if (!session || !session.user || session.user.role !== 'buyer') {
-      throw new Error('Vui lòng đăng nhập tài khoản người mua để trả giá');
+  async bulkHandoverOrders(orderIds: Array<string | number>, carrier: string): Promise<{ message: string }> {
+    for (const id of orderIds) {
+      await this.handoverOrder(String(id), { carrier });
     }
-    const database = getDb();
-    if (database.presentation_mode && !session.user.is_owner) {
-      throw new Error('Cửa hàng đang tạm dừng nhận đơn trong buổi thuyết trình');
-    }
+    return { message: `Đã bàn giao ${orderIds.length} đơn hàng cho ${carrier}` };
+  }
 
-    const prodId = Number(payload.productId ?? payload.product_id);
-    const prod = database.products.find((p) => p.id === prodId);
-    if (!prod) throw new Error('Không tìm thấy sản phẩm');
+  async addShipmentEvent(code: string | number, event: { event?: string; status?: string; label?: string; location?: string; note?: string }): Promise<{ message: string }> {
+    const db = getActiveFirestore();
+    const orderRef = doc(db, 'orders', String(code));
+    const snap = await getDoc(orderRef);
+    if (!snap.exists()) throw new Error('Đơn không tồn tại');
 
-    const rawOfferedPrice = payload.offeredPrice ?? payload.offered_price ?? (payload as any).price;
-    const offeredPrice = Math.round(Number(rawOfferedPrice));
-    if (isNaN(offeredPrice) || offeredPrice <= 0) {
-      throw new Error('Mức giá đề xuất không hợp lệ');
-    }
-    if (offeredPrice >= prod.price) {
-      throw new Error('Mức giá trả phải thấp hơn giá niêm yết của sản phẩm');
-    }
-
-    const shop = database.shops.find((s) => s.id === prod.shop_id);
-    if (shop && shop.owner_user_id === session.user.id) {
-      throw new Error('Bạn không thể trả giá sản phẩm của chính shop mình');
-    }
-
-    // Check if buyer already has an active pending/countered offer for this product
-    const existingActive = database.offers.find(
-      (o) => (o.buyer_id === session.user.id || o.user_id === session.user.id) && o.product_id === prod.id && (o.status === 'pending' || o.status === 'countered')
-    );
-    if (existingActive) {
-      throw new Error('Bạn đang có một lời trả giá chờ phản hồi cho món này');
-    }
-
-    const newOfferId = (database.offers.reduce((max, o) => Math.max(max, o.id), 0) || 0) + 1;
-    const expiresAt = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
-
-    const newOffer: Offer = {
-      id: newOfferId,
-      shop_id: prod.shop_id || 1,
-      shop_name: shop?.name || prod.shop_name || 'Đồ Cũ Còn Thương',
-      user_id: session.user.id,
-      buyer_id: session.user.id,
-      seller_id: shop?.owner_user_id || prod.seller_id || 1,
-      product_id: prod.id,
-      product_name: prod.name,
-      product_image: prod.image_url,
-      original_price: prod.price,
-      offered_price: offeredPrice,
-      price: offeredPrice,
-      message: payload.message?.trim(),
-      status: 'pending',
-      expires_at: expiresAt,
-      created_at: new Date().toISOString(),
-      buyer_name: session.user.full_name,
-      buyer_phone: session.user.phone
-    };
-
-    database.offers.unshift(newOffer);
-
-    // Notify seller of this shop
-    const formattedPrice = offeredPrice.toLocaleString('vi-VN') + 'đ';
-    database.notifications.unshift({
-      id: (database.notifications.reduce((max, n) => Math.max(max, n.id), 0) || 0) + 1,
-      user_id: shop?.owner_user_id || 1,
-      role: 'seller',
-      title: 'Lời trả giá mới',
-      message: `Khách hàng ${session.user.full_name} trả giá ${formattedPrice} cho "${prod.name}".`,
-      is_read: false,
-      created_at: new Date().toISOString()
+    const events = snap.data()?.shipmentEvents || [];
+    events.push({
+      event: event.event || event.status || 'in_transit',
+      label: event.label || 'Đang luân chuyển qua các bưu cục',
+      location: event.location || 'TP. Hồ Chí Minh',
+      note: event.note || '',
+      at: new Date().toISOString()
     });
 
-    saveDb(database);
-    return { message: 'Đã gửi lời trả giá', offer: newOffer };
-  },
+    await updateDoc(orderRef, {
+      shipmentEvents: events,
+      updatedAt: serverTimestamp()
+    });
+
+    return { message: 'Đã thêm mốc vận chuyển' };
+  }
+
+  // --- OFFERS (TRẢ GIÁ) ---
 
   async getOffers(): Promise<{ offers: Offer[] }> {
-    return this.getMyOffers();
-  },
+    const cur = getCurrentUser();
+    if (!cur) return { offers: [] };
 
-  async getMyOffers(): Promise<{ offers: Offer[] }> {
-    await delay();
-    const session = getCurrentSession();
-    if (!session || !session.user) return { offers: [] };
-    const database = getDb();
-    if (checkExpiredOffers(database)) saveDb(database);
-    const myOffers = database.offers.filter((o) => o.user_id === session.user.id || o.buyer_id === session.user.id);
-    return { offers: myOffers };
-  },
+    const db = getActiveFirestore();
+    const q = query(collection(db, 'offers'), where('buyerUid', '==', cur.uid));
+    const snap = await getDocs(q);
+
+    const offers: Offer[] = [];
+    snap.forEach((d) => {
+      const data = d.data();
+      offers.push({
+        id: d.id as any,
+        shop_id: data.shopId as any,
+        seller_id: data.sellerUid as any,
+        buyer_id: data.buyerUid as any,
+        buyer_name: data.buyerName,
+        product_id: data.productId as any,
+        product_name: data.productName,
+        original_price: data.originalPrice,
+        offered_price: data.offeredPrice,
+        counter_price: data.counterPrice,
+        price: data.offeredPrice,
+        status: data.status,
+        expires_at: data.expiresAt,
+        created_at: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString()
+      });
+    });
+
+    offers.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    return { offers };
+  }
 
   async getSellerOffers(): Promise<{ offers: Offer[] }> {
-    await delay();
-    const session = getCurrentSession();
-    const database = getDb();
-    if (checkExpiredOffers(database)) saveDb(database);
-    const sellerShop = this.checkSellerShopOwnership(session, database);
-    return { offers: database.offers.filter((o) => o.shop_id === sellerShop.id) };
-  },
+    const cur = getCurrentUser();
+    if (!cur || cur.role !== 'seller') return { offers: [] };
 
-  async acceptOffer(offerId: number): Promise<{ message: string; offer: Offer }> {
-    await delay();
-    const session = getCurrentSession();
-    const database = getDb();
-    const off = database.offers.find((o) => o.id === Number(offerId));
-    if (!off) throw new Error('Không tìm thấy lời trả giá');
+    const db = getActiveFirestore();
+    const q = query(collection(db, 'offers'), where('sellerUid', '==', cur.uid));
+    const snap = await getDocs(q);
 
-    this.checkSellerShopOwnership(session, database, off.shop_id);
-
-    off.status = 'accepted';
-
-    // Notify buyer
-    const formattedPrice = (off.offered_price || (off as any).price || 0).toLocaleString('vi-VN') + 'đ';
-    database.notifications.unshift({
-      id: (database.notifications.reduce((max, n) => Math.max(max, n.id), 0) || 0) + 1,
-      user_id: off.buyer_id || off.user_id || 1,
-      role: 'buyer',
-      title: 'Shop chấp nhận trả giá!',
-      message: `Shop đã chấp nhận mức giá ${formattedPrice} cho "${off.product_name}". Hãy đặt mua ngay nhé!`,
-      is_read: false,
-      created_at: new Date().toISOString()
+    const offers: Offer[] = [];
+    snap.forEach((d) => {
+      const data = d.data();
+      offers.push({
+        id: d.id as any,
+        shop_id: data.shopId as any,
+        seller_id: data.sellerUid as any,
+        buyer_id: data.buyerUid as any,
+        buyer_name: data.buyerName,
+        product_id: data.productId as any,
+        product_name: data.productName,
+        original_price: data.originalPrice,
+        offered_price: data.offeredPrice,
+        counter_price: data.counterPrice,
+        price: data.offeredPrice,
+        status: data.status,
+        expires_at: data.expiresAt,
+        created_at: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString()
+      });
     });
 
-    saveDb(database);
-    return { message: 'Đã chấp nhận lời trả giá', offer: off };
-  },
+    offers.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    return { offers };
+  }
 
-  async counterOffer(offerId: number, counterPrice: number, sellerNote?: string): Promise<{ message: string; offer: Offer }> {
-    await delay();
-    const session = getCurrentSession();
-    const database = getDb();
-    const off = database.offers.find((o) => o.id === Number(offerId));
-    if (!off) throw new Error('Không tìm thấy lời trả giá');
-
-    this.checkSellerShopOwnership(session, database, off.shop_id);
-
-    off.status = 'countered';
-    off.counter_price = Number(counterPrice);
-    off.seller_note = sellerNote?.trim();
-
-    // Notify buyer
-    const formattedCounter = Number(counterPrice).toLocaleString('vi-VN') + 'đ';
-    database.notifications.unshift({
-      id: (database.notifications.reduce((max, n) => Math.max(max, n.id), 0) || 0) + 1,
-      user_id: off.buyer_id || off.user_id || 1,
-      role: 'buyer',
-      title: 'Shop thương lượng lại mức giá',
-      message: `Shop đề xuất mức giá ${formattedCounter} cho "${off.product_name}".`,
-      is_read: false,
-      created_at: new Date().toISOString()
-    });
-
-    saveDb(database);
-    return { message: 'Đã gửi giá thương lượng lại', offer: off };
-  },
-
-  async rejectOffer(offerId: number, reason?: string): Promise<{ message: string; offer: Offer }> {
-    await delay();
-    const session = getCurrentSession();
-    const database = getDb();
-    const off = database.offers.find((o) => o.id === Number(offerId));
-    if (!off) throw new Error('Không tìm thấy lời trả giá');
-
-    this.checkSellerShopOwnership(session, database, off.shop_id);
-
-    off.status = 'rejected';
-    off.seller_note = reason?.trim();
-
-    // Notify buyer
-    database.notifications.unshift({
-      id: (database.notifications.reduce((max, n) => Math.max(max, n.id), 0) || 0) + 1,
-      user_id: off.buyer_id || off.user_id || 1,
-      role: 'buyer',
-      title: 'Shop từ chối trả giá',
-      message: `Shop không thể giảm giá thêm cho "${off.product_name}".`,
-      is_read: false,
-      created_at: new Date().toISOString()
-    });
-
-    saveDb(database);
-    return { message: 'Đã từ chối lời trả giá', offer: off };
-  },
-
-  async acceptCounterOffer(offerId: number): Promise<{ message: string }> {
-    await delay();
-    const database = getDb();
-    const off = database.offers.find((o) => o.id === Number(offerId));
-    if (!off) throw new Error('Không tìm thấy lời trả giá');
-
-    off.status = 'accepted';
-    if (off.counter_price) {
-      off.offered_price = off.counter_price;
-      off.price = off.counter_price;
+  async createOffer(payload: {
+    productId?: number | string;
+    product_id?: number | string;
+    offeredPrice?: number;
+    offered_price?: number;
+    price?: number;
+    message?: string;
+  }): Promise<{ message: string; offer: Offer }> {
+    const cur = getCurrentUser();
+    if (!cur || cur.role !== 'buyer') {
+      throw new Error('Vui lòng đăng nhập tài khoản người mua để trả giá');
     }
-    saveDb(database);
-    return { message: 'Đã đồng ý mức giá thương lượng' };
-  },
 
-  async rejectCounterOffer(offerId: number): Promise<{ message: string }> {
-    await delay();
-    const database = getDb();
-    const off = database.offers.find((o) => o.id === Number(offerId));
-    if (!off) throw new Error('Không tìm thấy lời trả giá');
+    const pid = String(payload.productId || payload.product_id);
+    const offeredPrice = Number(payload.offeredPrice ?? payload.offered_price ?? payload.price ?? 0);
 
-    off.status = 'rejected';
-    saveDb(database);
-    return { message: 'Đã từ chối mức giá thương lượng' };
-  },
+    const db = getActiveFirestore();
+    const prodSnap = await getDoc(doc(db, 'products', pid));
+    if (!prodSnap.exists()) throw new Error('Sản phẩm không tồn tại');
+    const prod = prodSnap.data();
 
-  async cancelOffer(offerId: number): Promise<{ message: string }> {
-    await delay(50);
-    const session = getCurrentSession();
-    if (!session || !session.user) throw new Error('Vui lòng đăng nhập');
-    const database = getDb();
-    const off = database.offers.find((o) => o.id === Number(offerId) && (o.buyer_id === session.user.id || o.user_id === session.user.id));
-    if (!off) throw new Error('Không tìm thấy lời trả giá');
-    if (off.status !== 'pending' && off.status !== 'countered') {
-      throw new Error('Không thể hủy lời trả giá ở trạng thái này');
+    const existingQ = query(collection(db, 'offers'), where('buyerUid', '==', cur.uid));
+    const existingSnap = await getDocs(existingQ);
+    for (const d of existingSnap.docs) {
+      const data = d.data();
+      if (String(data.productId) === pid && (data.status === 'pending' || data.status === 'countered')) {
+        throw new Error('Bạn đang có một lời trả giá chờ phản hồi cho món này');
+      }
     }
-    off.status = 'rejected';
-    off.seller_note = 'Người mua đã hủy lời trả giá';
-    saveDb(database);
+
+    const offerId = `off_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const expiresAt = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
+
+    const offerDoc = {
+      productId: pid,
+      productName: prod.name,
+      shopId: prod.shopId || 'do-cu-con-thuong',
+      sellerUid: prod.ownerUid || 'seller_admin',
+      buyerUid: cur.uid,
+      buyerName: cur.full_name,
+      originalPrice: Number(prod.price || 0),
+      offeredPrice,
+      counterPrice: null,
+      message: payload.message || '',
+      status: 'pending',
+      createdAt: serverTimestamp(),
+      expiresAt,
+      respondedAt: null
+    };
+
+    assertDocSize(offerDoc);
+    await setDoc(doc(db, 'offers', offerId), offerDoc);
+
+    await setDoc(doc(db, 'notifications', `notif_off_${offerId}`), {
+      toUid: prod.ownerUid || 'seller_admin',
+      fromUid: cur.uid,
+      type: 'offer',
+      title: 'Lời trả giá mới',
+      body: `Khách ${cur.full_name} đề nghị giá ${offeredPrice.toLocaleString('vi-VN')}đ cho món "${prod.name}".`,
+      link: '/seller?tab=offers',
+      isRead: false,
+      createdAt: serverTimestamp()
+    });
+
+    return {
+      message: 'Đã gửi lời trả giá thành công',
+      offer: {
+        id: offerId as any,
+        shop_id: prod.shopId as any,
+        seller_id: prod.ownerUid as any,
+        buyer_id: cur.uid as any,
+        buyer_name: cur.full_name,
+        product_id: pid as any,
+        product_name: prod.name,
+        original_price: Number(prod.price || 0),
+        offered_price: offeredPrice,
+        price: offeredPrice,
+        status: 'pending',
+        expires_at: expiresAt,
+        created_at: new Date().toISOString()
+      }
+    };
+  }
+
+  async getMyOfferForProduct(productId: number | string): Promise<{ offer: Offer | null }> {
+    const cur = getCurrentUser();
+    if (!cur) return { offer: null };
+
+    const db = getActiveFirestore();
+    const q = query(collection(db, 'offers'), where('buyerUid', '==', cur.uid));
+    const snap = await getDocs(q);
+
+    let activeOffer: Offer | null = null;
+    const now = new Date().getTime();
+
+    for (const d of snap.docs) {
+      const data = d.data();
+      if (String(data.productId) === String(productId)) {
+        if (data.status === 'pending' && data.expiresAt && new Date(data.expiresAt).getTime() < now) {
+          await updateDoc(doc(db, 'offers', d.id), { status: 'expired' });
+          continue;
+        }
+
+        if (data.status === 'pending' || data.status === 'accepted' || data.status === 'countered') {
+          activeOffer = {
+            id: d.id as any,
+            shop_id: data.shopId as any,
+            seller_id: data.sellerUid as any,
+            buyer_id: data.buyerUid as any,
+            buyer_name: data.buyerName,
+            product_id: data.productId as any,
+            product_name: data.productName,
+            original_price: data.originalPrice,
+            offered_price: data.offeredPrice,
+            counter_price: data.counterPrice,
+            price: data.offeredPrice,
+            status: data.status,
+            expires_at: data.expiresAt,
+            created_at: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString()
+          };
+          break;
+        }
+      }
+    }
+
+    return { offer: activeOffer };
+  }
+
+  async cancelOffer(offerId: number | string): Promise<{ message: string }> {
+    const db = getActiveFirestore();
+    await updateDoc(doc(db, 'offers', String(offerId)), {
+      status: 'cancelled',
+      updatedAt: serverTimestamp()
+    });
     return { message: 'Đã hủy lời trả giá' };
-  },
+  }
 
-  async getMyOfferForProduct(productId: number): Promise<{ offer: Offer | null }> {
-    await delay(30);
-    const session = getCurrentSession();
-    if (!session || !session.user) return { offer: null };
-    const database = getDb();
-    if (checkExpiredOffers(database)) saveDb(database);
-    const myOffers = database.offers.filter((o) => (o.buyer_id === session.user.id || o.user_id === session.user.id) && o.product_id === Number(productId));
-    const active = myOffers.find((o) => o.status === 'pending' || o.status === 'countered') || myOffers.find((o) => o.status === 'accepted');
-    return { offer: active || null };
-  },
+  async acceptOffer(offerId: number | string): Promise<{ message: string }> {
+    return this.respondToOffer(offerId, 'accept');
+  }
 
-  // --- CHAT / NHẮN TIN THEO SHOP (MULTI-SHOP SHOPEE-STYLE) ---
-  async startShopChat(
-    shopId: number,
-    context?: {
-      type: 'product' | 'order';
-      product_id?: number;
-      order_code?: string;
-      initial_message?: string;
-    }
-  ): Promise<{ conversation: ChatConversation; created: boolean }> {
-    await delay(30);
-    const session = getCurrentSession();
-    if (!session || !session.user) {
-      throw new Error('Vui lòng đăng nhập để chat với shop');
-    }
-    const database = getDb();
-    const shop = database.shops.find((s) => s.id === Number(shopId));
-    if (!shop) throw new Error('Không tìm thấy shop');
+  async counterOffer(offerId: number | string, counter_price: number, seller_note?: string): Promise<{ message: string }> {
+    return this.respondToOffer(offerId, 'counter', counter_price);
+  }
 
-    if (shop.owner_user_id === session.user.id) {
-      throw new Error('Bạn không thể tự chat với shop của chính mình');
-    }
+  async rejectOffer(offerId: number | string, seller_note?: string): Promise<{ message: string }> {
+    return this.respondToOffer(offerId, 'reject');
+  }
 
-    let conv = database.chat_conversations.find(
-      (c) => c.buyer_id === session.user.id && c.shop_id === shop.id
-    );
+  async acceptCounterOffer(offerId: number | string): Promise<{ message: string }> {
+    return this.buyerRespondToCounter(offerId, 'accept');
+  }
 
-    let contextCard: ChatMessageContext | undefined;
-    if (context) {
-      if (context.type === 'product' && context.product_id) {
-        const prod = database.products.find((p) => p.id === context.product_id);
-        if (prod) {
-          contextCard = {
-            type: 'product',
-            product_id: prod.id,
-            title: prod.name,
-            image_url: prod.image_url,
-            price: prod.price
-          };
-        }
-      } else if (context.type === 'order' && context.order_code) {
-        const ord = database.orders.find((o) => o.code === context.order_code || o.id === Number(context.order_code));
-        if (ord) {
-          contextCard = {
-            type: 'order',
-            order_code: ord.code,
-            title: `Đơn hàng #${ord.code}`,
-            price: ord.total,
-            status_text: ord.status === 'completed' ? 'Đã hoàn thành' : ord.status === 'shipping' ? 'Đang giao' : 'Đang xử lý'
-          };
-        }
-      }
-    }
+  async rejectCounterOffer(offerId: number | string): Promise<{ message: string }> {
+    return this.buyerRespondToCounter(offerId, 'reject');
+  }
 
-    if (!conv) {
-      // Do NOT save empty conversation to DB before buyer sends first message
-      const virtualConv: ChatConversation = {
-        id: 0,
-        shop_id: shop.id,
-        buyer_id: session.user.id,
-        seller_id: shop.owner_user_id,
-        shop_name: shop.name,
-        shop_slug: shop.slug,
-        shop_avatar: shop.avatar,
-        buyer_name: session.user.full_name,
-        buyer_phone: session.user.phone,
-        last_message: '',
-        last_message_at: new Date().toISOString(),
-        buyer_unread: 0,
-        seller_unread: 0,
-        created_at: new Date().toISOString(),
-        messages: contextCard ? [{
-          id: -1,
-          conversation_id: 0,
-          sender_role: 'buyer',
-          sender_id: session.user.id,
-          content: '',
-          type: 'context',
-          context_card: contextCard,
-          is_read: true,
-          created_at: new Date().toISOString()
-        }] : []
-      };
-      return { conversation: virtualConv, created: true };
-    }
+  async respondToOffer(offerId: number | string, action: 'accept' | 'reject' | 'counter', counterPrice?: number): Promise<{ message: string }> {
+    const cur = getCurrentUser();
+    if (!cur || cur.role !== 'seller') throw new Error('Chỉ người bán mới được phản hồi trả giá');
 
-    const msgs = database.chat_messages.filter((m) => m.conversation_id === conv!.id);
-    return {
-      conversation: {
-        ...conv,
-        shop_name: conv.shop_name || shop.name,
-        shop_slug: conv.shop_slug || shop.slug,
-        shop_avatar: conv.shop_avatar || shop.avatar,
-        messages: msgs
-      },
-      created: false
-    };
-  },
+    const db = getActiveFirestore();
+    const ref = doc(db, 'offers', String(offerId));
+    const snap = await getDoc(ref);
+    if (!snap.exists()) throw new Error('Lời trả giá không tồn tại');
+    const data = snap.data();
 
-  async getChatConversations(): Promise<{ conversations: ChatConversation[] }> {
-    await delay(50);
-    const database = getDb();
-    const session = getCurrentSession();
-    if (!session || !session.user) return { conversations: [] };
+    let newStatus: string = action === 'accept' ? 'accepted' : action === 'reject' ? 'rejected' : 'countered';
 
-    let convs: ChatConversation[] = [];
+    await updateDoc(ref, {
+      status: newStatus,
+      counterPrice: action === 'counter' ? Number(counterPrice) : null,
+      respondedAt: serverTimestamp()
+    });
 
-    if (session.user.role === 'buyer') {
-      convs = database.chat_conversations.filter((c) => c.buyer_id === session.user.id);
+    const notifBody = action === 'accept'
+      ? `Shop đã đồng ý mức giá ${Number(data.offeredPrice).toLocaleString('vi-VN')}đ cho món "${data.productName}".`
+      : action === 'counter'
+      ? `Shop đề nghị mức giá mới ${Number(counterPrice).toLocaleString('vi-VN')}đ cho món "${data.productName}".`
+      : `Shop đã từ chối lời trả giá cho món "${data.productName}".`;
+
+    await setDoc(doc(db, 'notifications', `notif_resp_${offerId}`), {
+      toUid: data.buyerUid,
+      fromUid: cur.uid,
+      type: 'offer_response',
+      title: 'Phản hồi lời trả giá',
+      body: notifBody,
+      link: `/product/${data.productId}`,
+      isRead: false,
+      createdAt: serverTimestamp()
+    });
+
+    return { message: 'Đã phản hồi lời trả giá' };
+  }
+
+  async buyerRespondToCounter(offerId: number | string, action: 'accept' | 'reject'): Promise<{ message: string }> {
+    const cur = getCurrentUser();
+    if (!cur) throw new Error('Chưa đăng nhập');
+
+    const db = getActiveFirestore();
+    const ref = doc(db, 'offers', String(offerId));
+    const snap = await getDoc(ref);
+    if (!snap.exists()) throw new Error('Lời trả giá không tồn tại');
+    const data = snap.data();
+
+    if (action === 'accept') {
+      await updateDoc(ref, { status: 'accepted' });
+      await this.addToCart(data.productId, 1, Number(offerId) as any, data.counterPrice);
+      return { message: 'Đã chấp nhận đề nghị của shop và thêm vào giỏ hàng' };
     } else {
-      // Seller: only chats belonging to seller's shop
-      const sellerShop = this.checkSellerShopOwnership(session, database);
-      convs = database.chat_conversations.filter((c) => c.shop_id === sellerShop.id);
+      await updateDoc(ref, { status: 'rejected' });
+      return { message: 'Đã từ chối đề nghị của shop' };
+    }
+  }
+
+  // --- REVIEWS & RETURNS ---
+
+  async createReview(payload: {
+    order_id: string | number;
+    product_id: string | number;
+    rating: number;
+    comment: string;
+    tags?: string[];
+    images?: string[];
+    video_blob?: Blob;
+  }): Promise<{ message: string }> {
+    const cur = getCurrentUser();
+    if (!cur) throw new Error('Chưa đăng nhập');
+
+    const db = getActiveFirestore();
+    const pid = String(payload.product_id);
+    const orderCode = String(payload.order_id);
+
+    const compressedImages: string[] = [];
+    for (const img of (payload.images || []).slice(0, 3)) {
+      const c = await compressImage(img, 800, 120 * 1024);
+      compressedImages.push(c);
     }
 
-    const populated = convs
-      .filter((c) => {
-        // Only keep conversations with at least 1 real text message
-        const msgs = database.chat_messages.filter((m) => m.conversation_id === c.id);
-        return msgs.some((m) => m.type === 'text' && m.content && m.content.trim());
-      })
-      .map((c) => {
-        const msgs = database.chat_messages.filter((m) => m.conversation_id === c.id);
-        const textMsgs = msgs.filter((m) => m.type === 'text' && m.content && m.content.trim());
-        const lastText = textMsgs[textMsgs.length - 1];
-        const shopObj = database.shops.find((s) => s.id === c.shop_id);
-
-        const isSeller = session.user.role === 'seller';
-        const unreadCount = msgs.filter(
-          (m) => m.type === 'text' && !m.is_read && (isSeller ? m.sender_role === 'buyer' : m.sender_role === 'seller')
-        ).length;
-
-        return {
-          ...c,
-          shop_name: c.shop_name || shopObj?.name || 'Shop',
-          shop_slug: c.shop_slug || shopObj?.slug || '',
-          shop_avatar: c.shop_avatar || shopObj?.avatar || '',
-          last_message: lastText?.content || '',
-          last_message_at: lastText?.created_at || c.last_message_at,
-          buyer_unread: isSeller ? c.buyer_unread : unreadCount,
-          seller_unread: isSeller ? unreadCount : c.seller_unread,
-          messages: msgs
-        };
-      })
-      .sort((a, b) => new Date(b.last_message_at || 0).getTime() - new Date(a.last_message_at || 0).getTime());
-
-    return { conversations: populated };
-  },
-
-  async getChatDetail(conversationId: number): Promise<{ conversation: ChatConversation; messages: ChatMessage[] }> {
-    await delay(50);
-    const database = getDb();
-    const conv = database.chat_conversations.find((c) => c.id === Number(conversationId));
-    if (!conv) throw new Error('Không tìm thấy cuộc trò chuyện');
-
-    const msgs = database.chat_messages.filter((m) => m.conversation_id === conv.id);
-
-    // Mark read for text messages
-    const session = getCurrentSession();
-    if (session?.user?.role === 'seller') {
-      conv.seller_unread = 0;
-      msgs.forEach((m) => {
-        if (m.sender_role === 'buyer') m.is_read = true;
-      });
-    } else {
-      conv.buyer_unread = 0;
-      msgs.forEach((m) => {
-        if (m.sender_role === 'seller') m.is_read = true;
-      });
+    let videoLocalId: string | null = null;
+    let videoThumb: string | null = null;
+    if (payload.video_blob) {
+      videoLocalId = await saveLocalVideo(payload.video_blob);
+      videoThumb = compressedImages[0] || null;
     }
 
-    if (session?.user) {
-      for (const n of database.notifications) {
-        if (n.type === 'chat' && n.order_id === conv.id && n.user_id === session.user.id) {
-          n.is_read = true;
-        }
-      }
-    }
-    saveDb(database);
+    const reviewId = `${orderCode}_${pid}`;
+    const pSnap = await getDoc(doc(db, 'products', pid));
+    const pData = pSnap.exists() ? pSnap.data() : { shopId: 'do-cu-con-thuong', ownerUid: 'seller_admin' };
 
-    const shopObj = database.shops.find((s) => s.id === conv.shop_id);
-    const populatedConv = {
-      ...conv,
-      shop_name: conv.shop_name || shopObj?.name || 'Shop',
-      shop_slug: conv.shop_slug || shopObj?.slug || '',
-      shop_avatar: conv.shop_avatar || shopObj?.avatar || '',
-      messages: msgs
+    const reviewDoc = {
+      orderId: orderCode,
+      productId: pid,
+      shopId: pData.shopId || 'do-cu-con-thuong',
+      sellerUid: pData.ownerUid || 'seller_admin',
+      buyerUid: cur.uid,
+      buyerDisplayName: cur.full_name,
+      anonymous: false,
+      rating: Number(payload.rating),
+      tags: payload.tags || [],
+      comment: payload.comment,
+      images: compressedImages,
+      videoLocalId,
+      videoThumb,
+      helpfulUids: [],
+      helpfulCount: 0,
+      sellerReply: null,
+      hidden: false,
+      hiddenReason: '',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      editedOnce: false
     };
 
-    return {
-      conversation: populatedConv,
-      messages: msgs
-    };
-  },
+    assertDocSize(reviewDoc);
 
-  async sendChatMessage(payload: {
-    conversation_id?: number;
-    shop_id?: number;
-    product_id?: number;
-    order_code?: string;
-    content: string;
-    context_card?: ChatMessageContext;
-  }): Promise<{ message: ChatMessage; conversation: ChatConversation }> {
-    await delay(50);
-    const session = getCurrentSession();
-    if (!session || !session.user) {
-      throw new Error('Chưa gửi được, bạn thử lại nhé');
-    }
-    const database = getDb();
-    if (database.presentation_mode && !session.user.is_owner) {
-      throw new Error('Cửa hàng đang tạm dừng nhận đơn trong buổi thuyết trình');
-    }
+    await runTransaction(db, async (txn) => {
+      txn.set(doc(db, 'reviews', reviewId), reviewDoc);
 
-    const content = (payload.content || '').trim();
-    if (!content) {
-      throw new Error('Nội dung tin nhắn không được để trống');
-    }
-
-    const senderRole = session.user.role === 'seller' ? 'seller' : 'buyer';
-    let conv: ChatConversation | undefined;
-
-    if (payload.conversation_id && payload.conversation_id > 0) {
-      conv = database.chat_conversations.find((c) => c.id === Number(payload.conversation_id));
-    }
-
-    if (!conv && payload.shop_id) {
-      conv = database.chat_conversations.find(
-        (c) => c.shop_id === Number(payload.shop_id) && c.buyer_id === (senderRole === 'buyer' ? session.user.id : c.buyer_id)
-      );
-    }
-
-    const targetShop = database.shops.find((s) => s.id === (conv?.shop_id || Number(payload.shop_id)));
-    if (!targetShop) throw new Error('Không tìm thấy shop');
-
-    if (senderRole === 'buyer' && targetShop.owner_user_id === session.user.id) {
-      throw new Error('Bạn không thể tự chat với shop của chính mình');
-    }
-
-    if (senderRole === 'seller') {
-      this.checkSellerShopOwnership(session, database, targetShop.id);
-    }
-
-    // If conversation doesn't exist yet, create it now!
-    if (!conv) {
-      const newConvId = (database.chat_conversations.reduce((max, c) => Math.max(max, c.id), 0) || 0) + 1;
-      conv = {
-        id: newConvId,
-        shop_id: targetShop.id,
-        buyer_id: session.user.id,
-        seller_id: targetShop.owner_user_id,
-        shop_name: targetShop.name,
-        shop_slug: targetShop.slug,
-        shop_avatar: targetShop.avatar,
-        buyer_name: session.user.full_name,
-        buyer_phone: session.user.phone,
-        last_message: content,
-        last_message_at: new Date().toISOString(),
-        buyer_unread: senderRole === 'seller' ? 1 : 0,
-        seller_unread: senderRole === 'buyer' ? 1 : 0,
-        created_at: new Date().toISOString()
-      };
-      database.chat_conversations.unshift(conv);
-    }
-
-    // If context_card provided: only insert if different from last context card in this conversation
-    if (payload.context_card) {
-      const prevContextMsgs = database.chat_messages.filter(
-        (m) => m.conversation_id === conv!.id && m.type === 'context'
-      );
-      const lastContext = prevContextMsgs[prevContextMsgs.length - 1];
-      const isSameProd = lastContext?.context_card?.product_id && payload.context_card.product_id && lastContext.context_card.product_id === payload.context_card.product_id;
-      const isSameOrd = lastContext?.context_card?.order_code && payload.context_card.order_code && lastContext.context_card.order_code === payload.context_card.order_code;
-
-      if (!isSameProd && !isSameOrd) {
-        const ctxMsgId = (database.chat_messages.reduce((max, m) => Math.max(max, m.id), 0) || 0) + 1;
-        const ctxMsg: ChatMessage = {
-          id: ctxMsgId,
-          conversation_id: conv.id,
-          sender_role: senderRole,
-          sender_id: session.user.id,
-          content: '', // NO text bubble!
-          type: 'context',
-          context_card: payload.context_card,
-          is_read: true,
-          created_at: new Date().toISOString()
-        };
-        database.chat_messages.push(ctxMsg);
+      const prodRef = doc(db, 'products', pid);
+      const prSnap = await txn.get(prodRef);
+      if (prSnap.exists()) {
+        const curCount = prSnap.data().ratingCount || 0;
+        const curAvg = prSnap.data().ratingAvg || 0;
+        const newCount = curCount + 1;
+        const newAvg = Number(((curAvg * curCount + payload.rating) / newCount).toFixed(1));
+        txn.update(prodRef, {
+          ratingCount: newCount,
+          ratingAvg: newAvg
+        });
       }
-    }
 
-    // Now insert real text message
-    const newMsgId = (database.chat_messages.reduce((max, m) => Math.max(max, m.id), 0) || 0) + 1;
-    const newMsg: ChatMessage = {
-      id: newMsgId,
-      conversation_id: conv.id,
-      sender_role: senderRole,
-      sender_id: session.user.id,
-      content,
-      type: 'text',
-      is_read: false,
-      created_at: new Date().toISOString()
-    };
-    database.chat_messages.push(newMsg);
-
-    conv.last_message = content;
-    conv.last_message_at = newMsg.created_at;
-
-    if (senderRole === 'buyer') {
-      conv.seller_unread = (conv.seller_unread || 0) + 1;
-    } else {
-      conv.buyer_unread = (conv.buyer_unread || 0) + 1;
-    }
-
-    // Notification for recipient (with 60 chars snippet, grouped/updated if existing unread notification for this conversation exists)
-    const recipientUserId = senderRole === 'buyer' ? targetShop.owner_user_id : conv.buyer_id;
-    const recipientRole = senderRole === 'buyer' ? 'seller' : 'buyer';
-    const senderName = senderRole === 'buyer' ? session.user.full_name : targetShop.name;
-    const snippet = content.length > 60 ? content.slice(0, 60) + '...' : content;
-
-    const existingNotif = database.notifications.find(
-      (n) => n.user_id === recipientUserId && n.type === 'chat' && n.order_id === conv!.id && !n.is_read
-    );
-
-    if (existingNotif) {
-      existingNotif.title = `Tin nhắn mới từ ${senderName}`;
-      existingNotif.message = `Tin nhắn mới từ ${senderName}: "${snippet}"`;
-      existingNotif.created_at = new Date().toISOString();
-    } else {
-      database.notifications.unshift({
-        id: (database.notifications.reduce((max, n) => Math.max(max, n.id), 0) || 0) + 1,
-        user_id: recipientUserId,
-        role: recipientRole,
-        type: 'chat',
-        order_id: conv.id,
-        title: `Tin nhắn mới từ ${senderName}`,
-        message: `Tin nhắn mới từ ${senderName}: "${snippet}"`,
-        is_read: false,
-        created_at: new Date().toISOString()
-      });
-    }
-
-    saveDb(database);
-    const msgs = database.chat_messages.filter((m) => m.conversation_id === conv!.id);
-    return {
-      message: newMsg,
-      conversation: {
-        ...conv,
-        shop_name: conv.shop_name || targetShop.name,
-        shop_slug: conv.shop_slug || targetShop.slug,
-        shop_avatar: conv.shop_avatar || targetShop.avatar,
-        messages: msgs
+      const shopRef = doc(db, 'shops', pData.shopId);
+      const shSnap = await txn.get(shopRef);
+      if (shSnap.exists()) {
+        const curCount = shSnap.data().ratingCount || 0;
+        const curAvg = shSnap.data().ratingAvg || 0;
+        const newCount = curCount + 1;
+        const newAvg = Number(((curAvg * curCount + payload.rating) / newCount).toFixed(1));
+        txn.update(shopRef, {
+          ratingCount: newCount,
+          ratingAvg: newAvg
+        });
       }
-    };
-  },
+    });
 
-  async markChatRead(conversationId: number): Promise<{ message: string }> {
-    await delay(30);
-    const session = getCurrentSession();
-    if (!session || !session.user) return { message: 'Xong' };
-    const database = getDb();
-    const conv = database.chat_conversations.find((c) => c.id === Number(conversationId));
-    if (conv) {
-      if (session.user.role === 'seller') {
-        conv.seller_unread = 0;
-      } else {
-        conv.buyer_unread = 0;
-      }
-      for (const m of database.chat_messages) {
-        if (m.conversation_id === conv.id) {
-          if (session.user.role === 'seller' && m.sender_role === 'buyer') m.is_read = true;
-          if (session.user.role === 'buyer' && m.sender_role === 'seller') m.is_read = true;
-        }
-      }
-      for (const n of database.notifications) {
-        if (n.type === 'chat' && n.order_id === conv.id && n.user_id === session.user.id) {
-          n.is_read = true;
-        }
-      }
-      saveDb(database);
-    }
-    return { message: 'Đã đánh dấu đã đọc' };
-  },
+    return { message: 'Đã gửi đánh giá thành công' };
+  }
 
-  // --- REVIEWS / ĐÁNH GIÁ ---
-  async getProductReviews(productId: number): Promise<{
-    reviews: Review[];
-    recent_reviews: Review[];
-    total_reviews: number;
-    average_rating: number;
-    distribution: Record<string, number>;
-  }> {
-    await delay();
-    const database = getDb();
-    const pid = Number(productId);
-    const session = getCurrentSession();
+  async submitReview(payload: any): Promise<{ message: string }> {
+    return this.createReview(payload);
+  }
 
-    // public filter: not hidden unless authored by current logged in user
-    const list = database.reviews.filter(
-      (r) => r.product_id === pid && (!r.is_hidden || (session?.user && r.user_id === session.user.id))
-    );
+  async getProductReviews(productId: number | string): Promise<{ reviews: Review[]; avg: number; total: number }> {
+    const db = getActiveFirestore();
+    const q = query(collection(db, 'reviews'), where('productId', '==', String(productId)));
+    const snap = await getDocs(q);
+
+    const list: Review[] = [];
+    let sum = 0;
+    snap.forEach((d) => {
+      const data = d.data();
+      if (!data.hidden) {
+        sum += Number(data.rating || 0);
+        list.push({
+          id: d.id as any,
+          order_id: data.orderId,
+          product_id: data.productId,
+          user_id: data.buyerUid,
+          user_name: data.buyerDisplayName,
+          rating: data.rating,
+          comment: data.comment,
+          images: data.images || [],
+          created_at: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString()
+        });
+      }
+    });
 
     const total = list.length;
-    const avg = total > 0 ? Number((list.reduce((acc, r) => acc + r.rating, 0) / total).toFixed(1)) : 0;
+    const avg = total > 0 ? Number((sum / total).toFixed(1)) : 0;
+    return { reviews: list, avg, total };
+  }
 
-    const dist: Record<string, number> = { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 };
-    for (const r of list) {
-      const k = String(r.rating);
-      if (dist[k] !== undefined) dist[k]++;
-    }
-
-    return {
-      reviews: list,
-      recent_reviews: list.slice(0, 5),
-      total_reviews: total,
-      average_rating: avg,
-      distribution: dist
-    };
-  },
-
-  async getShopReviews(shopId?: number): Promise<{
-    reviews: Review[];
-    recent_reviews: Review[];
-    total_reviews: number;
-    average_rating: number;
-    distribution: Record<string, number>;
-  }> {
-    await delay();
-    const database = getDb();
-    const session = getCurrentSession();
-
-    let list = database.reviews.filter(
-      (r) => !r.is_hidden || (session?.user && r.user_id === session.user.id)
-    );
-
-    if (shopId) {
-      list = list.filter((r) => r.shop_id === Number(shopId));
-    }
-
-    const total = list.length;
-    const avg = total > 0 ? Number((list.reduce((acc, r) => acc + r.rating, 0) / total).toFixed(1)) : 0;
-
-    const dist: Record<string, number> = { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 };
-    for (const r of list) {
-      const k = String(r.rating);
-      if (dist[k] !== undefined) dist[k]++;
-    }
-
-    return {
-      reviews: list,
-      recent_reviews: list.slice(0, 5),
-      total_reviews: total,
-      average_rating: avg,
-      distribution: dist
-    };
-  },
-
-  async getSellerReviews(): Promise<{ reviews: Review[]; total_reviews: number; average_rating: number; unreplied_count: number }> {
-    await delay();
-    const session = getCurrentSession();
-    const database = getDb();
-    const sellerShop = this.checkSellerShopOwnership(session, database);
-
-    const list = database.reviews.filter((r) => r.shop_id === sellerShop.id);
-    const total = list.length;
-    const avg = total > 0 ? Number((list.reduce((acc, r) => acc + r.rating, 0) / total).toFixed(1)) : 0;
+  async getShopReviews(): Promise<{ reviews: Review[]; avg: number; total: number; unreplied_count: number }> {
+    const cur = getCurrentUser();
+    if (!cur) return { reviews: [], avg: 0, total: 0, unreplied_count: 0 };
+    const db = getActiveFirestore();
+    const q = query(collection(db, 'reviews'), where('sellerUid', '==', cur.uid));
+    const snap = await getDocs(q);
+    const list: Review[] = [];
+    let sum = 0;
+    snap.forEach((d) => {
+      const data = d.data();
+      sum += Number(data.rating || 0);
+      list.push({
+        id: d.id as any,
+        order_id: data.orderId,
+        product_id: data.productId,
+        user_id: data.buyerUid,
+        user_name: data.buyerDisplayName,
+        rating: data.rating,
+        comment: data.comment,
+        images: data.images || [],
+        seller_reply: data.sellerReply?.text || null,
+        seller_reply_at: data.sellerReply?.at || null,
+        created_at: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString()
+      });
+    });
     const unreplied = list.filter((r) => !r.seller_reply).length;
-
     return {
       reviews: list,
-      total_reviews: total,
-      average_rating: avg,
+      avg: list.length > 0 ? Number((sum / list.length).toFixed(1)) : 0,
+      total: list.length,
       unreplied_count: unreplied
     };
-  },
+  }
 
-  async getOrderReviewedItems(orderId: number): Promise<{ reviewed_product_ids: number[]; reviews: Review[] }> {
-    await delay(50);
-    const database = getDb();
-    const revs = database.reviews.filter((r) => r.order_id === Number(orderId));
-    return {
-      reviewed_product_ids: revs.map((r) => r.product_id),
-      reviews: revs
-    };
-  },
+  async getSellerReviews(): Promise<{ reviews: Review[]; avg: number; total: number; unreplied_count: number }> {
+    return this.getShopReviews();
+  }
 
-  async submitReview(payload: {
-    order_id: number;
-    product_id: number;
-    rating: number;
-    comment?: string;
-    images?: string[];
-    video_url?: string;
-    video_duration?: number;
-    video_poster?: string;
-    is_anonymous?: boolean;
-    tags?: string[];
-  }): Promise<{ message: string; review: Review }> {
-    await delay();
-    const session = getCurrentSession();
-    if (!session || !session.user || session.user.role !== 'buyer') {
-      throw new Error('Vui lòng đăng nhập để gửi đánh giá');
-    }
-    const database = getDb();
-    if (database.presentation_mode && !session.user.is_owner) {
-      throw new Error('Cửa hàng đang tạm dừng nhận đơn trong buổi thuyết trình');
-    }
-
-    const prod = database.products.find((p) => p.id === Number(payload.product_id));
-    if (!prod) throw new Error('Không tìm thấy sản phẩm');
-
-    // Check existing
-    const existing = database.reviews.find(
-      (r) => r.order_id === Number(payload.order_id) && r.product_id === Number(payload.product_id)
-    );
-    if (existing) {
-      throw new Error('Sản phẩm này trong đơn hàng đã được đánh giá rồi');
-    }
-
-    const ord = database.orders.find((o) => o.id === Number(payload.order_id));
-    const targetShopId = prod.shop_id || ord?.shop_id || 1;
-    const shopObj = database.shops.find((s) => s.id === targetShopId);
-
-    const newRevId = (database.reviews.reduce((max, r) => Math.max(max, r.id), 0) || 0) + 1;
-    const authorName = payload.is_anonymous ? 'Người mua ẩn danh' : session.user.full_name;
-    const newRev: Review = {
-      id: newRevId,
-      shop_id: targetShopId,
-      order_id: Number(payload.order_id),
-      product_id: Number(payload.product_id),
-      user_id: session.user.id,
-      author_name: authorName,
-      buyer_name: authorName,
-      product_name: prod.name,
-      order_code: ord?.code,
-      rating: Math.min(5, Math.max(1, Number(payload.rating) || 5)),
-      comment: (payload.comment || '').trim(),
-      images: payload.images || [],
-      video_url: payload.video_url,
-      video_duration: payload.video_duration,
-      video_poster: payload.video_poster,
-      is_anonymous: Boolean(payload.is_anonymous),
-      tags: payload.tags || [],
-      helpful_count: 0,
-      helpful_user_ids: [],
-      is_hidden: false,
-      edit_count: 0,
-      created_at: new Date().toISOString()
-    };
-
-    database.reviews.unshift(newRev);
-
-    // Notify seller of this shop
-    database.notifications.unshift({
-      id: (database.notifications.reduce((max, n) => Math.max(max, n.id), 0) || 0) + 1,
-      user_id: shopObj?.owner_user_id || 1,
-      role: 'seller',
-      title: 'Đánh giá mới cho sản phẩm',
-      message: `${newRev.buyer_name} vừa đánh giá ${newRev.rating}★ cho "${prod.name}".`,
-      is_read: false,
-      created_at: new Date().toISOString()
+  async getOrderReviewedItems(orderId: number | string): Promise<{ reviewed_product_ids: number[] }> {
+    const db = getActiveFirestore();
+    const q = query(collection(db, 'reviews'), where('orderId', '==', String(orderId)));
+    const snap = await getDocs(q);
+    const ids: number[] = [];
+    snap.forEach((d) => {
+      ids.push(Number(d.data().productId) || d.data().productId);
     });
+    return { reviewed_product_ids: ids };
+  }
 
-    saveDb(database);
-    return { message: 'Cảm ơn bạn đã đánh giá!', review: newRev };
-  },
+  async updateReview(id: number | string, payload: any): Promise<{ message: string }> {
+    const db = getActiveFirestore();
+    await updateDoc(doc(db, 'reviews', String(id)), {
+      ...payload,
+      updatedAt: serverTimestamp()
+    });
+    return { message: 'Cập nhật đánh giá thành công' };
+  }
 
-  async updateReview(reviewId: number, payload: Partial<Review>): Promise<{ message: string; review: Review }> {
-    await delay();
-    const session = getCurrentSession();
-    if (!session || !session.user) throw new Error('Vui lòng đăng nhập');
-    const database = getDb();
-    const rev = database.reviews.find((r) => r.id === Number(reviewId) && r.user_id === session.user.id);
-    if (!rev) throw new Error('Không tìm thấy đánh giá');
+  async toggleHelpfulReview(id: number | string): Promise<{ helpful_count: number }> {
+    const cur = getCurrentUser();
+    if (!cur) throw new Error('Vui lòng đăng nhập');
+    const db = getActiveFirestore();
+    const ref = doc(db, 'reviews', String(id));
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return { helpful_count: 0 };
 
-    // Allowed 1 edit within 7 days
-    const createdTime = new Date(rev.created_at).getTime();
-    if (Date.now() - createdTime > 7 * 86400000) {
-      throw new Error('Đã quá hạn 7 ngày để chỉnh sửa đánh giá');
-    }
-    if ((rev.edit_count || 0) >= 1) {
-      throw new Error('Đánh giá chỉ được chỉnh sửa tối đa 1 lần');
-    }
-
-    if (payload.rating !== undefined) rev.rating = payload.rating;
-    if (payload.comment !== undefined) rev.comment = payload.comment;
-    if (payload.images !== undefined) rev.images = payload.images;
-    if (payload.video_url !== undefined) rev.video_url = payload.video_url;
-    if (payload.is_anonymous !== undefined) {
-      rev.is_anonymous = payload.is_anonymous;
-      rev.buyer_name = payload.is_anonymous ? 'Người mua ẩn danh' : session.user.full_name;
-    }
-    rev.edit_count = (rev.edit_count || 0) + 1;
-    rev.updated_at = new Date().toISOString();
-
-    saveDb(database);
-    return { message: 'Đã cập nhật đánh giá thành công', review: rev };
-  },
-
-  async toggleHelpfulReview(reviewId: number): Promise<{ helpful_count: number; is_helpful: boolean }> {
-    await delay(50);
-    const session = getCurrentSession();
-    if (!session || !session.user) throw new Error('Vui lòng đăng nhập');
-    const database = getDb();
-    const rev = database.reviews.find((r) => r.id === Number(reviewId));
-    if (!rev) throw new Error('Không tìm thấy đánh giá');
-
-    rev.helpful_user_ids = rev.helpful_user_ids || [];
-    const idx = rev.helpful_user_ids.indexOf(session.user.id);
-    let isHelpful = false;
-
-    if (idx >= 0) {
-      rev.helpful_user_ids.splice(idx, 1);
-      isHelpful = false;
+    const helpfulUids: string[] = snap.data().helpfulUids || [];
+    let newCount = helpfulUids.length;
+    if (helpfulUids.includes(cur.uid)) {
+      await updateDoc(ref, {
+        helpfulUids: arrayRemove(cur.uid),
+        helpfulCount: increment(-1)
+      });
+      newCount--;
     } else {
-      rev.helpful_user_ids.push(session.user.id);
-      isHelpful = true;
+      await updateDoc(ref, {
+        helpfulUids: arrayUnion(cur.uid),
+        helpfulCount: increment(1)
+      });
+      newCount++;
     }
-    rev.helpful_count = rev.helpful_user_ids.length;
+    return { helpful_count: Math.max(0, newCount) };
+  }
 
-    saveDb(database);
-    return { helpful_count: rev.helpful_count, is_helpful: isHelpful };
-  },
-
-  async replyReview(reviewId: number, reply: string): Promise<{ message: string; review: Review }> {
-    await delay();
-    const session = getCurrentSession();
-    const database = getDb();
-    const rev = database.reviews.find((r) => r.id === Number(reviewId));
-    if (!rev) throw new Error('Không tìm thấy đánh giá');
-
-    this.checkSellerShopOwnership(session, database, rev.shop_id);
-
-    rev.seller_reply = reply.trim();
-    rev.seller_reply_at = new Date().toISOString();
-
-    // Notify buyer
-    database.notifications.unshift({
-      id: (database.notifications.reduce((max, n) => Math.max(max, n.id), 0) || 0) + 1,
-      user_id: rev.user_id || 2,
-      role: 'buyer',
-      title: 'Shop đã phản hồi đánh giá',
-      message: `Shop vừa phản hồi đánh giá của bạn cho món đồ "${rev.product_name}".`,
-      is_read: false,
-      created_at: new Date().toISOString()
+  async replyReview(id: number | string, reply: string): Promise<{ message: string }> {
+    const db = getActiveFirestore();
+    await updateDoc(doc(db, 'reviews', String(id)), {
+      sellerReply: {
+        text: reply,
+        at: new Date().toISOString()
+      },
+      updatedAt: serverTimestamp()
     });
+    return { message: 'Đã gửi phản hồi đánh giá' };
+  }
 
-    saveDb(database);
-    return { message: 'Đã phản hồi đánh giá', review: rev };
-  },
+  async reportReview(id: number | string, reason: string): Promise<{ message: string }> {
+    const db = getActiveFirestore();
+    await updateDoc(doc(db, 'reviews', String(id)), {
+      hidden: true,
+      hiddenReason: reason,
+      updatedAt: serverTimestamp()
+    });
+    return { message: 'Đã báo cáo đánh giá' };
+  }
 
-  async reportReview(reviewId: number, reason: string): Promise<{ message: string }> {
-    await delay();
-    const database = getDb();
-    const rev = database.reviews.find((r) => r.id === Number(reviewId));
-    if (!rev) throw new Error('Không tìm thấy đánh giá');
-
-    rev.is_hidden = true;
-    rev.report_reason = reason;
-
-    saveDb(database);
-    return { message: 'Đã ẩn đánh giá khỏi trang công khai' };
-  },
-
-  // --- RETURNS & REFUNDS ---
-  async requestReturn(payload: {
-    order_id: number;
+  async createReturn(payload: {
+    order_id: string | number;
     reason: string;
-    description: string;
+    detail?: string;
+    description?: string;
     images?: string[];
-    refund_method: string;
-  }): Promise<{ message: string; return_request: ReturnRequest }> {
-    await delay();
-    const session = getCurrentSession();
-    if (!session || !session.user || session.user.role !== 'buyer') {
-      throw new Error('Vui lòng đăng nhập tài khoản người mua');
+  }): Promise<{ message: string }> {
+    const cur = getCurrentUser();
+    if (!cur) throw new Error('Chưa đăng nhập');
+
+    const db = getActiveFirestore();
+    const orderSnap = await getDoc(doc(db, 'orders', String(payload.order_id)));
+    if (!orderSnap.exists()) throw new Error('Đơn không tồn tại');
+    const oData = orderSnap.data();
+
+    const compressedImages: string[] = [];
+    for (const img of (payload.images || []).slice(0, 3)) {
+      const c = await compressImage(img, 800, 120 * 1024);
+      compressedImages.push(c);
     }
-    const database = getDb();
-    const ord = database.orders.find((o) => o.id === Number(payload.order_id) && (o.buyer_id === session.user.id || o.user_id === session.user.id));
-    if (!ord) throw new Error('Không tìm thấy đơn hàng');
 
-    const firstItem = ord.items?.[0];
-    const newId = (database.return_requests.reduce((max, r) => Math.max(max, r.id), 0) || 0) + 1;
-    const shopObj = database.shops.find((s) => s.id === ord.shop_id);
-
-    const newReq: ReturnRequest = {
-      id: newId,
-      order_id: ord.id,
-      shop_id: ord.shop_id,
-      order_code: ord.code,
-      buyer_id: session.user.id,
-      buyer_name: session.user.full_name,
-      buyer_phone: session.user.phone,
-      product_id: firstItem?.product_id || 1,
-      product_name: firstItem?.product_name || 'Sản phẩm hoàn trả',
-      product_image: firstItem?.image_url,
+    const retId = `ret_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const retDoc = {
+      orderId: String(payload.order_id),
+      buyerUid: cur.uid,
+      sellerUid: oData.sellerUid,
+      shopId: oData.shopId,
+      items: oData.items || [],
       reason: payload.reason,
-      description: payload.description,
-      images: payload.images || [],
-      refund_amount: ord.total,
-      refund_method: payload.refund_method,
+      detail: payload.detail || payload.description || '',
+      images: compressedImages,
       status: 'pending',
-      created_at: new Date().toISOString()
+      logs: [{
+        status: 'pending',
+        actor: cur.full_name,
+        at: new Date().toISOString()
+      }],
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
     };
 
-    database.return_requests.unshift(newReq);
+    assertDocSize(retDoc);
+    await setDoc(doc(db, 'returns', retId), retDoc);
 
-    // Notify seller of this shop
-    database.notifications.unshift({
-      id: (database.notifications.reduce((max, n) => Math.max(max, n.id), 0) || 0) + 1,
-      user_id: shopObj?.owner_user_id || 1,
-      role: 'seller',
-      title: 'Yêu cầu đổi trả mới',
-      message: `Khách ${session.user.full_name} yêu cầu trả đơn #${ord.code}.`,
-      is_read: false,
-      created_at: new Date().toISOString()
+    return { message: 'Đã gửi yêu cầu trả hàng' };
+  }
+
+  async requestReturn(payload: any): Promise<{ message: string }> {
+    return this.createReturn(payload);
+  }
+
+  async getMyReturns(): Promise<{ returns: ReturnRequest[] }> {
+    const cur = getCurrentUser();
+    if (!cur) return { returns: [] };
+    const db = getActiveFirestore();
+    const q = query(collection(db, 'returns'), where('buyerUid', '==', cur.uid));
+    const snap = await getDocs(q);
+    const list: ReturnRequest[] = [];
+    snap.forEach((d) => {
+      const data = d.data();
+      list.push({
+        id: d.id as any,
+        shop_id: data.shopId as any,
+        order_id: data.orderId,
+        buyer_id: data.buyerUid,
+        product_id: data.items?.[0]?.productId || 1,
+        reason: data.reason,
+        description: data.detail,
+        images: data.images,
+        status: data.status,
+        refund_amount: 0,
+        refund_method: 'Ngân hàng',
+        created_at: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString()
+      });
+    });
+    return { returns: list };
+  }
+
+  async getSellerReturns(): Promise<{ returns: ReturnRequest[]; return_requests: ReturnRequest[] }> {
+    const cur = getCurrentUser();
+    if (!cur || cur.role !== 'seller') return { returns: [], return_requests: [] };
+    const db = getActiveFirestore();
+    const q = query(collection(db, 'returns'), where('sellerUid', '==', cur.uid));
+    const snap = await getDocs(q);
+    const list: ReturnRequest[] = [];
+    snap.forEach((d) => {
+      const data = d.data();
+      list.push({
+        id: d.id as any,
+        shop_id: data.shopId as any,
+        order_id: data.orderId,
+        buyer_id: data.buyerUid,
+        product_id: data.items?.[0]?.productId || 1,
+        reason: data.reason,
+        description: data.detail,
+        images: data.images,
+        status: data.status,
+        refund_amount: 0,
+        refund_method: 'Ngân hàng',
+        created_at: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString()
+      });
+    });
+    return { returns: list, return_requests: list };
+  }
+
+  async updateReturnStatus(id: number | string, payload: { status: string; seller_note?: string }): Promise<{ message: string }> {
+    const db = getActiveFirestore();
+    await updateDoc(doc(db, 'returns', String(id)), {
+      status: payload.status,
+      sellerNote: payload.seller_note || null,
+      updatedAt: serverTimestamp()
+    });
+    return { message: 'Đã cập nhật trạng thái khiếu nại' };
+  }
+
+  // --- CONVERSATIONS & CHAT ---
+
+  async getChatConversations(): Promise<{ conversations: ChatConversation[] }> {
+    return this.getConversations();
+  }
+
+  async getConversations(): Promise<{ conversations: ChatConversation[] }> {
+    const cur = getCurrentUser();
+    if (!cur) return { conversations: [] };
+
+    const db = getActiveFirestore();
+    const convRef = collection(db, 'conversations');
+    const field = cur.role === 'seller' ? 'sellerUid' : 'buyerUid';
+    const q = query(convRef, where(field, '==', cur.uid));
+    const snap = await getDocs(q);
+
+    const list: ChatConversation[] = [];
+    snap.forEach((d) => {
+      const data = d.data();
+      list.push({
+        id: d.id as any,
+        buyer_id: data.buyerUid as any,
+        seller_id: data.sellerUid as any,
+        shop_id: data.shopId as any,
+        shop_name: data.shopName,
+        buyer_name: data.buyerName,
+        last_message: data.lastMessage,
+        last_message_at: data.lastMessageAt?.toDate ? data.lastMessageAt.toDate().toISOString() : new Date().toISOString(),
+        unread_count: cur.role === 'buyer' ? data.buyerUnread || 0 : data.sellerUnread || 0,
+        created_at: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString()
+      });
     });
 
-    saveDb(database);
-    return { message: 'Đã gửi yêu cầu trả hàng & hoàn tiền', return_request: newReq };
-  },
+    list.sort((a, b) => new Date(b.last_message_at || 0).getTime() - new Date(a.last_message_at || 0).getTime());
+    return { conversations: list };
+  }
 
-  async getMyReturns(): Promise<{ return_requests: ReturnRequest[] }> {
-    await delay();
-    const session = getCurrentSession();
-    if (!session || !session.user) return { return_requests: [] };
-    const database = getDb();
-    return { return_requests: database.return_requests.filter((r) => r.buyer_id === session.user.id) };
-  },
+  async startShopChat(
+    shopId: number | string,
+    context?: { type: 'product' | 'order'; product_id?: number | string; order_code?: string; initial_message?: string }
+  ): Promise<{ conversation: ChatConversation; created: boolean }> {
+    const cur = getCurrentUser();
+    if (!cur) throw new Error('Vui lòng đăng nhập');
 
-  async getSellerReturns(): Promise<{ return_requests: ReturnRequest[] }> {
-    await delay();
-    const session = getCurrentSession();
-    const database = getDb();
-    const sellerShop = this.checkSellerShopOwnership(session, database);
+    const db = getActiveFirestore();
+    const convId = `${cur.uid}_${shopId}`;
+    const convRef = doc(db, 'conversations', convId);
+    const snap = await getDoc(convRef);
 
-    const filtered = database.return_requests.filter((r) => {
-      if (r.shop_id) return r.shop_id === sellerShop.id;
-      const ord = database.orders.find((o) => o.id === r.order_id);
-      return ord && ord.shop_id === sellerShop.id;
-    });
+    let created = false;
+    let shopName = 'Đồ Cũ Còn Thương';
+    let sellerUid = 'seller_admin';
 
-    return { return_requests: filtered };
-  },
+    const sSnap = await getDoc(doc(db, 'shops', String(shopId)));
+    if (sSnap.exists()) {
+      shopName = sSnap.data().name;
+      sellerUid = sSnap.data().ownerUid;
+    }
 
-  async updateReturnStatus(id: number, payload: { status: string; seller_note?: string }): Promise<{ message: string; return_request: ReturnRequest }> {
-    await delay();
-    const session = getCurrentSession();
-    const database = getDb();
-    const ret = database.return_requests.find((r) => r.id === Number(id));
-    if (!ret) throw new Error('Không tìm thấy yêu cầu trả hàng');
+    if (!snap.exists()) {
+      created = true;
+      await setDoc(convRef, {
+        buyerUid: cur.uid,
+        buyerName: cur.full_name,
+        shopId: String(shopId),
+        shopName,
+        sellerUid,
+        lastMessage: context?.initial_message || 'Bắt đầu trò chuyện',
+        lastMessageAt: serverTimestamp(),
+        buyerUnread: 0,
+        sellerUnread: 1,
+        createdAt: serverTimestamp()
+      });
 
-    const ord = database.orders.find((o) => o.id === ret.order_id);
-    const shopId = ret.shop_id || ord?.shop_id || 1;
-    this.checkSellerShopOwnership(session, database, shopId);
-
-    ret.status = payload.status as ReturnStatus;
-    if (payload.seller_note) ret.seller_note = payload.seller_note;
-
-    if (payload.status === 'refunded') {
-      // restore stock
-      if (ord) {
-        for (const it of ord.items || []) {
-          const prod = database.products.find((p) => p.id === it.product_id);
-          if (prod) prod.stock += it.quantity;
-        }
+      if (context?.initial_message) {
+        await this.sendMessage({
+          conversation_id: convId,
+          text: context.initial_message,
+          context: context.product_id ? { kind: 'product', refId: context.product_id } : undefined
+        });
       }
     }
 
-    saveDb(database);
-    return { message: 'Đã cập nhật yêu cầu trả hàng', return_request: ret };
-  },
+    const { messages } = await this.getMessages(convId);
+    const conv: ChatConversation = {
+      id: convId as any,
+      buyer_id: cur.uid as any,
+      seller_id: sellerUid as any,
+      shop_id: shopId as any,
+      shop_name: shopName,
+      buyer_name: cur.full_name,
+      last_message: context?.initial_message || 'Bắt đầu trò chuyện',
+      last_message_at: new Date().toISOString(),
+      unread_count: 0,
+      created_at: new Date().toISOString(),
+      messages
+    };
+
+    return { conversation: conv, created };
+  }
+
+  async getChatDetail(id: number | string): Promise<{ conversation: ChatConversation; messages: ChatMessage[] }> {
+    const db = getActiveFirestore();
+    const snap = await getDoc(doc(db, 'conversations', String(id)));
+    if (!snap.exists()) throw new Error('Cuộc trò chuyện không tồn tại');
+    const data = snap.data();
+
+    const { messages } = await this.getMessages(String(id));
+    const conversation: ChatConversation = {
+      id: String(id) as any,
+      buyer_id: data.buyerUid,
+      seller_id: data.sellerUid,
+      shop_id: data.shopId,
+      shop_name: data.shopName,
+      buyer_name: data.buyerName,
+      last_message: data.lastMessage,
+      last_message_at: data.lastMessageAt?.toDate ? data.lastMessageAt.toDate().toISOString() : new Date().toISOString(),
+      unread_count: 0,
+      created_at: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString(),
+      messages
+    };
+
+    return { conversation, messages };
+  }
+
+  async getMessages(conversationId: string): Promise<{ messages: ChatMessage[] }> {
+    const db = getActiveFirestore();
+    const msgsRef = collection(db, 'conversations', conversationId, 'messages');
+    const snap = await getDocs(msgsRef);
+
+    const messages: ChatMessage[] = [];
+    snap.forEach((d) => {
+      const data = d.data();
+      messages.push({
+        id: d.id as any,
+        conversation_id: conversationId as any,
+        sender_id: data.senderUid as any,
+        sender_role: data.senderRole,
+        message: data.text,
+        context_type: data.context?.kind,
+        context_id: data.context?.refId,
+        created_at: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString()
+      });
+    });
+
+    messages.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    return { messages };
+  }
+
+  async sendMessage(payload: {
+    conversation_id?: string;
+    shop_id?: string | number;
+    text: string;
+    context?: any;
+  }): Promise<{ message: ChatMessage }> {
+    const cur = getCurrentUser();
+    if (!cur) throw new Error('Vui lòng đăng nhập để gửi tin nhắn');
+
+    const db = getActiveFirestore();
+    let convId = payload.conversation_id;
+
+    if (!convId && payload.shop_id) {
+      convId = `${cur.uid}_${payload.shop_id}`;
+    }
+    if (!convId) throw new Error('Thiếu thông tin cuộc trò chuyện');
+
+    const convRef = doc(db, 'conversations', convId);
+    const convSnap = await getDoc(convRef);
+
+    let toUid = '';
+    if (!convSnap.exists()) {
+      const shopSnap = await getDoc(doc(db, 'shops', String(payload.shop_id)));
+      const shopData = shopSnap.exists() ? shopSnap.data() : { name: 'Đồ Cũ Còn Thương', ownerUid: 'seller_admin' };
+      toUid = shopData.ownerUid;
+
+      await setDoc(convRef, {
+        buyerUid: cur.uid,
+        buyerName: cur.full_name,
+        shopId: String(payload.shop_id),
+        shopName: shopData.name,
+        sellerUid: shopData.ownerUid,
+        lastMessage: payload.text,
+        lastMessageAt: serverTimestamp(),
+        buyerUnread: 0,
+        sellerUnread: 1,
+        createdAt: serverTimestamp()
+      });
+    } else {
+      const data = convSnap.data();
+      toUid = cur.role === 'buyer' ? data.sellerUid : data.buyerUid;
+      await updateDoc(convRef, {
+        lastMessage: payload.text,
+        lastMessageAt: serverTimestamp(),
+        buyerUnread: cur.role === 'seller' ? increment(1) : 0,
+        sellerUnread: cur.role === 'buyer' ? increment(1) : 0
+      });
+    }
+
+    const msgId = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const msgDoc = {
+      senderUid: cur.uid,
+      senderRole: cur.role,
+      type: payload.context ? 'context' : 'text',
+      text: payload.text,
+      context: payload.context || null,
+      createdAt: serverTimestamp(),
+      readAt: null
+    };
+
+    await setDoc(doc(db, 'conversations', convId, 'messages', msgId), msgDoc);
+
+    const notifId = `chat_${convId}_${toUid}`;
+    await setDoc(
+      doc(db, 'notifications', notifId),
+      {
+        toUid,
+        fromUid: cur.uid,
+        type: 'chat',
+        title: `Tin nhắn mới từ ${cur.full_name}`,
+        body: payload.text,
+        link: `/chat?conv=${convId}`,
+        isRead: false,
+        count: increment(1),
+        createdAt: serverTimestamp()
+      },
+      { merge: true }
+    );
+
+    return {
+      message: {
+        id: msgId as any,
+        conversation_id: convId as any,
+        sender_id: cur.uid as any,
+        sender_role: cur.role,
+        message: payload.text,
+        created_at: new Date().toISOString()
+      }
+    };
+  }
+
+  async sendChatMessage(payload: any): Promise<{ message: ChatMessage }> {
+    return this.sendMessage({
+      conversation_id: payload.conversation_id ? String(payload.conversation_id) : undefined,
+      shop_id: payload.shop_id,
+      text: payload.content || payload.text,
+      context: payload.context_card || payload.context
+    });
+  }
+
+  async markChatRead(id: number | string): Promise<{ message: string }> {
+    const cur = getCurrentUser();
+    if (!cur) return { message: 'OK' };
+    const db = getActiveFirestore();
+    const convRef = doc(db, 'conversations', String(id));
+    if (cur.role === 'buyer') {
+      await updateDoc(convRef, { buyerUnread: 0 });
+    } else {
+      await updateDoc(convRef, { sellerUnread: 0 });
+    }
+    return { message: 'Đã đánh dấu đã đọc' };
+  }
 
   // --- NOTIFICATIONS ---
+
   async getNotifications(): Promise<{ notifications: NotificationItem[]; unread_count: number }> {
-    await delay(50);
-    const session = getCurrentSession();
-    if (!session || !session.user) return { notifications: [], unread_count: 0 };
-    const database = getDb();
-    const myNotifs = database.notifications.filter(
-      (n) => n.user_id === session.user.id || (n.role && n.role === session.user.role)
-    );
-    return {
-      notifications: myNotifs,
-      unread_count: myNotifs.filter((n) => !n.is_read).length
-    };
-  },
+    const cur = getCurrentUser();
+    if (!cur) return { notifications: [], unread_count: 0 };
 
-  async markNotificationRead(id: number): Promise<{ message: string }> {
-    await delay(30);
-    const database = getDb();
-    const notif = database.notifications.find((n) => n.id === Number(id));
-    if (notif) notif.is_read = true;
-    saveDb(database);
-    return { message: 'Đã đánh dấu đã đọc' };
-  },
+    const db = getActiveFirestore();
+    const q = query(collection(db, 'notifications'), where('toUid', '==', cur.uid));
+    const snap = await getDocs(q);
 
-  async markAllNotificationsRead(): Promise<{ message: string }> {
-    await delay(30);
-    const session = getCurrentSession();
-    if (!session || !session.user) return { message: 'Xong' };
-    const database = getDb();
-    for (const n of database.notifications) {
-      if (n.user_id === session.user.id || n.role === session.user.role) {
-        n.is_read = true;
-      }
-    }
-    saveDb(database);
-    return { message: 'Đã đọc toàn bộ thông báo' };
-  },
-
-  // --- WISHLIST ---
-  async getWishlistIds(): Promise<{ product_ids: number[] }> {
-    await delay(40);
-    const session = getCurrentSession();
-    if (!session || !session.user) return { product_ids: [] };
-    const database = getDb();
-    const ids = database.wishlist.filter((w) => w.user_id === session.user.id).map((w) => w.product_id);
-    return { product_ids: ids };
-  },
-
-  async toggleWishlist(productId: number): Promise<{ liked: boolean; message: string }> {
-    await delay(80);
-    const session = getCurrentSession();
-    if (!session || !session.user || session.user.role !== 'buyer') {
-      throw new Error('Vui lòng đăng nhập tài khoản người mua để lưu món đồ');
-    }
-    const database = getDb();
-    const pid = Number(productId);
-    const idx = database.wishlist.findIndex((w) => w.user_id === session.user.id && w.product_id === pid);
-    let liked = false;
-    if (idx >= 0) {
-      database.wishlist.splice(idx, 1);
-      liked = false;
-    } else {
-      database.wishlist.push({ user_id: session.user.id, product_id: pid, created_at: new Date().toISOString() });
-      liked = true;
-    }
-    saveDb(database);
-    return { liked, message: liked ? 'Đã thêm vào danh sách yêu thích' : 'Đã bỏ yêu thích' };
-  },
-
-  // --- SELLER COUPONS ---
-  async getSellerCoupons(): Promise<{ coupons: Coupon[] }> {
-    await delay();
-    const session = getCurrentSession();
-    const database = getDb();
-    const sellerShop = this.checkSellerShopOwnership(session, database);
-    return { coupons: database.coupons.filter((c) => c.shop_id === sellerShop.id) };
-  },
-
-  async createCoupon(data: { code: string; type: string; value: number; max_discount?: number; min_order_amount?: number }): Promise<{ coupon: Coupon }> {
-    await delay();
-    const session = getCurrentSession();
-    const database = getDb();
-    const sellerShop = this.checkSellerShopOwnership(session, database);
-
-    const cleanCode = data.code.toUpperCase().trim();
-    if (database.coupons.some((c) => c.code === cleanCode && c.shop_id === sellerShop.id)) {
-      throw new Error('Mã giảm giá này đã tồn tại trong shop của bạn');
-    }
-
-    const newId = (database.coupons.reduce((max, c) => Math.max(max, c.id), 0) || 0) + 1;
-    const newCpn: Coupon = {
-      id: newId,
-      shop_id: sellerShop.id,
-      seller_id: sellerShop.owner_user_id,
-      code: cleanCode,
-      type: data.type as any,
-      value: Number(data.value),
-      max_discount: data.max_discount ? Number(data.max_discount) : undefined,
-      min_order_amount: data.min_order_amount ? Number(data.min_order_amount) : 0,
-      is_active: true,
-      usage_count: 0
-    };
-
-    database.coupons.push(newCpn);
-    saveDb(database);
-    return { coupon: newCpn };
-  },
-
-  async toggleCoupon(id: number): Promise<{ message: string; is_active: boolean }> {
-    await delay();
-    const session = getCurrentSession();
-    const database = getDb();
-    const cpn = database.coupons.find((c) => c.id === Number(id));
-    if (!cpn) throw new Error('Không tìm thấy mã');
-
-    this.checkSellerShopOwnership(session, database, cpn.shop_id);
-
-    cpn.is_active = !cpn.is_active;
-    saveDb(database);
-    return {
-      message: cpn.is_active ? 'Đã kích hoạt mã giảm giá' : 'Đã tạm dừng mã giảm giá',
-      is_active: Boolean(cpn.is_active)
-    };
-  },
-
-  async deleteCoupon(id: number): Promise<{ message: string }> {
-    await delay();
-    const session = getCurrentSession();
-    const database = getDb();
-    const cpn = database.coupons.find((c) => c.id === Number(id));
-    if (!cpn) throw new Error('Không tìm thấy mã');
-
-    this.checkSellerShopOwnership(session, database, cpn.shop_id);
-
-    database.coupons = database.coupons.filter((c) => c.id !== Number(id));
-    saveDb(database);
-    return { message: 'Đã xóa mã giảm giá' };
-  },
-
-  // --- FILE UPLOAD (MOCK / INDEXEDDB) ---
-  async uploadFile(base64: string, type: 'image' | 'video' = 'image'): Promise<{ url: string }> {
-    await delay(100);
-    const url = await saveMediaToIndexedDb(base64, type);
-    return { url };
-  },
-
-  // --- ADDRESS BOOK ---
-  async getAddresses(): Promise<{ addresses: Address[] }> {
-    await delay(50);
-    const session = getCurrentSession();
-    if (!session || !session.user) return { addresses: [] };
-    const database = getDb();
-    const list = database.addresses.filter((a) => a.user_id === session.user.id);
-    return { addresses: list };
-  },
-
-  async addAddress(data: { recipient_name: string; phone: string; address_line: string; is_default?: boolean }): Promise<{ message: string; addresses: Address[] }> {
-    await delay(80);
-    const session = getCurrentSession();
-    if (!session || !session.user) throw new Error('Vui lòng đăng nhập');
-    const database = getDb();
-
-    if (data.is_default) {
-      for (const a of database.addresses) {
-        if (a.user_id === session.user.id) a.is_default = false;
-      }
-    }
-
-    const newId = (database.addresses.reduce((max, a) => Math.max(max, a.id), 0) || 0) + 1;
-    database.addresses.push({
-      id: newId,
-      user_id: session.user.id,
-      recipient_name: data.recipient_name.trim(),
-      phone: data.phone.trim(),
-      address_line: data.address_line.trim(),
-      is_default: Boolean(data.is_default || database.addresses.filter((a) => a.user_id === session.user.id).length === 0)
+    const list: NotificationItem[] = [];
+    snap.forEach((d) => {
+      const data = d.data();
+      list.push({
+        id: d.id as any,
+        user_id: cur.uid as any,
+        role: cur.role,
+        title: data.title,
+        message: data.body,
+        is_read: !!data.isRead,
+        created_at: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString()
+      });
     });
 
-    saveDb(database);
-    const updatedList = database.addresses.filter((a) => a.user_id === session.user.id);
-    return { message: 'Thêm địa chỉ mới thành công', addresses: updatedList };
-  },
+    list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    return {
+      notifications: list,
+      unread_count: list.filter((n) => !n.is_read).length
+    };
+  }
 
-  async updateAddress(id: number, data: { recipient_name: string; phone: string; address_line: string; is_default?: boolean }): Promise<{ message: string; addresses: Address[] }> {
-    await delay(80);
-    const session = getCurrentSession();
-    if (!session || !session.user) throw new Error('Vui lòng đăng nhập');
-    const database = getDb();
+  async markNotificationRead(id: string | number): Promise<void> {
+    const db = getActiveFirestore();
+    await updateDoc(doc(db, 'notifications', String(id)), { isRead: true });
+  }
 
-    const addr = database.addresses.find((a) => a.id === Number(id) && a.user_id === session.user.id);
-    if (!addr) throw new Error('Không tìm thấy địa chỉ');
+  async markAllNotificationsRead(): Promise<void> {
+    const cur = getCurrentUser();
+    if (!cur) return;
+    const db = getActiveFirestore();
+    const q = query(collection(db, 'notifications'), where('toUid', '==', cur.uid));
+    const snap = await getDocs(q);
+    const batch = writeBatch(db);
+    snap.forEach((d) => {
+      batch.update(d.ref, { isRead: true });
+    });
+    await batch.commit();
+  }
 
-    if (data.is_default) {
-      for (const a of database.addresses) {
-        if (a.user_id === session.user.id) a.is_default = false;
+  // --- COUPONS & CHECKOUT CALCULATIONS ---
+
+  async getPublicCoupons(): Promise<{ coupons: Coupon[] }> {
+    const db = getActiveFirestore();
+    const snap = await getDocs(collection(db, 'coupons'));
+    const list: Coupon[] = [];
+    snap.forEach((d) => {
+      list.push(normalizeCouponDoc(d.data(), d.id));
+    });
+    return { coupons: list };
+  }
+
+  async getSellerCoupons(): Promise<{ coupons: Coupon[] }> {
+    const cur = getCurrentUser();
+    if (!cur || cur.role !== 'seller') return { coupons: [] };
+    const db = getActiveFirestore();
+    const q = query(collection(db, 'coupons'), where('ownerUid', '==', cur.uid));
+    const snap = await getDocs(q);
+    const list: Coupon[] = [];
+    snap.forEach((d) => {
+      list.push(normalizeCouponDoc(d.data(), d.id));
+    });
+    return { coupons: list };
+  }
+
+  async createCoupon(data: any): Promise<{ coupon: Coupon }> {
+    const cur = getCurrentUser();
+    if (!cur || cur.role !== 'seller') throw new Error('Chỉ người bán mới được tạo mã');
+    const db = getActiveFirestore();
+    const code = (data.code || '').toUpperCase().trim();
+    const couponDoc = {
+      code,
+      shopId: cur.shop_id || 'do-cu-con-thuong',
+      ownerUid: cur.uid,
+      type: data.type || 'percent',
+      value: Number(data.value || 0),
+      maxDiscount: Number(data.max_discount || 0),
+      minOrder: Number(data.min_order_amount || 0),
+      active: true,
+      usedCount: 0,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    };
+    await setDoc(doc(db, 'coupons', code), couponDoc);
+    return { coupon: normalizeCouponDoc(couponDoc, code) };
+  }
+
+  async toggleCoupon(code: string | number): Promise<{ is_active: boolean; message: string }> {
+    const db = getActiveFirestore();
+    const ref = doc(db, 'coupons', String(code));
+    const snap = await getDoc(ref);
+    if (!snap.exists()) throw new Error('Mã không tồn tại');
+    const current = snap.data().active !== false;
+    await updateDoc(ref, { active: !current });
+    return {
+      is_active: !current,
+      message: !current ? 'Đã kích hoạt mã giảm giá' : 'Đã tạm dừng mã giảm giá'
+    };
+  }
+
+  async deleteCoupon(code: string | number): Promise<{ message: string }> {
+    const db = getActiveFirestore();
+    await deleteDoc(doc(db, 'coupons', String(code)));
+    return { message: 'Đã xóa mã' };
+  }
+
+  async validateCoupon(code: string, subtotal: number, shippingFee?: number, shopId?: number | string): Promise<{ coupon: Coupon; discount_amount: number }> {
+    const db = getActiveFirestore();
+    const cSnap = await getDoc(doc(db, 'coupons', code.toUpperCase().trim()));
+    if (!cSnap.exists() || cSnap.data().active === false) {
+      throw new Error('Mã giảm giá không tồn tại hoặc đã hết hạn');
+    }
+    const cpn = cSnap.data();
+    if (shopId && cpn.shopId && String(cpn.shopId) !== String(shopId)) {
+      throw new Error('Mã này chỉ áp dụng cho shop phát hành');
+    }
+    if (subtotal < (cpn.minOrder || 0)) {
+      throw new Error(`Đơn hàng của shop phải từ ${(cpn.minOrder || 0).toLocaleString('vi-VN')}đ để dùng mã này`);
+    }
+
+    const shipFee = shippingFee !== undefined ? shippingFee : (subtotal >= 1000000 ? 0 : 30000);
+    let discount = 0;
+    if (cpn.type === 'freeship' || cpn.type === 'shipping') {
+      discount = Math.min(shipFee, cpn.maxDiscount || 30000);
+    } else if (cpn.type === 'percent') {
+      discount = Math.min(Math.round((subtotal * cpn.value) / 100), cpn.maxDiscount || 999999999);
+    } else {
+      discount = cpn.value || 0;
+    }
+
+    return {
+      coupon: normalizeCouponDoc(cpn, code),
+      discount_amount: discount
+    };
+  }
+
+  async calculateCheckout(cart: { items: any[] }, couponsByShop?: Record<number | string, string>): Promise<{
+    shop_breakdowns: Array<{
+      shop_id: string;
+      shop_name: string;
+      items: any[];
+      subtotal: number;
+      shipping_fee: number;
+      discount_amount: number;
+      total: number;
+      applied_coupon?: string;
+    }>;
+    total_subtotal: number;
+    total_shipping: number;
+    total_discount: number;
+    grand_total: number;
+  }> {
+    const shopMap = new Map<string, any[]>();
+    for (const it of cart.items || []) {
+      const sId = String(it.product?.shop_id || it.shopId || 'do-cu-con-thuong');
+      if (!shopMap.has(sId)) shopMap.set(sId, []);
+      shopMap.get(sId)!.push(it);
+    }
+
+    const breakdowns: any[] = [];
+    let totSub = 0;
+    let totShip = 0;
+    let totDisc = 0;
+
+    for (const [sId, items] of shopMap.entries()) {
+      let sub = 0;
+      let shopName = items[0]?.product?.shop_name || 'Đồ Cũ Còn Thương';
+      for (const i of items) {
+        sub += (i.effective_price || i.product?.price || 0) * (i.quantity || 1);
       }
-    }
-
-    addr.recipient_name = data.recipient_name.trim();
-    addr.phone = data.phone.trim();
-    addr.address_line = data.address_line.trim();
-    if (data.is_default !== undefined) addr.is_default = data.is_default;
-
-    saveDb(database);
-    const updatedList = database.addresses.filter((a) => a.user_id === session.user.id);
-    return { message: 'Cập nhật địa chỉ thành công', addresses: updatedList };
-  },
-
-  async deleteAddress(id: number): Promise<{ message: string; addresses: Address[] }> {
-    await delay(80);
-    const session = getCurrentSession();
-    if (!session || !session.user) throw new Error('Vui lòng đăng nhập');
-    const database = getDb();
-
-    database.addresses = database.addresses.filter((a) => !(a.id === Number(id) && a.user_id === session.user.id));
-    saveDb(database);
-    const updatedList = database.addresses.filter((a) => a.user_id === session.user.id);
-    return { message: 'Đã xóa địa chỉ', addresses: updatedList };
-  },
-
-  async setDefaultAddress(id: number): Promise<{ message: string; addresses: Address[] }> {
-    await delay(50);
-    const session = getCurrentSession();
-    if (!session || !session.user) throw new Error('Vui lòng đăng nhập');
-    const database = getDb();
-
-    for (const a of database.addresses) {
-      if (a.user_id === session.user.id) {
-        a.is_default = a.id === Number(id);
+      const ship = sub >= 1000000 ? 0 : 30000;
+      let disc = 0;
+      const cCode = couponsByShop ? couponsByShop[sId as any] : undefined;
+      if (cCode) {
+        try {
+          const res = await this.validateCoupon(cCode, sub, ship, sId);
+          disc = res.discount_amount;
+        } catch {}
       }
+
+      const total = Math.max(0, sub + ship - disc);
+      totSub += sub;
+      totShip += ship;
+      totDisc += disc;
+
+      breakdowns.push({
+        shop_id: sId,
+        shop_name: shopName,
+        items,
+        subtotal: sub,
+        shipping_fee: ship,
+        discount_amount: disc,
+        total,
+        applied_coupon: cCode
+      });
     }
 
-    saveDb(database);
-    const updatedList = database.addresses.filter((a) => a.user_id === session.user.id);
-    return { message: 'Đã đặt làm địa chỉ mặc định', addresses: updatedList };
-  },
+    return {
+      shop_breakdowns: breakdowns,
+      total_subtotal: totSub,
+      total_shipping: totShip,
+      total_discount: totDisc,
+      grand_total: Math.max(0, totSub + totShip - totDisc)
+    };
+  }
 
-  // --- PROFILE UPDATE ---
-  async updateProfile(data: { full_name: string; phone?: string }): Promise<{ message: string; user: User }> {
-    await delay(100);
-    const session = getCurrentSession();
-    if (!session || !session.user) throw new Error('Vui lòng đăng nhập');
-    const database = getDb();
+  // --- ADDRESSES & PROFILE & WISHLIST ---
 
-    const user = database.users.find((u) => u.id === session.user.id);
-    if (!user) throw new Error('Không tìm thấy tài khoản');
+  async updateProfile(data: { full_name: string; phone?: string }): Promise<{ user: User }> {
+    const cur = getCurrentUser();
+    if (!cur) throw new Error('Chưa đăng nhập');
+    const db = getActiveFirestore();
+    await updateDoc(doc(db, 'users', cur.uid), {
+      fullName: data.full_name,
+      phone: data.phone || cur.phone,
+      updatedAt: serverTimestamp()
+    });
+    cur.full_name = data.full_name;
+    if (data.phone) cur.phone = data.phone;
+    setCurrentSession(cur);
+    return { user: cur };
+  }
 
-    user.full_name = data.full_name.trim();
-    if (data.phone) {
-      user.phone = data.phone.trim();
-    }
+  async getAddresses(): Promise<{ addresses: Address[] }> {
+    const cur = getCurrentUser();
+    if (!cur) return { addresses: [] };
+    const db = getActiveFirestore();
+    const uSnap = await getDoc(doc(db, 'users', cur.uid));
+    const raw = uSnap.data()?.addresses || [];
+    return {
+      addresses: raw.map((a: any, idx: number) => ({
+        id: a.id || idx + 1,
+        user_id: cur.uid as any,
+        recipient_name: a.receiver || a.recipient_name,
+        phone: a.phone,
+        address_line: a.address || a.address_line,
+        is_default: !!a.isDefault
+      }))
+    };
+  }
 
-    const safeUser: User = {
-      id: user.id,
-      role: user.role,
-      username: user.username,
-      full_name: user.full_name,
-      phone: user.phone,
-      is_owner: Boolean(user.is_owner),
-      shop_name: user.shop_name
+  async addAddress(data: { recipient_name: string; phone: string; address_line: string; is_default?: boolean }): Promise<{ address: Address }> {
+    const cur = getCurrentUser();
+    if (!cur) throw new Error('Chưa đăng nhập');
+    const db = getActiveFirestore();
+    const uRef = doc(db, 'users', cur.uid);
+    const uSnap = await getDoc(uRef);
+    const addresses = uSnap.data()?.addresses || [];
+
+    const newId = (addresses.reduce((max: number, a: any) => Math.max(max, a.id || 0), 0) || 0) + 1;
+    const newAddr = {
+      id: newId,
+      receiver: data.recipient_name,
+      phone: data.phone,
+      address: data.address_line,
+      isDefault: !!data.is_default || addresses.length === 0
     };
 
-    saveDb(database);
-    setCurrentSession(safeUser);
-    return { message: 'Cập nhật thông tin thành công', user: safeUser };
-  },
+    if (newAddr.isDefault) {
+      addresses.forEach((a: any) => (a.isDefault = false));
+    }
+    addresses.push(newAddr);
 
-  // --- WISHLIST FULL PRODUCTS ---
+    await updateDoc(uRef, { addresses, updatedAt: serverTimestamp() });
+    return {
+      address: {
+        id: newId,
+        user_id: cur.uid as any,
+        recipient_name: data.recipient_name,
+        phone: data.phone,
+        address_line: data.address_line,
+        is_default: newAddr.isDefault
+      }
+    };
+  }
+
+  async updateAddress(id: number, data: { recipient_name: string; phone: string; address_line: string; is_default?: boolean }): Promise<{ address: Address }> {
+    const cur = getCurrentUser();
+    if (!cur) throw new Error('Chưa đăng nhập');
+    const db = getActiveFirestore();
+    const uRef = doc(db, 'users', cur.uid);
+    const uSnap = await getDoc(uRef);
+    const addresses = uSnap.data()?.addresses || [];
+
+    const idx = addresses.findIndex((a: any) => a.id === id);
+    if (idx < 0) throw new Error('Địa chỉ không tồn tại');
+
+    if (data.is_default) {
+      addresses.forEach((a: any) => (a.isDefault = false));
+    }
+
+    addresses[idx] = {
+      id,
+      receiver: data.recipient_name,
+      phone: data.phone,
+      address: data.address_line,
+      isDefault: data.is_default !== undefined ? data.is_default : addresses[idx].isDefault
+    };
+
+    await updateDoc(uRef, { addresses, updatedAt: serverTimestamp() });
+    return {
+      address: {
+        id,
+        user_id: cur.uid as any,
+        recipient_name: data.recipient_name,
+        phone: data.phone,
+        address_line: data.address_line,
+        is_default: addresses[idx].isDefault
+      }
+    };
+  }
+
+  async deleteAddress(id: number): Promise<{ message: string }> {
+    const cur = getCurrentUser();
+    if (!cur) throw new Error('Chưa đăng nhập');
+    const db = getActiveFirestore();
+    const uRef = doc(db, 'users', cur.uid);
+    const uSnap = await getDoc(uRef);
+    const addresses = (uSnap.data()?.addresses || []).filter((a: any) => a.id !== id);
+    await updateDoc(uRef, { addresses, updatedAt: serverTimestamp() });
+    return { message: 'Đã xóa địa chỉ' };
+  }
+
+  async setDefaultAddress(id: number): Promise<{ message: string }> {
+    const cur = getCurrentUser();
+    if (!cur) throw new Error('Chưa đăng nhập');
+    const db = getActiveFirestore();
+    const uRef = doc(db, 'users', cur.uid);
+    const uSnap = await getDoc(uRef);
+    const addresses = uSnap.data()?.addresses || [];
+    addresses.forEach((a: any) => (a.isDefault = a.id === id));
+    await updateDoc(uRef, { addresses, updatedAt: serverTimestamp() });
+    return { message: 'Đã đặt địa chỉ mặc định' };
+  }
+
   async getWishlist(): Promise<{ products: Product[] }> {
-    await delay(60);
-    const session = getCurrentSession();
-    if (!session || !session.user) return { products: [] };
-    const database = getDb();
-    const wishPids = new Set(database.wishlist.filter((w) => w.user_id === session.user.id).map((w) => w.product_id));
-    const products = database.products.filter((p) => wishPids.has(p.id));
+    const cur = getCurrentUser();
+    if (!cur) return { products: [] };
+    const db = getActiveFirestore();
+    const uSnap = await getDoc(doc(db, 'users', cur.uid));
+    const ids = uSnap.data()?.wishlist || [];
+    const products: Product[] = [];
+    for (const pid of ids) {
+      try {
+        const pSnap = await getDoc(doc(db, 'products', String(pid)));
+        if (pSnap.exists() && pSnap.data().isActive !== false) {
+          products.push(normalizeProductDoc(pSnap.data(), pSnap.id));
+        }
+      } catch {}
+    }
     return { products };
-  },
+  }
 
-  // --- PUBLIC COUPONS & AUTOCOMPLETE ---
-  async getPublicCoupons(): Promise<{ coupons: Coupon[] }> {
-    await delay(40);
-    const database = getDb();
-    return { coupons: database.coupons.filter((c) => c.is_active) };
-  },
+  async getWishlistIds(): Promise<{ wishlist_ids: number[]; product_ids: number[] }> {
+    const cur = getCurrentUser();
+    if (!cur) return { wishlist_ids: [], product_ids: [] };
+    const db = getActiveFirestore();
+    const uSnap = await getDoc(doc(db, 'users', cur.uid));
+    const ids = (uSnap.data()?.wishlist || []).map((i: any) => Number(i) || i);
+    return { wishlist_ids: ids, product_ids: ids };
+  }
 
-  async getAutocomplete(q: string): Promise<{ suggestions: Array<{ id: number; name: string; category: string; price: number; original_price: number; condition_pct: number; image_url: string; stock: number }> }> {
-    await delay(30);
-    const database = getDb();
-    const query = (q || '').toLowerCase().trim();
-    if (!query) return { suggestions: [] };
+  async toggleWishlist(productId: number | string): Promise<{ in_wishlist: boolean; message: string }> {
+    const cur = getCurrentUser();
+    if (!cur) throw new Error('Vui lòng đăng nhập để lưu vào yêu thích');
+    const db = getActiveFirestore();
+    const uRef = doc(db, 'users', cur.uid);
+    const uSnap = await getDoc(uRef);
+    const wishlist: string[] = (uSnap.data()?.wishlist || []).map(String);
+    const strPid = String(productId);
 
-    const matches = database.products
-      .filter((p) => p.name.toLowerCase().includes(query) || p.category.toLowerCase().includes(query))
-      .slice(0, 6)
-      .map((p) => ({
-        id: p.id,
+    if (wishlist.includes(strPid)) {
+      await updateDoc(uRef, { wishlist: arrayRemove(strPid) });
+      return { in_wishlist: false, message: 'Đã xóa khỏi danh sách yêu thích' };
+    } else {
+      await updateDoc(uRef, { wishlist: arrayUnion(strPid) });
+      return { in_wishlist: true, message: 'Đã thêm vào danh sách yêu thích' };
+    }
+  }
+
+  async uploadFile(dataUrl: string, type: 'image' | 'video' = 'image'): Promise<{ url: string }> {
+    if (type === 'video') {
+      const thumb = await compressImage(dataUrl, 200, 40 * 1024);
+      return { url: thumb };
+    }
+    const comp = await compressImage(dataUrl, 1024, 150 * 1024);
+    return { url: comp };
+  }
+
+  // --- SELLER STATS ---
+
+  async getSellerStats(): Promise<{ stats: SellerStats }> {
+    const { orders } = await this.getSellerOrders('all');
+    const { products } = await this.getProducts({ in_stock: true });
+
+    let revenue = 0;
+    let pending = 0;
+    let confirmed = 0;
+    let shipping = 0;
+    let completed = 0;
+    let cancelled = 0;
+
+    orders.forEach((o) => {
+      if (o.status === 'completed' || o.payment_status === 'paid') revenue += o.total;
+      if (o.status === 'pending') pending++;
+      else if (o.status === 'confirmed') confirmed++;
+      else if (o.status === 'shipping') shipping++;
+      else if (o.status === 'completed') completed++;
+      else if (o.status === 'cancelled') cancelled++;
+    });
+
+    const stats: SellerStats = {
+      total_revenue: revenue,
+      total_orders: orders.length,
+      status_counts: {
+        pending,
+        confirmed,
+        shipping,
+        delivered: 0,
+        completed,
+        cancelled
+      },
+      low_stock_count: products.filter((p) => (p.stock || 0) <= 2).length,
+      recent_orders: orders.slice(0, 5),
+      orders_pending: pending,
+      orders_confirmed: confirmed,
+      orders_shipping: shipping,
+      orders_completed: completed,
+      orders_cancelled: cancelled,
+      total_products: products.length,
+      rating_avg: 0,
+      total_reviews: 0
+    };
+
+    return { stats };
+  }
+
+  // --- DEMO CONTROLLER ROLE SWITCHING ---
+
+  async switchRole(targetUserId: number | string): Promise<{ token: string; user: User; role_name: string }> {
+    if (targetUserId === 2 || targetUserId === '2' || targetUserId === 'buyer') {
+      const u = await this.switchAccount('buyer', '0987654321');
+      return { token: u.uid || String(u.id), user: u, role_name: 'Khách mua hàng' };
+    }
+    if (targetUserId === 3 || targetUserId === '3' || targetUserId === 'goc_sach_nhac') {
+      const u = await this.switchAccount('seller', 'goc_sach_nhac');
+      return { token: u.uid || String(u.id), user: u, role_name: 'Góc Sách & Nhạc' };
+    }
+    if (targetUserId === 4 || targetUserId === '4' || targetUserId === 'retro_tech') {
+      const u = await this.switchAccount('seller', 'retro_tech');
+      return { token: u.uid || String(u.id), user: u, role_name: 'Retro Tech' };
+    }
+    const u = await this.switchAccount('seller', 'admin');
+    return { token: u.uid || String(u.id), user: u, role_name: 'Đồ Cũ Còn Thương' };
+  }
+
+  async switchBuyer(): Promise<{ token: string; user: User }> {
+    const res = await this.switchRole(2);
+    return { token: res.token, user: res.user };
+  }
+
+  async switchSeller(username: string = 'admin'): Promise<{ token: string; user: User }> {
+    const res = await this.switchRole(username);
+    return { token: res.token, user: res.user };
+  }
+
+  async resetDemo(): Promise<{ message: string }> {
+    return this.resetDemoData();
+  }
+
+  // --- PRESENTATION MODE (config/settings) ---
+
+  async getPresentationMode(): Promise<{ presentation_mode: boolean }> {
+    const db = getActiveFirestore();
+    const snap = await getDoc(doc(db, 'config', 'settings'));
+    if (!snap.exists()) return { presentation_mode: false };
+    return { presentation_mode: !!snap.data()?.presentationMode };
+  }
+
+  async setPresentationMode(enabled: boolean): Promise<{ presentation_mode: boolean }> {
+    const cur = getCurrentUser();
+    if (!cur) throw new Error('Chưa đăng nhập');
+
+    const db = getActiveFirestore();
+    await setDoc(
+      doc(db, 'config', 'settings'),
+      {
+        presentationMode: enabled,
+        updatedAt: serverTimestamp(),
+        updatedBy: cur.uid
+      },
+      { merge: true }
+    );
+    return { presentation_mode: enabled };
+  }
+
+  // --- MARKETPLACE SEED INITIALIZATION (Section 8) ---
+
+  async initMarketplaceData(onProgress?: (msg: string) => void): Promise<{ message: string }> {
+    const cur = getCurrentUser();
+    if (!cur) throw new Error('Vui lòng đăng nhập tài khoản chủ');
+
+    const db = getActiveFirestore();
+    onProgress?.('Kiểm tra tài khoản chủ...');
+
+    const adminSnap = await getDoc(doc(db, 'usernames', 'seller_admin'));
+    if (!adminSnap.exists()) {
+      throw new Error('Cần đăng ký tài khoản người bán admin trước');
+    }
+    const gocSnap = await getDoc(doc(db, 'usernames', 'seller_goc_sach_nhac'));
+    if (!gocSnap.exists()) {
+      throw new Error('Cần đăng ký tài khoản người bán goc_sach_nhac trước');
+    }
+    const retroSnap = await getDoc(doc(db, 'usernames', 'seller_retro_tech'));
+    if (!retroSnap.exists()) {
+      throw new Error('Cần đăng ký tài khoản người bán retro_tech trước');
+    }
+
+    const adminUid = adminSnap.data()?.uid;
+    const gocUid = gocSnap.data()?.uid;
+    const retroUid = retroSnap.data()?.uid;
+
+    onProgress?.('Tạo 3 shop mẫu...');
+    const batch1 = writeBatch(db);
+
+    batch1.set(doc(db, 'shops', 'do-cu-con-thuong'), {
+      slug: 'do-cu-con-thuong',
+      ownerUid: adminUid,
+      name: 'Đồ Cũ Còn Thương',
+      description: 'Tiệm đồ second-hand có câu chuyện: thời trang, phụ kiện, đồ gia dụng đã kiểm định.',
+      avatar: createShopAvatarSvg('Đồ Cũ Còn Thương', '#08482D'),
+      coverColor: '#08482D',
+      coverImage: '',
+      pickupAddress: '128 Đường Hai Bà Trưng, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh',
+      phone: '0901234567',
+      followerUids: [],
+      followerCount: 0,
+      ratingAvg: 0,
+      ratingCount: 0,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+
+    batch1.set(doc(db, 'shops', 'goc-sach-nhac'), {
+      slug: 'goc-sach-nhac',
+      ownerUid: gocUid,
+      name: 'Góc Sách & Nhạc',
+      description: 'Sách cũ còn thơm mùi giấy và nhạc cụ đã qua sử dụng, chỉnh âm kỹ trước khi giao.',
+      avatar: createShopAvatarSvg('Góc Sách & Nhạc', '#7A4E2D'),
+      coverColor: '#7A4E2D',
+      coverImage: '',
+      pickupAddress: '45 Đường Đinh Tiên Hoàng, Phường Đa Kao, Quận 1, TP. Hồ Chí Minh',
+      phone: '0902345678',
+      followerUids: [],
+      followerCount: 0,
+      ratingAvg: 0,
+      ratingCount: 0,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+
+    batch1.set(doc(db, 'shops', 'retro-tech'), {
+      slug: 'retro-tech',
+      ownerUid: retroUid,
+      name: 'Retro Tech',
+      description: 'Đồ công nghệ cũ đã test kỹ: máy ảnh film, điện thoại, tai nghe, bàn phím cơ.',
+      avatar: createShopAvatarSvg('Retro Tech', '#2F4B6B'),
+      coverColor: '#2F4B6B',
+      coverImage: '',
+      pickupAddress: '89 Đường Cách Mạng Tháng 8, Phường 7, Quận 3, TP. Hồ Chí Minh',
+      phone: '0903456789',
+      followerUids: [],
+      followerCount: 0,
+      ratingAvg: 0,
+      ratingCount: 0,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+
+    batch1.set(doc(db, 'coupons', 'DOCU10'), {
+      code: 'DOCU10',
+      shopId: 'do-cu-con-thuong',
+      ownerUid: adminUid,
+      type: 'percent',
+      value: 10,
+      maxDiscount: 100000,
+      minOrder: 300000,
+      active: true,
+      usedCount: 0,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+
+    batch1.set(doc(db, 'coupons', 'FREESHIP'), {
+      code: 'FREESHIP',
+      shopId: 'do-cu-con-thuong',
+      ownerUid: adminUid,
+      type: 'freeship',
+      value: 100,
+      maxDiscount: 30000,
+      minOrder: 0,
+      active: true,
+      usedCount: 0,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+
+    batch1.set(doc(db, 'coupons', 'SACHHAY'), {
+      code: 'SACHHAY',
+      shopId: 'goc-sach-nhac',
+      ownerUid: gocUid,
+      type: 'fixed',
+      value: 15000,
+      maxDiscount: 15000,
+      minOrder: 100000,
+      active: true,
+      usedCount: 0,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+
+    batch1.set(doc(db, 'coupons', 'TECH50'), {
+      code: 'TECH50',
+      shopId: 'retro-tech',
+      ownerUid: retroUid,
+      type: 'fixed',
+      value: 50000,
+      maxDiscount: 50000,
+      minOrder: 1000000,
+      active: true,
+      usedCount: 0,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+
+    batch1.set(doc(db, 'config', 'settings'), {
+      presentationMode: false,
+      updatedAt: serverTimestamp()
+    });
+
+    await batch1.commit();
+
+    onProgress?.('Tạo 10 sản phẩm mẫu...');
+    const batch2 = writeBatch(db);
+
+    const sampleProducts = [
+      { id: 'prod_1', name: 'Áo khoác denim cũ size L', category: 'Thời trang', price: 350000, orig: 1200000, cond: 95, note: 'Không rách, phai màu nhẹ tự nhiên ở khuỷu tay, form áo đứng và dày dặn', stock: 1, shopId: 'do-cu-con-thuong', ownerUid: adminUid, shopName: 'Đồ Cũ Còn Thương', icon: '🧥' },
+      { id: 'prod_2', name: 'Túi xách da thật vintage', category: 'Thời trang', price: 600000, orig: 1800000, cond: 80, note: 'Chất da bò thật patina bóng đẹp, khóa đồng vintage nguyên bản, có dấu sờn quai nhẹ', stock: 1, shopId: 'do-cu-con-thuong', ownerUid: adminUid, shopName: 'Đồ Cũ Còn Thương', icon: '👜' },
+      { id: 'prod_3', name: 'Đồng hồ Casio A168 vintage', category: 'Phụ kiện', price: 450000, orig: 900000, cond: 90, note: 'Đã thay pin Maxell chính hãng, đèn Illuminator sáng rực, dây kim loại còn sáng bóng', stock: 3, shopId: 'do-cu-con-thuong', ownerUid: adminUid, shopName: 'Đồ Cũ Còn Thương', icon: '⌚' },
+      { id: 'prod_4', name: 'Nồi chiên không dầu Philips 4.1L', category: 'Gia dụng', price: 900000, orig: 2300000, cond: 85, note: 'Lòng nồi men chống dính còn rất tốt, mâm nhiệt sáng, hoạt động êm ái', stock: 1, shopId: 'do-cu-con-thuong', ownerUid: adminUid, shopName: 'Đồ Cũ Còn Thương', icon: '🍳' },
+      { id: 'prod_5', name: 'Sách "Nhà giả kim" bản cũ', category: 'Sách', price: 45000, orig: 79000, cond: 80, note: 'Giấy ngả ố vàng hoài niệm, chữ in rõ nét, gáy sách chắc chắn không mất trang', stock: 5, shopId: 'goc-sach-nhac', ownerUid: gocUid, shopName: 'Góc Sách & Nhạc', icon: '📖' },
+      { id: 'prod_6', name: 'Đàn guitar acoustic Yamaha F310', category: 'Nhạc cụ', price: 1500000, orig: 2900000, cond: 85, note: 'Action êm tay, âm vang chuẩn, gỗ đã qua tôi luyện lâu năm, kèm bao da dày', stock: 1, shopId: 'goc-sach-nhac', ownerUid: gocUid, shopName: 'Góc Sách & Nhạc', icon: '🎸' },
+      { id: 'prod_7', name: 'Máy ảnh film Canon AE-1', category: 'Máy ảnh', price: 3200000, orig: 6000000, cond: 85, note: 'Cơ tốc chạy tốt, đo sáng nhạy, trầy nhẹ thân máy theo năm tháng', stock: 1, shopId: 'retro-tech', ownerUid: retroUid, shopName: 'Retro Tech', icon: '📷' },
+      { id: 'prod_8', name: 'iPhone 11 64GB', category: 'Điện tử', price: 4500000, orig: 8000000, cond: 90, note: 'Pin 84%, máy zin chưa qua sửa chữa, có vài vết xước dăm viền nhẹ', stock: 2, shopId: 'retro-tech', ownerUid: retroUid, shopName: 'Retro Tech', icon: '📱' },
+      { id: 'prod_9', name: 'Tai nghe Sony WH-1000XM3', category: 'Điện tử', price: 2100000, orig: 5500000, cond: 88, note: 'Chống ồn đỉnh cao, pin còn hơn 25h, đệm tai da cừu đã thay mới tinh', stock: 1, shopId: 'retro-tech', ownerUid: retroUid, shopName: 'Retro Tech', icon: '🎧' },
+      { id: 'prod_10', name: 'Bàn phím cơ Keychron K2', category: 'Điện tử', price: 1100000, orig: 2000000, cond: 92, note: 'Gateron Brown switch gõ đầm tay, bluetooth mượt mà, đủ keycap và cáp Type-C', stock: 2, shopId: 'retro-tech', ownerUid: retroUid, shopName: 'Retro Tech', icon: '⌨️' }
+    ];
+
+    for (const p of sampleProducts) {
+      batch2.set(doc(db, 'products', p.id), {
+        shopId: p.shopId,
+        ownerUid: p.ownerUid,
+        shopName: p.shopName,
         name: p.name,
         category: p.category,
         price: p.price,
-        original_price: p.original_price,
-        condition_pct: p.condition_pct,
-        image_url: p.image_url,
-        stock: p.stock
-      }));
-
-    return { suggestions: matches };
-  },
-
-  async recordProductView(productId: number): Promise<{ success: boolean }> {
-    // Record view in memory
-    return { success: true };
-  },
-
-  // --- SEARCH SHOPS ---
-  async searchShops(q: string): Promise<{ shops: Shop[] }> {
-    await delay(30);
-    const database = getDb();
-    const query = (q || '').toLowerCase().trim();
-    if (!query) return { shops: [] };
-    const matches = database.shops.filter(
-      (s) => s.name.toLowerCase().includes(query) || (s.description && s.description.toLowerCase().includes(query)) || s.slug.toLowerCase().includes(query)
-    );
-    return { shops: matches };
-  },
-
-  // --- SHIPMENT FAST FORWARD & KANBAN HANDOVER ---
-  async getEligibleShipmentOrders(): Promise<{ orders: Order[] }> {
-    await delay(50);
-    const session = getCurrentSession();
-    const database = getDb();
-    const sellerShop = this.checkSellerShopOwnership(session, database);
-
-    const eligible = database.orders.filter(
-      (o) => o.shop_id === sellerShop.id && (o.status === 'confirmed' || o.status === 'shipping' || o.status === 'delivered' || o.status === 'pending')
-    );
-    return { orders: eligible };
-  },
-
-  async handoverOrder(orderId: number, handoverData: { carrier: string; location?: string; note?: string }): Promise<{ message: string; order: Order; shipment_events: ShipmentEvent[] }> {
-    await delay();
-    const session = getCurrentSession();
-    const database = getDb();
-    const ord = database.orders.find((o) => o.id === Number(orderId));
-    if (!ord) throw new Error('Không tìm thấy đơn hàng');
-
-    const sellerShop = this.checkSellerShopOwnership(session, database, ord.shop_id);
-
-    ord.carrier = handoverData.carrier;
-    if (!ord.tracking_code) {
-      const carrierPrefixMap: Record<string, string> = {
-        'Giao Hàng Nhanh': 'GHN',
-        'Giao Hàng Tiết Kiệm': 'GHTK',
-        'Viettel Post': 'VTP',
-        'J&T Express': 'JNT',
-        'SPX Express': 'SPX'
-      };
-      const prefix = carrierPrefixMap[handoverData.carrier] || 'VN';
-      ord.tracking_code = `${prefix}-${Math.floor(100000 + Math.random() * 900000)}VN`;
+        originalPrice: p.orig,
+        conditionPct: p.cond,
+        conditionNote: p.note,
+        description: p.note,
+        defects: [{ text: p.note, image: '' }],
+        inspection: {
+          date: '2026-10-20',
+          inspector: 'Trần Minh Tuấn (KTV Chuyên Sâu)',
+          checks: [
+            '✓ Hoạt động hoàn hảo mọi tính năng',
+            '✓ Đã vệ sinh & khử khuẩn chuyên sâu',
+            '✓ Đúng nguồn gốc và đúng như ảnh chụp thực tế'
+          ]
+        },
+        images: [],
+        icon: p.icon,
+        stock: p.stock,
+        sold: 0,
+        viewCount: 0,
+        viewDate: '',
+        ratingAvg: 0,
+        ratingCount: 0,
+        isActive: true,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
     }
-    ord.status = 'shipping';
 
-    const newEvt: ShipmentEvent = {
-      id: (database.shipment_events.reduce((max, e) => Math.max(max, e.id), 0) || 0) + 1,
-      order_id: ord.id,
-      status: 'Đã bàn giao cho đơn vị vận chuyển',
-      location: handoverData.location || sellerShop.pickup_address || `Kho ${sellerShop.name}`,
-      note: handoverData.note || `Đã bàn giao kiện hàng cho đối tác ${handoverData.carrier}`,
-      created_at: new Date().toISOString()
+    await batch2.commit();
+    onProgress?.('Hoàn thành khởi tạo dữ liệu chợ!');
+
+    return { message: 'Khởi tạo dữ liệu chợ thành công' };
+  }
+
+  // --- DEMO RESET (Section 8) ---
+
+  async resetDemoData(): Promise<{ message: string }> {
+    const cur = getCurrentUser();
+    if (!cur) throw new Error('Vui lòng đăng nhập tài khoản chủ');
+
+    const db = getActiveFirestore();
+
+    const collectionsToClear = [
+      'orders',
+      'offers',
+      'returns',
+      'reviews',
+      'notifications',
+      'carts',
+      'conversations'
+    ];
+
+    for (const colName of collectionsToClear) {
+      const snap = await getDocs(collection(db, colName));
+      const batch = writeBatch(db);
+      snap.forEach((d) => {
+        batch.delete(d.ref);
+      });
+      await batch.commit();
+    }
+
+    const sampleProductIds = [
+      'prod_1', 'prod_2', 'prod_3', 'prod_4', 'prod_5',
+      'prod_6', 'prod_7', 'prod_8', 'prod_9', 'prod_10'
+    ];
+    const initialStocks: Record<string, number> = {
+      prod_1: 1, prod_2: 1, prod_3: 3, prod_4: 1, prod_5: 5,
+      prod_6: 1, prod_7: 1, prod_8: 2, prod_9: 1, prod_10: 2
     };
 
-    ord.shipment_events = ord.shipment_events || [];
-    ord.shipment_events.push(newEvt);
-
-    // Notify buyer
-    database.notifications.unshift({
-      id: (database.notifications.reduce((max, n) => Math.max(max, n.id), 0) || 0) + 1,
-      user_id: ord.buyer_id || ord.user_id || 2,
-      role: 'buyer',
-      title: 'Đơn hàng đang trên đường giao',
-      message: `Đơn hàng #${ord.code} đã được bàn giao cho ${handoverData.carrier}. Mã vận đơn: ${ord.tracking_code}`,
-      order_id: ord.id,
-      is_read: false,
-      created_at: new Date().toISOString()
-    });
-
-    saveDb(database);
-    return { message: `Đã bàn giao đơn hàng #${ord.code}`, order: ord, shipment_events: ord.shipment_events };
-  },
-
-  async bulkHandoverOrders(orderIds: number[], carrier: string): Promise<{ message: string; handover_count: number }> {
-    await delay();
-    const session = getCurrentSession();
-    const database = getDb();
-    const sellerShop = this.checkSellerShopOwnership(session, database);
-    let count = 0;
-
-    for (const id of orderIds) {
-      const ord = database.orders.find((o) => o.id === Number(id));
-      if (ord && ord.shop_id === sellerShop.id) {
-        ord.carrier = carrier;
-        if (!ord.tracking_code) {
-          ord.tracking_code = `GHN-${Math.floor(100000 + Math.random() * 900000)}VN`;
-        }
-        ord.status = 'shipping';
-        ord.shipment_events = ord.shipment_events || [];
-        ord.shipment_events.push({
-          id: (database.shipment_events.reduce((max, e) => Math.max(max, e.id), 0) || 0) + 1,
-          order_id: ord.id,
-          status: 'Đã bàn giao cho đơn vị vận chuyển',
-          location: sellerShop.pickup_address || `Kho ${sellerShop.name}`,
-          note: `Đã bàn giao hàng loạt cho ${carrier}`,
-          created_at: new Date().toISOString()
+    const prodBatch = writeBatch(db);
+    for (const pid of sampleProductIds) {
+      const ref = doc(db, 'products', pid);
+      const snap = await getDoc(ref);
+      if (snap.exists()) {
+        prodBatch.update(ref, {
+          stock: initialStocks[pid] || 1,
+          sold: 0,
+          viewCount: 0,
+          ratingAvg: 0,
+          ratingCount: 0,
+          updatedAt: serverTimestamp()
         });
-        count++;
       }
     }
+    await prodBatch.commit();
 
-    saveDb(database);
-    return { message: `Đã bàn giao ${count} đơn hàng cho ${carrier}`, handover_count: count };
+    const sampleCoupons = ['DOCU10', 'FREESHIP', 'SACHHAY', 'TECH50'];
+    const cpnBatch = writeBatch(db);
+    for (const c of sampleCoupons) {
+      const ref = doc(db, 'coupons', c);
+      const snap = await getDoc(ref);
+      if (snap.exists()) {
+        cpnBatch.update(ref, {
+          usedCount: 0,
+          updatedAt: serverTimestamp()
+        });
+      }
+    }
+    await cpnBatch.commit();
+
+    const sampleShops = ['do-cu-con-thuong', 'goc-sach-nhac', 'retro-tech'];
+    const shopBatch = writeBatch(db);
+    for (const s of sampleShops) {
+      const ref = doc(db, 'shops', s);
+      const snap = await getDoc(ref);
+      if (snap.exists()) {
+        shopBatch.update(ref, {
+          followerUids: [],
+          followerCount: 0,
+          ratingAvg: 0,
+          ratingCount: 0,
+          updatedAt: serverTimestamp()
+        });
+      }
+    }
+    await shopBatch.commit();
+
+    return { message: 'Đã khôi phục dữ liệu demo về trạng thái ban đầu' };
   }
-};
+
+  // --- FAST FORWARD SHIPMENT (DEMO TOOL) ---
+
+  async getEligibleShipmentOrders(): Promise<{ orders: Order[] }> {
+    const { orders } = await this.getMyOrders('all');
+    return {
+      orders: orders.filter((o) => o.status !== 'completed' && o.status !== 'cancelled')
+    };
+  }
+
+  async advanceShipmentStep(orderCode: string | number, step: number): Promise<{ message: string }> {
+    const db = getActiveFirestore();
+    const ref = doc(db, 'orders', String(orderCode));
+    const snap = await getDoc(ref);
+    if (!snap.exists()) throw new Error('Đơn không tồn tại');
+
+    const steps = [
+      { status: 'confirmed', label: 'Bàn giao cho ĐVVC', event: 'dispatched' },
+      { status: 'shipping', label: 'Đến kho phân loại', event: 'hub_arrival' },
+      { status: 'shipping', label: 'Đang vận chuyển liên tỉnh', event: 'transit' },
+      { status: 'shipping', label: 'Đang giao hàng tới người mua', event: 'out_for_delivery' },
+      { status: 'completed', label: 'Giao hàng thành công', event: 'delivered' }
+    ];
+
+    const target = steps[Math.min(step, steps.length - 1)];
+    const events = snap.data().shipmentEvents || [];
+    events.push({
+      event: target.event,
+      label: target.label,
+      location: 'Hồ Chí Minh',
+      note: 'Tua nhanh vận chuyển',
+      at: new Date().toISOString()
+    });
+
+    const updates: any = {
+      status: target.status,
+      shipmentEvents: events,
+      updatedAt: serverTimestamp()
+    };
+    if (target.status === 'completed') {
+      updates.completedAt = new Date().toISOString();
+      updates.paymentStatus = 'paid';
+    }
+
+    await updateDoc(ref, updates);
+    return { message: `Đã cập nhật: ${target.label}` };
+  }
+}
+
+export const db = new DCCTDatabaseService();

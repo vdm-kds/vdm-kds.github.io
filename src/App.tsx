@@ -92,9 +92,24 @@ function MainShopApp() {
     open: boolean; 
     role: 'buyer' | 'seller'; 
     initialIsRegister?: boolean;
+    initialUsername?: string;
     promptMessage?: string;
   }>({ open: false, role: 'buyer' });
   const [policyType, setPolicyType] = useState<'returns' | 'shipping' | 'guide' | 'about' | 'contact' | null>(null);
+
+  // Online / Offline network state (Section 5)
+  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   // Presentation Mode state
   const [presentationMode, setPresentationMode] = useState<boolean>(false);
@@ -710,6 +725,13 @@ function MainShopApp() {
 
   return (
     <div key={user?.id ?? 'guest'} className="min-h-screen flex flex-col bg-[#F5F8EF] text-[#101410]">
+      {/* OFFLINE BANNER (Section 5) */}
+      {!isOnline && (
+        <div className="bg-amber-600 text-white text-xs font-semibold py-2 px-4 text-center sticky top-0 z-50 animate-in fade-in">
+          Đang mất kết nối, dữ liệu sẽ tự đồng bộ khi có mạng
+        </div>
+      )}
+
       {/* PREVIEW BANNER (Fixed on top when seller is previewing shop) */}
       {isPreview && (
         <div className="sticky top-0 z-50 bg-[#C2522D] text-white px-4 sm:px-6 py-2.5 flex items-center justify-between shadow-md">
@@ -1250,7 +1272,7 @@ function MainShopApp() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8 pt-6 border-t border-[#E2E8D8] flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left text-[#5E5E61]">
             <div>
               <p>© 2026 Đồ Cũ Còn Thương. Nền tảng thương mại điện tử đồ cũ bền vững phong cách studio xanh bạc hà.</p>
-              <p className="text-xs text-[#08482D] font-medium mt-1">Bản demo: dữ liệu được lưu trên trình duyệt của bạn.</p>
+              <p className="text-xs text-[#08482D] font-medium mt-1">Bản demo: dữ liệu được lưu trên Firebase và dùng chung cho mọi người.</p>
             </div>
           </div>
         </footer>
@@ -1259,6 +1281,14 @@ function MainShopApp() {
       {/* Floating Demo Controller Button at Bottom-Left */}
       <DemoController
         onPresentationModeChange={setPresentationMode}
+        onOpenFirstTimeLogin={(role, username) => {
+          setAuthModal({
+            open: true,
+            role,
+            initialIsRegister: false,
+            initialUsername: username
+          });
+        }}
         onRoleSwitched={(role) => {
           if (role === 'buyer') setCurrentView('home');
           if (role === 'seller') setCurrentView('seller');
@@ -1362,6 +1392,7 @@ function MainShopApp() {
         isOpen={authModal.open}
         role={authModal.role}
         initialIsRegister={authModal.initialIsRegister}
+        initialUsername={authModal.initialUsername}
         promptMessage={authModal.promptMessage}
         onClose={() => setAuthModal({ open: false, role: 'buyer' })}
         onSuccess={handleAuthSuccess}
