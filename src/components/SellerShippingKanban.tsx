@@ -497,8 +497,8 @@ export const SellerShippingKanban: React.FC<SellerShippingKanbanProps> = ({
 
                       {latestEvent && (
                         <div className="text-[11px] text-[#5E5E61] pt-1 border-t border-[#E2E8D8]/50">
-                          <div className="font-medium text-[#101410]">
-                            {latestEvent.status}
+                          <div className="font-bold text-[#101410]">
+                            {latestEvent.label || (latestEvent as any).status || 'Đang vận chuyển'}
                           </div>
                           <div className="truncate">
                             📍 {latestEvent.location}

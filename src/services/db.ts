@@ -396,13 +396,17 @@ function normalizeUserDoc(docData: DocumentData, uid: string): User {
 
 // Normalizer from Firestore shop doc to Shop interface
 function normalizeShopDoc(docData: DocumentData, slug: string): Shop {
-  return {
-    id: slug as any,
-    owner_user_id: docData.ownerUid as any,
-    name: docData.name,
-    slug: docData.slug || slug,
-    description: docData.description || '',
-    avatar: docData.avatar || createShopAvatarSvg(docData.name, docData.coverColor, slug),
+    const rawAvatar = docData.avatar;
+    const shopAvatar = rawAvatar && !rawAvatar.includes('unsplash.com') && !rawAvatar.includes('photo-1544816155-12df9643f363')
+      ? rawAvatar
+      : createShopAvatarSvg(docData.name, docData.coverColor, slug);
+    return {
+      id: slug as any,
+      owner_user_id: docData.ownerUid as any,
+      name: docData.name,
+      slug: docData.slug || slug,
+      description: docData.description || '',
+      avatar: shopAvatar,
     cover_color: docData.coverColor || '#08482D',
     cover_image: docData.coverImage || '',
     pickup_address: docData.pickupAddress || '',
@@ -748,6 +752,13 @@ export class DCCTDatabaseService {
           if (!userData.shopId) {
             await updateDoc(doc(db, 'users', uid), { shopId: s.id });
           }
+          const sData = s.data();
+          if (!sData.avatar || sData.avatar.includes('unsplash.com')) {
+            const patchedAvatar = createShopAvatarSvg(sData.name || 'Shop', sData.coverColor || '#08482D', s.id);
+            try {
+              await updateDoc(doc(db, 'shops', s.id), { avatar: patchedAvatar });
+            } catch {}
+          }
         }
       } catch {}
     }
@@ -813,6 +824,13 @@ export class DCCTDatabaseService {
           userObj.shop_name = s.data().name;
           if (!userData.shopId) {
             await updateDoc(doc(db, 'users', firebaseUser.uid), { shopId: s.id });
+          }
+          const sData = s.data();
+          if (!sData.avatar || sData.avatar.includes('unsplash.com')) {
+            const patchedAvatar = createShopAvatarSvg(sData.name || 'Shop', sData.coverColor || '#08482D', s.id);
+            try {
+              await updateDoc(doc(db, 'shops', s.id), { avatar: patchedAvatar });
+            } catch {}
           }
           saveStoredAccount({
             role: 'seller',
@@ -1896,26 +1914,105 @@ export class DCCTDatabaseService {
   }
 
   async addShipmentEvent(code: string | number, event: { event?: string; status?: string; label?: string; location?: string; note?: string }): Promise<{ message: string }> {
+    const cur = getCurrentUser();
+    if (!cur) throw new Error('Chưa đăng nhập');
+
     const db = getActiveFirestore();
     const orderRef = doc(db, 'orders', String(code));
-    const snap = await getDoc(orderRef);
-    if (!snap.exists()) throw new Error('Đơn không tồn tại');
 
-    const events = snap.data()?.shipmentEvents || [];
-    events.push({
-      event: event.event || event.status || 'in_transit',
-      label: event.label || 'Đang luân chuyển qua các bưu cục',
-      location: event.location || 'TP. Hồ Chí Minh',
-      note: event.note || '',
-      at: new Date().toISOString()
+    const statusText = (event.status || event.label || event.event || '').trim();
+    const isHandover = statusText === 'Đã bàn giao cho đơn vị vận chuyển' || event.event === 'dispatched' || statusText.toLowerCase().includes('bàn giao');
+    const isDelivered = statusText === 'Giao hàng thành công' || event.event === 'delivered' || statusText.toLowerCase().includes('giao hàng thành công');
+
+    let updatedStatus: string = '';
+    let buyerUid: string = '';
+    let shopName: string = '';
+    let orderCodeStr: string = '';
+
+    await runTransaction(db, async (txn) => {
+      const snap = await txn.get(orderRef);
+      if (!snap.exists()) throw new Error('Đơn không tồn tại');
+      const oData = snap.data();
+      const currentStatus = oData.status;
+      buyerUid = oData.buyerUid;
+      shopName = oData.shopName || cur.shop_name || 'Người bán';
+      orderCodeStr = oData.code || String(code);
+
+      if (isHandover) {
+        if (currentStatus !== 'confirmed') {
+          throw new Error('Chỉ có thể bàn giao khi đơn hàng ở trạng thái Đã xác nhận');
+        }
+        updatedStatus = 'shipping';
+      } else if (isDelivered) {
+        if (currentStatus !== 'shipping') {
+          throw new Error('Đơn hàng phải đang trong trạng thái Đang giao hàng trước khi báo giao thành công');
+        }
+        updatedStatus = 'delivered';
+      } else {
+        if (currentStatus === 'confirmed') {
+          throw new Error('Hãy báo cáo Đã bàn giao cho đơn vị vận chuyển trước');
+        }
+        if (currentStatus !== 'shipping') {
+          throw new Error('Đơn hàng không ở trạng thái giao hàng');
+        }
+        updatedStatus = 'shipping';
+      }
+
+      const events = oData.shipmentEvents || [];
+      const newEvent = {
+        event: event.event || (isHandover ? 'dispatched' : isDelivered ? 'delivered' : 'in_transit'),
+        label: statusText || (isHandover ? 'Đã bàn giao cho đơn vị vận chuyển' : isDelivered ? 'Giao hàng thành công' : 'Đang vận chuyển'),
+        location: event.location || 'Bưu cục trung tâm',
+        note: event.note || statusText,
+        at: new Date().toISOString()
+      };
+      events.push(newEvent);
+
+      const logs = oData.logs || [];
+      logs.push({
+        status: updatedStatus,
+        actorRole: 'seller',
+        actorName: shopName,
+        note: event.note || statusText,
+        at: new Date().toISOString()
+      });
+
+      const updates: any = {
+        status: updatedStatus,
+        shipmentEvents: events,
+        logs,
+        updatedAt: serverTimestamp()
+      };
+
+      if (isDelivered) {
+        updates.deliveredAt = new Date().toISOString();
+        if (oData.paymentMethod === 'cod') {
+          updates.paymentStatus = 'paid';
+        }
+      }
+
+      txn.update(orderRef, updates);
     });
 
-    await updateDoc(orderRef, {
-      shipmentEvents: events,
-      updatedAt: serverTimestamp()
-    });
+    if (buyerUid) {
+      try {
+        const notifId = `notif_ship_${code}_${Date.now()}`;
+        await setDoc(doc(db, 'notifications', notifId), {
+          toUid: buyerUid,
+          fromUid: cur.uid,
+          type: 'order_status',
+          title: `Cập nhật vận chuyển: #${orderCodeStr}`,
+          body: `${statusText} · ${event.location || ''} ${event.note ? `(${event.note})` : ''}`.trim(),
+          link: `/orders/${orderCodeStr}`,
+          isRead: false,
+          createdAt: serverTimestamp()
+        });
+      } catch (e) {
+        console.warn('Failed to send shipment notif to buyer:', e);
+      }
+    }
 
-    return { message: 'Đã thêm mốc vận chuyển' };
+    return { message: 'Đã cập nhật mốc vận chuyển thành công' };
   }
 
   // --- OFFERS (TRẢ GIÁ) ---
@@ -1929,8 +2026,32 @@ export class DCCTDatabaseService {
     const snap = await getDocs(q);
 
     const offers: Offer[] = [];
-    snap.forEach((d) => {
+    const now = Date.now();
+
+    for (const d of snap.docs) {
       const data = d.data();
+      let status = data.status;
+      const isPast24h = data.expiresAt
+        ? new Date(data.expiresAt).getTime() < now
+        : (data.createdAt?.toDate ? now - data.createdAt.toDate().getTime() > 24 * 3600 * 1000 : false);
+
+      if (status === 'pending' && isPast24h) {
+        status = 'expired';
+        try {
+          await updateDoc(doc(db, 'offers', d.id), { status: 'expired', updatedAt: serverTimestamp() });
+          await setDoc(doc(db, 'notifications', `notif_exp_${d.id}`), {
+            toUid: cur.uid,
+            fromUid: cur.uid,
+            type: 'offer_expired',
+            title: 'Lời trả giá đã hết hạn',
+            body: `Lời trả giá cho món "${data.productName}" đã hết hạn sau 24 giờ. Bạn có thể trả giá lại.`,
+            link: `/product/${data.productId}`,
+            isRead: false,
+            createdAt: serverTimestamp()
+          });
+        } catch {}
+      }
+
       offers.push({
         id: d.id as any,
         shop_id: data.shopId as any,
@@ -1939,15 +2060,15 @@ export class DCCTDatabaseService {
         buyer_name: data.buyerName,
         product_id: data.productId as any,
         product_name: data.productName,
-        original_price: data.originalPrice,
-        offered_price: data.offeredPrice,
-        counter_price: data.counterPrice,
-        price: data.offeredPrice,
-        status: data.status,
+        original_price: Number(data.originalPrice || 0),
+        offered_price: Number(data.offeredPrice || data.price || 0),
+        counter_price: data.counterPrice != null ? Number(data.counterPrice) : undefined,
+        price: Number(data.offeredPrice || data.price || 0),
+        status,
         expires_at: data.expiresAt,
         created_at: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString()
       });
-    });
+    }
 
     offers.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     return { offers };
@@ -1962,8 +2083,32 @@ export class DCCTDatabaseService {
     const snap = await getDocs(q);
 
     const offers: Offer[] = [];
-    snap.forEach((d) => {
+    const now = Date.now();
+
+    for (const d of snap.docs) {
       const data = d.data();
+      let status = data.status;
+      const isPast24h = data.expiresAt
+        ? new Date(data.expiresAt).getTime() < now
+        : (data.createdAt?.toDate ? now - data.createdAt.toDate().getTime() > 24 * 3600 * 1000 : false);
+
+      if (status === 'pending' && isPast24h) {
+        status = 'expired';
+        try {
+          await updateDoc(doc(db, 'offers', d.id), { status: 'expired', updatedAt: serverTimestamp() });
+          await setDoc(doc(db, 'notifications', `notif_exp_${d.id}`), {
+            toUid: data.buyerUid,
+            fromUid: cur.uid,
+            type: 'offer_expired',
+            title: 'Lời trả giá đã hết hạn',
+            body: `Lời trả giá cho món "${data.productName}" đã hết hạn sau 24 giờ. Bạn có thể trả giá lại.`,
+            link: `/product/${data.productId}`,
+            isRead: false,
+            createdAt: serverTimestamp()
+          });
+        } catch {}
+      }
+
       offers.push({
         id: d.id as any,
         shop_id: data.shopId as any,
@@ -1972,15 +2117,15 @@ export class DCCTDatabaseService {
         buyer_name: data.buyerName,
         product_id: data.productId as any,
         product_name: data.productName,
-        original_price: data.originalPrice,
-        offered_price: data.offeredPrice,
-        counter_price: data.counterPrice,
-        price: data.offeredPrice,
-        status: data.status,
+        original_price: Number(data.originalPrice || 0),
+        offered_price: Number(data.offeredPrice || data.price || 0),
+        counter_price: data.counterPrice != null ? Number(data.counterPrice) : undefined,
+        price: Number(data.offeredPrice || data.price || 0),
+        status,
         expires_at: data.expiresAt,
         created_at: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString()
       });
-    });
+    }
 
     offers.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     return { offers };
@@ -2009,9 +2154,19 @@ export class DCCTDatabaseService {
 
     const existingQ = query(collection(db, 'offers'), where('buyerUid', '==', cur.uid));
     const existingSnap = await getDocs(existingQ);
+    const now = Date.now();
     for (const d of existingSnap.docs) {
       const data = d.data();
       if (String(data.productId) === pid && (data.status === 'pending' || data.status === 'countered')) {
+        const isPast24h = data.expiresAt
+          ? new Date(data.expiresAt).getTime() < now
+          : (data.createdAt?.toDate ? now - data.createdAt.toDate().getTime() > 24 * 3600 * 1000 : false);
+        if (data.status === 'pending' && isPast24h) {
+          try {
+            await updateDoc(doc(db, 'offers', d.id), { status: 'expired', updatedAt: serverTimestamp() });
+          } catch {}
+          continue;
+        }
         throw new Error('Bạn đang có một lời trả giá chờ phản hồi cho món này');
       }
     }
@@ -2569,12 +2724,16 @@ export class DCCTDatabaseService {
     const list: ChatConversation[] = [];
     snap.forEach((d) => {
       const data = d.data();
+      const shopAvatar = data.shopAvatar && !data.shopAvatar.includes('unsplash.com')
+        ? data.shopAvatar
+        : createShopAvatarSvg(data.shopName || 'Shop', '#08482D', data.shopId);
       list.push({
         id: d.id as any,
         buyer_id: data.buyerUid as any,
         seller_id: data.sellerUid as any,
         shop_id: data.shopId as any,
         shop_name: data.shopName,
+        shop_avatar: shopAvatar,
         buyer_name: data.buyerName,
         buyer_phone: data.buyerPhone || undefined,
         last_message: data.lastMessage,
@@ -2605,11 +2764,16 @@ export class DCCTDatabaseService {
     let created = false;
     let shopName = 'Đồ Cũ Còn Thương';
     let sellerUid = 'seller_admin';
+    let shopAvatar = createShopAvatarSvg(shopName, '#08482D', String(shopId));
 
     const sSnap = await getDoc(doc(db, 'shops', String(shopId)));
     if (sSnap.exists()) {
-      shopName = sSnap.data().name;
-      sellerUid = sSnap.data().ownerUid;
+      const sData = sSnap.data();
+      shopName = sData.name || shopName;
+      sellerUid = sData.ownerUid || sellerUid;
+      shopAvatar = sData.avatar && !sData.avatar.includes('unsplash.com') && !sData.avatar.includes('photo-1544816155-12df9643f363')
+        ? sData.avatar
+        : createShopAvatarSvg(shopName, sData.coverColor || '#08482D', sData.slug || String(shopId));
     }
 
     if (!snap.exists()) {
@@ -2620,21 +2784,62 @@ export class DCCTDatabaseService {
         buyerPhone: cur.phone || '',
         shopId: String(shopId),
         shopName,
+        shopAvatar,
         sellerUid,
-        lastMessage: context?.initial_message || 'Bắt đầu trò chuyện',
+        lastMessage: context?.initial_message || (context?.type === 'product' ? 'Khách hỏi về sản phẩm' : 'Bắt đầu trò chuyện'),
         lastMessageAt: serverTimestamp(),
         buyerUnread: 0,
-        sellerUnread: 1,
+        sellerUnread: 0, // Requirement 4: initialize unread to 0
         createdAt: serverTimestamp()
       });
+    } else {
+      const existingData = snap.data();
+      if (!existingData.shopAvatar || existingData.shopAvatar.includes('unsplash.com')) {
+        await updateDoc(convRef, { shopAvatar });
+      }
+    }
 
-      if (context?.initial_message) {
+    // Check if context is a product and if this conversation already has a context card for this product
+    if (context && context.type === 'product' && context.product_id) {
+      const targetPid = String(context.product_id);
+      const msgsRef = collection(db, 'conversations', convId, 'messages');
+      const msgSnap = await getDocs(msgsRef);
+      const alreadyHasCard = msgSnap.docs.some(d => {
+        const c = d.data().context;
+        return c && (String(c.refId) === targetPid || String(c.product_id) === targetPid);
+      });
+
+      if (!alreadyHasCard) {
+        let pName = 'Sản phẩm';
+        let pPrice = 0;
+        let pImg = '';
+        try {
+          const pSnap = await getDoc(doc(db, 'products', targetPid));
+          if (pSnap.exists()) {
+            pName = pSnap.data().name || pName;
+            pPrice = Number(pSnap.data().price || 0);
+            pImg = (pSnap.data().images && pSnap.data().images[0]) || pSnap.data().imageUrl || '';
+          }
+        } catch {}
+
         await this.sendMessage({
           conversation_id: convId,
-          text: context.initial_message,
-          context: context.product_id ? { kind: 'product', refId: context.product_id } : undefined
+          text: context.initial_message || `Tôi đang quan tâm đến "${pName}"`,
+          context: {
+            kind: 'product',
+            refId: targetPid,
+            product_id: targetPid,
+            title: pName,
+            price: pPrice,
+            image: pImg
+          }
         });
       }
+    } else if (context?.initial_message && !created) {
+      await this.sendMessage({
+        conversation_id: convId,
+        text: context.initial_message
+      });
     }
 
     const { messages } = await this.getMessages(convId);
@@ -2644,13 +2849,14 @@ export class DCCTDatabaseService {
       seller_id: sellerUid as any,
       shop_id: shopId as any,
       shop_name: shopName,
+      shop_avatar: shopAvatar,
       buyer_name: cur.full_name,
       buyer_phone: cur.phone || '',
       last_message: context?.initial_message || 'Bắt đầu trò chuyện',
       last_message_at: new Date().toISOString(),
       unread_count: 0,
       buyer_unread: 0,
-      seller_unread: 1,
+      seller_unread: 0,
       created_at: new Date().toISOString(),
       messages
     };
@@ -3672,13 +3878,18 @@ export class DCCTDatabaseService {
     }
     await cpnBatch.commit();
 
-    const sampleShops = ['do-cu-con-thuong', 'goc-sach-nhac', 'retro-tech'];
+    const sampleShops = [
+      { id: 'do-cu-con-thuong', name: 'Đồ Cũ Còn Thương', color: '#08482D' },
+      { id: 'goc-sach-nhac', name: 'Góc Sách & Nhạc', color: '#DAE7C7' },
+      { id: 'retro-tech', name: 'Retro Tech', color: '#08482D' }
+    ];
     const shopBatch = writeBatch(db);
     for (const s of sampleShops) {
-      const ref = doc(db, 'shops', s);
+      const ref = doc(db, 'shops', s.id);
       const snap = await getDoc(ref);
       if (snap.exists()) {
         shopBatch.update(ref, {
+          avatar: createShopAvatarSvg(s.name, s.color, s.id),
           followerUids: [],
           followerCount: 0,
           ratingAvg: 0,
@@ -3718,16 +3929,17 @@ export class DCCTDatabaseService {
     const snap = await getDoc(ref);
     if (!snap.exists()) throw new Error('Đơn không tồn tại');
 
+    const oData = snap.data();
     const steps = [
-      { status: 'confirmed', label: 'Bàn giao cho ĐVVC', event: 'dispatched' },
-      { status: 'shipping', label: 'Đến kho phân loại', event: 'hub_arrival' },
+      { status: 'shipping', label: 'Đã bàn giao cho đơn vị vận chuyển', event: 'dispatched' },
+      { status: 'shipping', label: 'Đã đến kho phân loại', event: 'hub_arrival' },
       { status: 'shipping', label: 'Đang vận chuyển liên tỉnh', event: 'transit' },
       { status: 'shipping', label: 'Đang giao hàng tới người mua', event: 'out_for_delivery' },
-      { status: 'completed', label: 'Giao hàng thành công', event: 'delivered' }
+      { status: 'delivered', label: 'Giao hàng thành công', event: 'delivered' }
     ];
 
-    const target = steps[Math.min(step, steps.length - 1)];
-    const events = snap.data().shipmentEvents || [];
+    const target = steps[Math.min(Math.max(0, step), steps.length - 1)];
+    const events = oData.shipmentEvents || [];
     events.push({
       event: target.event,
       label: target.label,
@@ -3736,14 +3948,26 @@ export class DCCTDatabaseService {
       at: new Date().toISOString()
     });
 
+    const logs = oData.logs || [];
+    logs.push({
+      status: target.status,
+      actorRole: 'seller',
+      actorName: oData.shopName || 'Hệ thống',
+      note: target.label,
+      at: new Date().toISOString()
+    });
+
     const updates: any = {
       status: target.status,
       shipmentEvents: events,
+      logs,
       updatedAt: serverTimestamp()
     };
-    if (target.status === 'completed') {
-      updates.completedAt = new Date().toISOString();
-      updates.paymentStatus = 'paid';
+    if (target.status === 'delivered') {
+      updates.deliveredAt = new Date().toISOString();
+      if (oData.paymentMethod === 'cod') {
+        updates.paymentStatus = 'paid';
+      }
     }
 
     await updateDoc(ref, updates);
@@ -3821,12 +4045,16 @@ export class DCCTDatabaseService {
       const list: ChatConversation[] = [];
       snap.forEach((d) => {
         const data = d.data();
+        const shopAvatar = data.shopAvatar && !data.shopAvatar.includes('unsplash.com') && !data.shopAvatar.includes('photo-1544816155-12df9643f363')
+          ? data.shopAvatar
+          : createShopAvatarSvg(data.shopName || 'Shop', '#08482D', data.shopId);
         list.push({
           id: d.id as any,
           buyer_id: data.buyerUid as any,
           seller_id: data.sellerUid as any,
           shop_id: data.shopId as any,
           shop_name: data.shopName,
+          shop_avatar: shopAvatar,
           buyer_name: data.buyerName,
           buyer_phone: data.buyerPhone || undefined,
           last_message: data.lastMessage,

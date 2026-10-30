@@ -221,13 +221,12 @@ function MainShopApp() {
     const handleRouteFromPath = () => {
       const path = window.location.pathname;
 
-      // 1. PRODUCT DETAIL: /product/:id (Requirement A6)
+      // 1. PRODUCT DETAIL: /product/:id (Direct link & F5 support)
       if (path.startsWith('/product/')) {
-        const idStr = path.replace('/product/', '').split('/')[0].split('?')[0];
-        const idNum = Number(idStr);
-        if (!isNaN(idNum) && idNum > 0) {
-          if (!detailProduct || detailProduct.id !== idNum) {
-            api.getProduct(idNum).then(res => {
+        const idStr = decodeURIComponent(path.replace('/product/', '').split('/')[0].split('?')[0].trim());
+        if (idStr) {
+          if (!detailProduct || String(detailProduct.id) !== idStr) {
+            api.getProduct(idStr).then(res => {
               if (res.product) {
                 setDetailProduct(res.product);
                 if (currentView === 'seller' && user?.role === 'buyer') {
@@ -850,10 +849,18 @@ function MainShopApp() {
             }}
             onSuccess={(order, allOrders) => {
               setDirectCheckoutItem(undefined);
-              setSuccessOrder(order);
-              setSuccessOrders(allOrders && allOrders.length > 0 ? allOrders : [order]);
+              setSuccessOrder(null);
+              setSuccessOrders([]);
               refreshCartCount();
               loadCartData();
+              const primaryOrder = order || (allOrders && allOrders.length > 0 ? allOrders[0] : null);
+              const orderCode = primaryOrder?.code || (primaryOrder?.id ? String(primaryOrder.id) : '');
+              if (orderCode) {
+                setSelectedOrderCodeForTracking(orderCode);
+              }
+              setCurrentView('orders');
+              window.history.pushState({}, '', '/orders' + (orderCode ? `/${orderCode}` : ''));
+              showToast(`Đặt hàng thành công — #${orderCode}`, 'success');
             }}
           />
         ) : currentView === '404' ? (

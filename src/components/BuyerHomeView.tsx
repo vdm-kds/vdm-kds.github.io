@@ -85,36 +85,29 @@ export const BuyerHomeView: React.FC<BuyerHomeViewProps> = ({
   // Fresh arrivals horizontal row scroll ref
   const freshScrollRef = useRef<HTMLDivElement>(null);
 
-  // Fetch shipping orders and unread notifications
+  // Real-time onSnapshot subscription for shipping orders & notifications (Requirement 3)
   useEffect(() => {
     let isMounted = true;
+    setLoadingOrders(true);
 
-    const loadBuyerData = async () => {
-      try {
-        const [ordersRes, notifRes] = await Promise.all([
-          api.getOrders('shipping'),
-          api.getNotifications()
-        ]);
-        if (isMounted) {
-          // Find orders currently in shipping or confirmed
-          const active = (ordersRes.orders || []).filter(
-            (o: Order) => o.status === 'shipping' || o.status === 'confirmed'
-          );
-          setShippingOrders(active);
-          setUnreadNotificationsCount(notifRes.unread_count || 0);
-        }
-      } catch {
-        // Silent catch
-      } finally {
-        if (isMounted) setLoadingOrders(false);
-      }
-    };
+    const unsubOrders = api.subscribeBuyerOrders((allOrders) => {
+      if (!isMounted) return;
+      const active = allOrders.filter(
+        (o: Order) => o.status === 'shipping' || o.status === 'confirmed'
+      );
+      setShippingOrders(active);
+      setLoadingOrders(false);
+    });
 
-    loadBuyerData();
-    const interval = setInterval(loadBuyerData, 15000);
+    const unsubNotifs = api.subscribeNotifications((_notifs, unreadCount) => {
+      if (!isMounted) return;
+      setUnreadNotificationsCount(unreadCount);
+    });
+
     return () => {
       isMounted = false;
-      clearInterval(interval);
+      unsubOrders();
+      unsubNotifs();
     };
   }, []);
 

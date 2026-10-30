@@ -2054,7 +2054,10 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                   <MessageSquare className="w-4 h-4 text-[#08482D]" />
                   Hộp thư tư vấn khách hàng
                 </h3>
-                <p className="text-[11px] text-[#5E5E61]">Tự động cập nhật mỗi 5 giây</p>
+                <p className="text-[11px] text-[#5E5E61] flex items-center gap-1.5 mt-0.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="text-emerald-700 font-semibold">Trực tiếp</span>
+                </p>
               </div>
               <Button variant="ghost" size="sm" onClick={fetchChat}>
                 <RefreshCw className="w-3.5 h-3.5" />

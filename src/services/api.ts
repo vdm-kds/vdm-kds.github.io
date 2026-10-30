@@ -37,32 +37,32 @@ export const api = {
   getAutocomplete: (q: string) =>
     db.getAutocomplete(q),
 
-  getProduct: (id: number) =>
+  getProduct: (id: number | string) =>
     db.getProduct(id),
 
   createProduct: (productData: Partial<Product>) =>
     db.createProduct(productData),
 
-  updateProduct: (id: number, productData: Partial<Product>) =>
+  updateProduct: (id: number | string, productData: Partial<Product>) =>
     db.updateProduct(id, productData),
 
-  deleteProduct: (id: number) =>
+  deleteProduct: (id: number | string) =>
     db.deleteProduct(id),
 
-  recordProductView: (productId: number) =>
+  recordProductView: (productId: number | string) =>
     db.recordProductView(productId),
 
   // --- CART ---
   getCart: () =>
     db.getCart(),
 
-  addToCart: (productId: number, quantity: number = 1, offerId?: number) =>
-    db.addToCart(productId, quantity),
+  addToCart: (productId: number | string, quantity: number = 1, offerId?: number | string) =>
+    db.addToCart(productId, quantity, offerId as any),
 
-  updateCartQty: (cartId: number, quantity: number) =>
+  updateCartQty: (cartId: number | string, quantity: number) =>
     db.updateCartQty(cartId, quantity),
 
-  removeFromCart: (cartId: number) =>
+  removeFromCart: (cartId: number | string) =>
     db.removeFromCart(cartId),
 
   clearCart: () =>
@@ -435,9 +435,9 @@ export const api = {
   getSellerOffers: () =>
     db.getSellerOffers(),
 
-  createOffer: (payload: { product_id?: number; productId?: number; offered_price?: number; offeredPrice?: number; price?: number; message?: string }) =>
+  createOffer: (payload: { product_id?: number | string; productId?: number | string; offered_price?: number; offeredPrice?: number; price?: number; message?: string }) =>
     db.createOffer({
-      productId: Number(payload.productId ?? payload.product_id),
+      productId: String(payload.productId ?? payload.product_id),
       offeredPrice: Number(payload.offeredPrice ?? payload.offered_price ?? (payload as any).price),
       message: payload.message
     }),

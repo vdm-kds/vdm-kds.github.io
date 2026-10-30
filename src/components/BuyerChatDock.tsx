@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { ChatConversation, ChatMessage, ChatMessageContext } from '../types';
 import { api } from '../services/api';
+import { createShopAvatarSvg } from '../services/db';
 import { formatVND } from '../utils/format';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -151,7 +152,10 @@ export const BuyerChatDock: React.FC<BuyerChatDockProps> = ({ onNavigateToShop }
     try {
       setSending(true);
       const res = await api.sendChatMessage(selectedConvId, text);
-      setActiveMessages(prev => [...prev, res.message]);
+      setActiveMessages(prev => {
+        if (prev.some(m => String(m.id) === String(res.message.id))) return prev;
+        return [...prev, res.message];
+      });
       setInputText('');
       setTimeout(scrollToBottom, 100);
       loadConversations();
@@ -276,7 +280,7 @@ export const BuyerChatDock: React.FC<BuyerChatDockProps> = ({ onNavigateToShop }
                       >
                         <div className="relative flex-shrink-0">
                           <img
-                            src={c.shop_avatar || 'https://images.unsplash.com/photo-1544816155-12df9643f363?w=100'}
+                            src={c.shop_avatar || createShopAvatarSvg(c.shop_name || 'Shop', '#08482D', c.shop_slug || String(c.shop_id))}
                             alt=""
                             className="w-10 h-10 rounded-full object-cover border border-stone-200"
                           />
@@ -323,7 +327,7 @@ export const BuyerChatDock: React.FC<BuyerChatDockProps> = ({ onNavigateToShop }
                       </button>
 
                       <img
-                        src={currentConv.shop_avatar || 'https://images.unsplash.com/photo-1544816155-12df9643f363?w=100'}
+                        src={currentConv.shop_avatar || createShopAvatarSvg(currentConv.shop_name || 'Shop', '#08482D', currentConv.shop_slug || String(currentConv.shop_id))}
                         alt=""
                         className="w-9 h-9 rounded-full object-cover border border-stone-200 shrink-0"
                       />

@@ -13,6 +13,7 @@ import { ProductImage } from './ProductImage';
 import { ProductFallbackImage } from './ProductFallbackImage';
 import { OfferModal } from './OfferModal';
 import { ChatDrawer } from './ChatDrawer';
+import { createShopAvatarSvg } from '../services/db';
 
 interface ProductDetailModalProps {
   product: Product | null;
@@ -1190,7 +1191,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
               <div className="p-3.5 rounded-2xl bg-[#F5F8EF] border border-[#DAE7C7] flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
                 <div className="flex items-center gap-3 min-w-0">
                   <img
-                    src={shopInfo?.avatar || 'https://images.unsplash.com/photo-1544816155-12df9643f363?w=100'}
+                    src={(shopInfo?.avatar && !shopInfo.avatar.includes('unsplash.com')) ? shopInfo.avatar : createShopAvatarSvg(shopInfo?.name || fullProduct.shop_name || 'Đồ Cũ Còn Thương', '#08482D', shopInfo?.slug || String(fullProduct.shop_id || 'do-cu-con-thuong'))}
                     alt=""
                     className="w-11 h-11 rounded-full object-cover border-2 border-white shadow-xs shrink-0"
                   />
