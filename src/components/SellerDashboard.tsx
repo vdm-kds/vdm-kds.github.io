@@ -2604,12 +2604,12 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#E2E8D8] pb-3">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-full bg-[#08482D] text-white flex items-center justify-center font-bold text-xs shrink-0">
-                            {rev.is_anonymous ? 'A' : (rev.buyer_name || 'K')[0].toUpperCase()}
+                            {(rev.buyer_name || rev.user_name || 'K')[0].toUpperCase()}
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
                               <span className="font-bold text-xs text-[#101410]">
-                                {rev.is_anonymous ? 'Người mua ẩn danh' : rev.buyer_name}
+                                {rev.is_anonymous ? 'Người mua ẩn danh' : (rev.buyer_name || rev.user_name || 'Khách hàng')}
                               </span>
                               {rev.is_anonymous && (
                                 <span className="text-[10px] bg-stone-100 text-[#5E5E61] px-1.5 py-0.2 rounded font-medium">
@@ -2617,10 +2617,19 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                                 </span>
                               )}
                             </div>
-                            <span className="text-[11px] text-[#5E5E61]">
-                              Sản phẩm: <strong className="text-[#08482D]">{rev.product_name}</strong>
-                              {rev.order_code && ` · Đơn #${rev.order_code}`}
-                            </span>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              {rev.product_image && (
+                                <img
+                                  src={rev.product_image}
+                                  alt=""
+                                  className="w-5 h-5 rounded object-cover border border-[#DAE7C7]"
+                                />
+                              )}
+                              <span className="text-[11px] text-[#5E5E61]">
+                                Sản phẩm: <strong className="text-[#08482D]">{rev.product_name || 'Sản phẩm'}</strong>
+                                {rev.order_code && ` · Đơn #${rev.order_code}`}
+                              </span>
+                            </div>
                           </div>
                         </div>
 

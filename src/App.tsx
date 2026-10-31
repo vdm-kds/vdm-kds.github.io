@@ -31,7 +31,7 @@ import {
 
 type PendingAction =
   | { type: 'cart'; product: Product; quantity: number }
-  | { type: 'buy'; product: Product; quantity: number }
+  | { type: 'buy'; product: Product; quantity: number; offerId?: string | number; negotiatedPrice?: number }
   | { type: 'offer'; product: Product }
   | { type: 'chat'; product: Product }
   | { type: 'wishlist'; productId: number };
@@ -79,7 +79,12 @@ function MainShopApp() {
   const [detailOpenChat, setDetailOpenChat] = useState(false);
 
   const [isCartOpen, setIsCartOpen] = useState(false);
-  const [directCheckoutItem, setDirectCheckoutItem] = useState<{ product: Product; quantity: number } | undefined>(undefined);
+  const [directCheckoutItem, setDirectCheckoutItem] = useState<{
+    product: Product;
+    quantity: number;
+    offer_id?: string | number;
+    negotiated_price?: number;
+  } | undefined>(undefined);
   const [successOrder, setSuccessOrder] = useState<Order | null>(null);
   const [successOrders, setSuccessOrders] = useState<Order[]>([]);
 
@@ -543,7 +548,12 @@ function MainShopApp() {
   };
 
   // Buy now handler
-  const handleBuyNow = (product: Product, quantity: number = 1) => {
+  const handleBuyNow = (
+    product: Product,
+    quantity: number = 1,
+    offerId?: string | number,
+    negotiatedPrice?: number
+  ) => {
     if (currentView === 'preview') {
       showToast('Bạn đang ở chế độ xem trước — chức năng mua hàng bị vô hiệu hóa', 'info');
       return;
@@ -555,7 +565,7 @@ function MainShopApp() {
     }
 
     if (!user) {
-      setPendingAction({ type: 'buy', product, quantity });
+      setPendingAction({ type: 'buy', product, quantity, offerId, negotiatedPrice });
       setAuthModal({
         open: true,
         role: 'buyer',
@@ -570,7 +580,12 @@ function MainShopApp() {
       return;
     }
 
-    setDirectCheckoutItem({ product, quantity });
+    setDirectCheckoutItem({
+      product,
+      quantity,
+      offer_id: offerId,
+      negotiated_price: negotiatedPrice
+    });
     if (detailProduct) setDetailProduct(null);
     setCurrentView('checkout');
     window.history.pushState({}, '', '/checkout');
@@ -692,7 +707,12 @@ function MainShopApp() {
             await loadCartData();
             setIsCartOpen(true);
           } else if (action.type === 'buy') {
-            setDirectCheckoutItem({ product: action.product, quantity: action.quantity });
+            setDirectCheckoutItem({
+              product: action.product,
+              quantity: action.quantity,
+              offer_id: action.offerId,
+              negotiated_price: action.negotiatedPrice
+            });
             if (detailProduct) setDetailProduct(null);
             setCurrentView('checkout');
             window.history.pushState({}, '', '/checkout');
@@ -1371,7 +1391,7 @@ function MainShopApp() {
         }}
         onClose={handleCloseProductDetail}
         onAddToCart={(prod, qty) => handleAddToCart(prod, qty)}
-        onBuyNow={(prod, qty) => handleBuyNow(prod, qty)}
+        onBuyNow={(prod, qty, offerId, negotiatedPrice) => handleBuyNow(prod, qty, offerId, negotiatedPrice)}
         disabledBuy={isPreview}
         onDisabledBuyClick={() => showToast('Bạn đang xem cửa hàng dưới góc nhìn của khách — chức năng mua hàng bị vô hiệu hóa', 'info')}
         onSelectProduct={(p) => handleOpenProductDetail(p)}

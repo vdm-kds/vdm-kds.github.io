@@ -8,6 +8,7 @@ import {
   signOut
 } from 'firebase/auth';
 import {
+  initializeFirestore,
   getFirestore,
   Firestore
 } from 'firebase/firestore';
@@ -21,6 +22,25 @@ export const firebaseConfig = {
   appId: "1:515526901972:web:7ded7eefaeb9c888287b41"
 };
 
+// Cache of initialized Firestore instances per app name
+const firestoreInstances = new Map<string, Firestore>();
+
+export function getFirestoreInstance(app: FirebaseApp): Firestore {
+  if (firestoreInstances.has(app.name)) {
+    return firestoreInstances.get(app.name)!;
+  }
+  let db: Firestore;
+  try {
+    db = initializeFirestore(app, {
+      ignoreUndefinedProperties: true
+    });
+  } catch {
+    db = getFirestore(app);
+  }
+  firestoreInstances.set(app.name, db);
+  return db;
+}
+
 // Default app for unauthenticated / guest access
 export function getDefaultApp(): FirebaseApp {
   const existing = getApps().find((a) => a.name === '[DEFAULT]');
@@ -29,7 +49,7 @@ export function getDefaultApp(): FirebaseApp {
 }
 
 export function getDefaultFirestore(): Firestore {
-  return getFirestore(getDefaultApp());
+  return getFirestoreInstance(getDefaultApp());
 }
 
 export function getDefaultAuth(): Auth {
@@ -183,7 +203,7 @@ export function getActiveAuth(): Auth {
 }
 
 export function getActiveFirestore(): Firestore {
-  return getFirestore(getActiveApp());
+  return getFirestoreInstance(getActiveApp());
 }
 
 // Startup verification: cleans default app, verifies all remembered accounts

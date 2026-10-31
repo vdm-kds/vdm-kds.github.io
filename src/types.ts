@@ -15,6 +15,7 @@ export interface Shop {
   follower_ids: any[];
   follower_count?: number;
   rating_avg?: number;
+  rating_count?: number;
   review_count?: number;
   response_rate?: number;
   joined_text?: string;

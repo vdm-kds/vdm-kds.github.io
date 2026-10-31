@@ -16,7 +16,7 @@ interface CheckoutViewProps {
   subtotal: number;
   shippingFee: number;
   total: number;
-  directItem?: { product: Product; quantity: number };
+  directItem?: { product: Product; quantity: number; offer_id?: string | number; negotiated_price?: number };
   onBackToCart: () => void;
   onSuccess: (order: Order, allOrders?: Order[]) => void;
 }
@@ -152,21 +152,26 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
   // Calculate order items
   const currentItems: CartItem[] = useMemo(() => {
     if (directItem) {
+      const priceToUse = directItem.negotiated_price ?? directItem.product.price;
       return [{
         id: 0,
         product_id: directItem.product.id,
         quantity: directItem.quantity,
         name: directItem.product.name,
         category: directItem.product.category,
-        price: directItem.product.price,
-        original_price: directItem.product.original_price,
+        price: priceToUse,
+        effective_price: priceToUse,
+        original_price: directItem.product.original_price || directItem.product.price,
         condition_pct: directItem.product.condition_pct,
         condition_detail: directItem.product.condition_detail,
         stock: directItem.product.stock,
         image_url: directItem.product.image_url,
         shop_id: directItem.product.shop_id || 1,
         shop_name: directItem.product.shop_name,
-        shop_slug: directItem.product.shop_slug
+        shop_slug: directItem.product.shop_slug,
+        is_negotiated: !!directItem.negotiated_price,
+        negotiated_price: directItem.negotiated_price,
+        offer_id: directItem.offer_id
       }];
     }
     return localItems.length > 0 ? localItems : items;
@@ -385,7 +390,11 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
         payment_method: paymentMethod,
         card_last4: cardLast4,
         card_type: cardType,
-        direct_items: directItem ? [{ product_id: directItem.product.id, quantity: directItem.quantity }] : undefined,
+        direct_items: directItem ? [{
+          product_id: directItem.product.id,
+          quantity: directItem.quantity,
+          offer_id: directItem.offer_id
+        }] : undefined,
         shop_coupons: couponsByShop
       });
 
@@ -926,13 +935,25 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                               <h4 className="text-xs font-bold text-[#101410] truncate">
                                 {item.name}
                               </h4>
-                              <p className="text-[11px] text-[#5E5E61]">
-                                SL: {item.quantity} · Mới: {item.condition_pct}%
+                              <p className="text-[11px] text-[#5E5E61] flex items-center gap-1.5 flex-wrap">
+                                <span>SL: {item.quantity} · Mới: {item.condition_pct}%</span>
+                                {(item.is_negotiated || item.negotiated_price) && (
+                                  <span className="px-1.5 py-0.2 rounded bg-[#DAE7C7] text-[#08482D] text-[10px] font-bold">
+                                    Giá trả giá
+                                  </span>
+                                )}
                               </p>
                             </div>
-                            <span className="font-mono text-xs font-bold text-[#08482D] shrink-0">
-                              {formatVND(item.price * item.quantity)}
-                            </span>
+                            <div className="text-right shrink-0">
+                              {(item.is_negotiated || item.negotiated_price) && (
+                                <span className="block text-[10px] text-[#5E5E61] line-through font-mono">
+                                  {formatVND((item.original_price || item.price) * item.quantity)}
+                                </span>
+                              )}
+                              <span className="font-mono text-xs font-bold text-[#08482D]">
+                                {formatVND(item.price * item.quantity)}
+                              </span>
+                            </div>
                           </div>
                         ))}
                       </div>

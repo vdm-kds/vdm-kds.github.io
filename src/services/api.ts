@@ -252,7 +252,7 @@ export const api = {
       const shopSlug = sItems[0]?.shop_slug || sItems[0]?.product?.shop_slug || sId;
 
       for (const i of sItems) {
-        const p = i.effective_price ?? i.price ?? i.product?.price ?? 0;
+        const p = i.effective_price ?? i.negotiated_price ?? i.price ?? i.product?.price ?? 0;
         subtotal += p * (i.quantity || 1);
       }
 
@@ -583,5 +583,11 @@ export const api = {
     db.subscribeOffers(cb),
 
   subscribeReturns: (cb: (returns: ReturnRequest[]) => void) =>
-    db.subscribeReturns(cb)
+    db.subscribeReturns(cb),
+
+  subscribeShop: (shopId: number | string, cb: (shop: any) => void) =>
+    db.subscribeShop(shopId, cb),
+
+  subscribeMyOfferForProduct: (productId: number | string, cb: (offer: Offer | null) => void) =>
+    db.subscribeMyOfferForProduct(productId, cb)
 };

@@ -64,6 +64,16 @@ import {
   SellerStats
 } from '../types';
 
+export function cleanObject<T extends Record<string, any>>(obj: T): Partial<T> {
+  const result: any = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== undefined) {
+      result[k] = v;
+    }
+  }
+  return result;
+}
+
 // =========================================================================
 // SVG GENERATORS & ICON HELPERS
 // =========================================================================
@@ -1290,7 +1300,18 @@ export class DCCTDatabaseService {
   }
 
   async getShopById(id: number | string): Promise<{ shop: Shop }> {
-    return this.getShopBySlug(String(id));
+    const db = getActiveFirestore();
+    const strId = String(id);
+    const snap = await getDoc(doc(db, 'shops', strId));
+    if (snap.exists()) {
+      return { shop: normalizeShopDoc(snap.data(), snap.id) };
+    }
+    const { shops } = await this.getShops();
+    const found = shops.find((s) => s.slug === strId || String(s.id) === strId) || shops[0];
+    if (found) {
+      return { shop: found };
+    }
+    throw new Error('Cửa hàng không tồn tại');
   }
 
   async getShopByOwnerUserId(userId: number | string): Promise<{ shop: Shop }> {
@@ -2460,15 +2481,20 @@ export class DCCTDatabaseService {
     const reviewId = `${orderCode}_${pid}`;
     const pSnap = await getDoc(doc(db, 'products', pid));
     const pData = pSnap.exists() ? pSnap.data() : { shopId: 'do-cu-con-thuong', ownerUid: 'seller_admin' };
+    const pName = pData.name || '';
+    const pImg = (pData.images && pData.images[0]) || pData.imageUrl || '';
+    const isAnon = !!(payload as any).is_anonymous || !!(payload as any).anonymous;
 
     const reviewDoc = {
       orderId: orderCode,
       productId: pid,
+      productName: pName,
+      productImage: pImg,
       shopId: pData.shopId || 'do-cu-con-thuong',
       sellerUid: pData.ownerUid || 'seller_admin',
       buyerUid: cur.uid,
       buyerDisplayName: cur.full_name,
-      anonymous: false,
+      anonymous: isAnon,
       rating: Number(payload.rating),
       tags: payload.tags || [],
       comment: payload.comment,
@@ -2560,11 +2586,18 @@ export class DCCTDatabaseService {
           id: d.id as any,
           order_id: data.orderId,
           product_id: data.productId,
+          product_name: data.productName || '',
+          product_image: data.productImage || '',
           user_id: data.buyerUid,
           user_name: data.buyerDisplayName,
+          buyer_name: data.buyerDisplayName,
+          author_name: data.buyerDisplayName,
+          is_anonymous: !!data.anonymous,
           rating: data.rating,
+          tags: data.tags || [],
           comment: data.comment,
           images: data.images || [],
+          helpful_count: data.helpfulCount || 0,
           created_at: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString()
         });
       }
@@ -2581,20 +2614,49 @@ export class DCCTDatabaseService {
     const db = getActiveFirestore();
     const q = query(collection(db, 'reviews'), where('sellerUid', '==', cur.uid));
     const snap = await getDocs(q);
+
+    // Cache missing product names/images for historical reviews
+    const prodMap = new Map<string, { name: string; image: string }>();
+    for (const d of snap.docs) {
+      const data = d.data();
+      const pid = String(data.productId || '');
+      if ((!data.productName || !data.productImage) && pid && !prodMap.has(pid)) {
+        try {
+          const pSnap = await getDoc(doc(db, 'products', pid));
+          if (pSnap.exists()) {
+            const pInfo = pSnap.data();
+            prodMap.set(pid, {
+              name: pInfo.name || '',
+              image: (pInfo.images && pInfo.images[0]) || pInfo.imageUrl || ''
+            });
+          }
+        } catch {}
+      }
+    }
+
     const list: Review[] = [];
     let sum = 0;
     snap.forEach((d) => {
       const data = d.data();
       sum += Number(data.rating || 0);
+      const pid = String(data.productId || '');
+      const fallback = prodMap.get(pid);
       list.push({
         id: d.id as any,
         order_id: data.orderId,
         product_id: data.productId,
+        product_name: data.productName || fallback?.name || '',
+        product_image: data.productImage || fallback?.image || '',
         user_id: data.buyerUid,
         user_name: data.buyerDisplayName,
+        buyer_name: data.buyerDisplayName,
+        author_name: data.buyerDisplayName,
+        is_anonymous: !!data.anonymous,
         rating: data.rating,
+        tags: data.tags || [],
         comment: data.comment,
         images: data.images || [],
+        helpful_count: data.helpfulCount || 0,
         seller_reply: data.sellerReply?.text || null,
         seller_reply_at: data.sellerReply?.at || null,
         created_at: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString()
@@ -3100,27 +3162,33 @@ export class DCCTDatabaseService {
         } catch {}
       }
 
-      resolvedContext = {
+      const ctxObj: any = {
         kind,
         refId,
-        product_id: kind === 'product' ? refId : undefined,
-        order_code: kind === 'order' ? String(refId) : undefined,
-        title,
-        price,
-        image
+        title: title || '',
+        price: Number(price ?? 0),
+        image: image || ''
       };
+      if (kind === 'product' && refId) {
+        ctxObj.product_id = String(refId);
+      } else if (kind === 'order' && refId) {
+        ctxObj.order_code = String(refId);
+      }
+      resolvedContext = cleanObject(ctxObj);
     }
 
     const msgId = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-    const msgDoc = {
+    const msgDoc: any = {
       senderUid: cur.uid,
       senderRole: cur.role,
       type: resolvedContext ? 'context' : 'text',
       text: payload.text,
-      context: resolvedContext,
       createdAt: serverTimestamp(),
       readAt: null
     };
+    if (resolvedContext) {
+      msgDoc.context = resolvedContext;
+    }
 
     await setDoc(doc(db, 'conversations', convId, 'messages', msgId), msgDoc);
 
@@ -3581,8 +3649,51 @@ export class DCCTDatabaseService {
   // --- SELLER STATS ---
 
   async getSellerStats(): Promise<{ stats: SellerStats }> {
+    const cur = getCurrentUser();
+    if (!cur || cur.role !== 'seller') {
+      return {
+        stats: {
+          total_revenue: 0,
+          total_orders: 0,
+          status_counts: { pending: 0, confirmed: 0, shipping: 0, delivered: 0, completed: 0, cancelled: 0 },
+          low_stock_count: 0,
+          recent_orders: [],
+          orders_pending: 0,
+          orders_confirmed: 0,
+          orders_shipping: 0,
+          orders_completed: 0,
+          orders_cancelled: 0,
+          total_products: 0,
+          rating_avg: 0,
+          total_reviews: 0
+        }
+      };
+    }
+
     const { orders } = await this.getSellerOrders('all');
-    const { products } = await this.getProducts({ in_stock: true });
+
+    // Query products strictly belonging to this seller's shop or owned by seller
+    const db = getActiveFirestore();
+    const shopProducts: Product[] = [];
+    if (cur.shop_id) {
+      const qShop = query(collection(db, 'products'), where('shopId', '==', String(cur.shop_id)));
+      const snap = await getDocs(qShop);
+      snap.forEach((d) => {
+        const data = d.data();
+        if (data.isActive !== false) {
+          shopProducts.push(normalizeProductDoc(data, d.id));
+        }
+      });
+    } else {
+      const qOwner = query(collection(db, 'products'), where('ownerUid', '==', cur.uid));
+      const snap = await getDocs(qOwner);
+      snap.forEach((d) => {
+        const data = d.data();
+        if (data.isActive !== false) {
+          shopProducts.push(normalizeProductDoc(data, d.id));
+        }
+      });
+    }
 
     let revenue = 0;
     let pending = 0;
@@ -3600,6 +3711,21 @@ export class DCCTDatabaseService {
       else if (o.status === 'cancelled') cancelled++;
     });
 
+    let ratingAvg = 0;
+    let totalReviews = 0;
+    if (cur.shop_id) {
+      try {
+        const sSnap = await getDoc(doc(db, 'shops', String(cur.shop_id)));
+        if (sSnap.exists()) {
+          ratingAvg = Number(sSnap.data().ratingAvg || 0);
+          totalReviews = Number(sSnap.data().ratingCount || 0);
+        }
+      } catch {}
+    }
+
+    // Tồn kho thấp: ≤ 1 món
+    const lowStockCount = shopProducts.filter((p) => (p.stock || 0) <= 1).length;
+
     const stats: SellerStats = {
       total_revenue: revenue,
       total_orders: orders.length,
@@ -3611,16 +3737,16 @@ export class DCCTDatabaseService {
         completed,
         cancelled
       },
-      low_stock_count: products.filter((p) => (p.stock || 0) <= 2).length,
+      low_stock_count: lowStockCount,
       recent_orders: orders.slice(0, 5),
       orders_pending: pending,
       orders_confirmed: confirmed,
       orders_shipping: shipping,
       orders_completed: completed,
       orders_cancelled: cancelled,
-      total_products: products.length,
-      rating_avg: 0,
-      total_reviews: 0
+      total_products: shopProducts.length,
+      rating_avg: ratingAvg,
+      total_reviews: totalReviews
     };
 
     return { stats };
@@ -4303,6 +4429,73 @@ export class DCCTDatabaseService {
       cb(list);
     }, (err) => {
       console.warn('subscribeReturns error:', err);
+    });
+  }
+
+  subscribeShop(shopId: number | string, cb: (shop: Shop) => void): Unsubscribe {
+    const db = getActiveFirestore();
+    const strId = String(shopId);
+    return onSnapshot(doc(db, 'shops', strId), (snap) => {
+      if (snap.exists()) {
+        cb(normalizeShopDoc(snap.data(), snap.id));
+      }
+    }, (err) => {
+      console.warn('subscribeShop error:', err);
+    });
+  }
+
+  subscribeMyOfferForProduct(productId: number | string, cb: (offer: Offer | null) => void): Unsubscribe {
+    const cur = getCurrentUser();
+    const auth = getActiveAuth();
+    if (!cur || !auth.currentUser || auth.currentUser.uid !== cur.uid) {
+      cb(null);
+      return () => {};
+    }
+    const db = getActiveFirestore();
+    const q = query(
+      collection(db, 'offers'),
+      where('buyerUid', '==', cur.uid),
+      where('productId', '==', String(productId))
+    );
+    return onSnapshot(q, (snap) => {
+      let matched: Offer | null = null;
+      const now = Date.now();
+      for (const d of snap.docs) {
+        const data = d.data();
+        let status = data.status;
+        const isPast24h = data.expiresAt
+          ? new Date(data.expiresAt).getTime() < now
+          : (data.createdAt?.toDate ? now - data.createdAt.toDate().getTime() > 24 * 3600 * 1000 : false);
+
+        if (status === 'pending' && isPast24h) {
+          status = 'expired';
+        }
+
+        if (status === 'pending' || status === 'accepted' || status === 'countered') {
+          matched = {
+            id: d.id as any,
+            shop_id: data.shopId as any,
+            seller_id: data.sellerUid as any,
+            buyer_id: data.buyerUid as any,
+            buyer_name: data.buyerName,
+            buyer_phone: data.buyerPhone || '',
+            product_id: data.productId as any,
+            product_name: data.productName,
+            original_price: Number(data.originalPrice || 0),
+            offered_price: Number(data.offeredPrice || data.price || 0),
+            counter_price: data.counterPrice != null ? Number(data.counterPrice) : undefined,
+            price: Number(data.offeredPrice || data.price || 0),
+            status,
+            expires_at: data.expiresAt,
+            created_at: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString()
+          };
+          break;
+        }
+      }
+      cb(matched);
+    }, (err) => {
+      console.warn('subscribeMyOfferForProduct error:', err);
+      cb(null);
     });
   }
 }

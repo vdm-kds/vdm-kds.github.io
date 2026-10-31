@@ -19,7 +19,7 @@ interface ProductDetailModalProps {
   product: Product | null;
   onClose: () => void;
   onAddToCart: (product: Product, quantity: number) => void;
-  onBuyNow: (product: Product, quantity: number) => void;
+  onBuyNow: (product: Product, quantity: number, offerId?: any, negotiatedPrice?: number) => void;
   isWishlisted?: boolean;
   onToggleWishlist?: (productId: number) => void;
   disabledBuy?: boolean;
@@ -119,11 +119,13 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   }, [initialOpenOffer, initialOpenChat]);
 
   useEffect(() => {
-    const sId = fullProduct.shop_id || 1;
+    const sId = fullProduct.shop_id || 'do-cu-con-thuong';
     api.getShopById(sId).then(res => setShopInfo(res.shop)).catch(() => {});
+    const unsubShop = api.subscribeShop(sId, (sh) => setShopInfo(sh));
     api.listProductsByShop(sId).then(res => {
       setOtherShopProducts((res.products || []).filter(p => p.id !== fullProduct.id).slice(0, 4));
     }).catch(() => {});
+    return () => unsubShop();
   }, [fullProduct.shop_id, fullProduct.id]);
 
   const fetchActiveOffer = async () => {
@@ -140,7 +142,15 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   };
 
   useEffect(() => {
+    if (!currentUser || !fullProduct?.id) {
+      setActiveOffer(null);
+      return;
+    }
     fetchActiveOffer();
+    const unsubOffer = api.subscribeMyOfferForProduct(fullProduct.id, (off) => {
+      setActiveOffer(off);
+    });
+    return () => unsubOffer();
   }, [currentUser?.id, fullProduct?.id]);
 
   const getRemainingHours = (expiresAt?: string) => {
@@ -257,7 +267,13 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
       return;
     }
     if (isSoldOut) return;
-    onBuyNow(fullProduct, quantity);
+    const isAccepted = activeOffer && activeOffer.status === 'accepted';
+    const priceToUse = isAccepted
+      ? (activeOffer.counter_price ?? activeOffer.offered_price ?? (activeOffer as any).price)
+      : fullProduct.price;
+    const offerIdToUse = isAccepted ? activeOffer.id : undefined;
+    onBuyNow({ ...fullProduct, price: priceToUse }, quantity, offerIdToUse, isAccepted ? priceToUse : undefined);
+    onClose();
   };
 
   // Condition annotation mapping
@@ -798,16 +814,29 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                             });
                           }
 
+                          const rawAuthorName = rev.author_name || rev.buyer_name || rev.user_name || 'Khách hàng';
+                          const avatarInitial = (rawAuthorName.trim() || 'K')[0].toUpperCase();
+                          const displayedName = rev.is_anonymous
+                            ? (() => {
+                                const parts = rawAuthorName.trim().split(/\s+/).filter(Boolean);
+                                if (parts.length === 1) {
+                                  const single = parts[0];
+                                  return single.length > 2 ? `${single[0]}***${single.slice(-1)}` : `${single[0]}***`;
+                                }
+                                return `${parts[0][0]}***${parts[parts.length - 1].slice(-1)}`;
+                              })()
+                            : rawAuthorName;
+
                           return (
                             <div key={rev.id} className="p-3.5 bg-white rounded-2xl border border-[#DAE7C7] space-y-2 text-xs shadow-2xs">
                               {/* User row */}
                               <div className="flex items-start justify-between gap-2">
                                 <div className="flex items-center gap-2.5">
                                   <div className="w-8 h-8 rounded-full bg-[#DAE7C7] text-[#08482D] font-bold flex items-center justify-center text-xs shrink-0">
-                                    {(rev.author_name || 'K')[0].toUpperCase()}
+                                    {avatarInitial}
                                   </div>
                                   <div>
-                                    <span className="font-bold text-[#101410] block">{rev.author_name}</span>
+                                    <span className="font-bold text-[#101410] block">{displayedName}</span>
                                     <div className="flex items-center gap-1 text-amber-500 mt-0.5">
                                       {[1, 2, 3, 4, 5].map(s => (
                                         <Star key={s} className={`w-3 h-3 ${s <= rev.rating ? 'fill-current' : 'text-stone-300'}`} />
@@ -1109,7 +1138,8 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                       <button
                         type="button"
                         onClick={() => {
-                          onBuyNow({ ...fullProduct, price: activeOffer.offered_price || (activeOffer as any).price || fullProduct.price }, 1);
+                          const acceptedPrice = activeOffer.counter_price ?? activeOffer.offered_price ?? (activeOffer as any).price;
+                          onBuyNow({ ...fullProduct, price: acceptedPrice }, 1, activeOffer.id, acceptedPrice);
                           onClose();
                         }}
                         className="px-3 py-1.5 bg-[#08482D] text-white rounded-xl text-xs font-bold shadow-xs hover:bg-[#063A24] shrink-0 cursor-pointer"
@@ -1205,10 +1235,17 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                       </span>
                     </div>
                     <div className="flex items-center gap-2 text-[11px] text-[#5E5E61] mt-0.5">
-                      {shopReviewsData && shopReviewsData.total_reviews > 0 ? (
+                      {(shopInfo && (shopInfo.rating_count || 0) > 0) ? (
+                        <span className="flex items-center gap-0.5">
+                          <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
+                          <strong className="text-stone-800">{shopInfo.rating_avg ? shopInfo.rating_avg.toFixed(1) : '5.0'}</strong>
+                          <span className="text-[#5E5E61]">({shopInfo.rating_count} đánh giá)</span>
+                        </span>
+                      ) : (shopReviewsData && shopReviewsData.total_reviews > 0) ? (
                         <span className="flex items-center gap-0.5">
                           <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
                           <strong className="text-stone-800">{shopReviewsData.average_rating}</strong>
+                          <span className="text-[#5E5E61]">({shopReviewsData.total_reviews} đánh giá)</span>
                         </span>
                       ) : (
                         <span>Chưa có đánh giá</span>
