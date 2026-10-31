@@ -9,6 +9,7 @@ interface ReviewModalProps {
   onClose: () => void;
   orderId: number;
   orderCode: string;
+  shopName?: string;
   product: {
     id: number;
     name: string;
@@ -133,6 +134,7 @@ export function ReviewModal({
   onClose,
   orderId,
   orderCode,
+  shopName,
   product,
   initialReview,
   onSuccess
@@ -356,7 +358,7 @@ export function ReviewModal({
               {initialReview ? 'Chỉnh sửa đánh giá sản phẩm' : 'Đánh giá sản phẩm'}
             </h3>
             <p className="text-xs text-[#5E5E61] mt-0.5">
-              Đơn hàng #{orderCode} · Đồ cũ còn thương
+              Đơn hàng #{orderCode} · {shopName || 'Đồ Cũ Còn Thương'}
             </p>
           </div>
           <button

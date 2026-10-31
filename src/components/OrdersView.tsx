@@ -635,7 +635,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                             {Boolean(item.is_negotiated) && (
                               <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 text-[10px] font-semibold border border-amber-200">
                                 <Tag className="w-2.5 h-2.5" />
-                                Giá đã thương lượng
+                                Giá trả giá
                               </span>
                             )}
                           </div>
@@ -643,9 +643,16 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                       </div>
 
                       <div className="flex flex-col items-end gap-1.5 shrink-0">
-                        <span className="font-mono font-bold text-[#101410]">
-                          {formatVND(item.price * item.quantity)}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          {Boolean(item.is_negotiated) && item.original_price && item.original_price > item.price && (
+                            <span className="line-through text-stone-400 font-mono text-[11px]">
+                              {formatVND(item.original_price * item.quantity)}
+                            </span>
+                          )}
+                          <span className="font-mono font-bold text-[#101410]">
+                            {formatVND(item.price * item.quantity)}
+                          </span>
+                        </div>
 
                         {/* Nút đánh giá khi đơn đã Hoàn thành */}
                         {selectedOrder.status === 'completed' && (
@@ -663,7 +670,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                               }}
                               className="px-2.5 py-1 bg-[#DAE7C7]/50 hover:bg-[#DAE7C7] text-[#08482D] text-[11px] font-bold rounded-lg transition-colors border border-[#DAE7C7]"
                             >
-                              Xem đánh giá
+                              Đã đánh giá
                             </button>
                           ) : (
                             <button
@@ -939,9 +946,13 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
           }}
           orderId={selectedOrder.id}
           orderCode={selectedOrder.code}
+          shopName={selectedOrder.shop_name}
           product={reviewModalProduct}
           initialReview={reviewModalInitial}
           onSuccess={() => {
+            if (reviewModalProduct?.id) {
+              setReviewedProductIds(prev => prev.includes(reviewModalProduct.id) ? prev : [...prev, reviewModalProduct.id]);
+            }
             fetchReviewedItems(selectedOrder.id);
             fetchOrders(true);
           }}

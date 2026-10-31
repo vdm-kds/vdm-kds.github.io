@@ -505,6 +505,11 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
 
     const unsubOrders = api.subscribeSellerOrders((allOrders) => {
       setOrders(allOrders);
+      setSelectedOrder(prev => {
+        if (!prev) return null;
+        const found = allOrders.find(o => String(o.id) === String(prev.id) || o.code === prev.code);
+        return found || prev;
+      });
       fetchStats();
     });
 
@@ -527,6 +532,18 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
       unsubReturns();
     };
   }, [currentUser?.id, currentUser?.role]);
+
+  // Real-time synchronization for currently opened order detail
+  useEffect(() => {
+    if (!selectedOrder?.code && !selectedOrder?.id) return;
+    const code = selectedOrder.code || selectedOrder.id;
+    const unsub = api.subscribeOrderDetail(code, (order) => {
+      if (order) {
+        setSelectedOrder(order);
+      }
+    });
+    return () => unsub();
+  }, [selectedOrder?.id, selectedOrder?.code]);
 
   // Subscribe to active conversation messages
   useEffect(() => {
@@ -1473,7 +1490,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                       </div>
 
                       <div className="py-2.5 text-xs text-[#524B46] space-y-1">
-                        <div><strong>Khách:</strong> {ord.buyer_name} ({ord.phone})</div>
+                        <div><strong>Khách:</strong> {ord.buyer_name}{ord.phone ? ` (${ord.phone})` : ''}</div>
                         <div className="text-stone-500 truncate"><strong>Địa chỉ:</strong> {ord.address}</div>
                         <div>
                           <strong>Món:</strong> {ord.items?.map(i => `${i.product_name} (x${i.quantity})`).join(', ')}
@@ -1595,7 +1612,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                 <div className="grid sm:grid-cols-2 gap-4 text-xs">
                   <div className="p-4 rounded-xl bg-white border border-[#E6DFD5]">
                     <span className="text-[#786F66] block font-semibold mb-1">Khách hàng & Địa chỉ:</span>
-                    <div className="font-bold text-[#101410]">{selectedOrder.recipient_name} ({selectedOrder.phone})</div>
+                    <div className="font-bold text-[#101410]">{selectedOrder.recipient_name}{selectedOrder.phone ? ` (${selectedOrder.phone})` : ''}</div>
                     <div className="text-stone-600 mt-1 leading-relaxed">{selectedOrder.address}</div>
                     {selectedOrder.note && (
                       <div className="mt-2 text-stone-500 italic">"Ghi chú: {selectedOrder.note}"</div>
@@ -1626,15 +1643,29 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                   <div className="border border-[#E6DFD5] rounded-xl overflow-hidden divide-y divide-[#F2ECE3]">
                     {selectedOrder.items?.map(it => (
                       <div key={it.id} className="p-3 flex items-center justify-between text-xs bg-white">
-                        <div className="flex items-center gap-3">
-                          <img src={it.image_url} alt="" className="w-10 h-10 rounded-lg object-cover bg-stone-100" />
-                          <div>
-                            <div className="font-bold text-[#101410]">{it.product_name}</div>
-                            <div className="text-stone-500">Độ mới {it.condition_pct}% · Số lượng: {it.quantity}</div>
+                        <div className="flex items-center gap-3 min-w-0">
+                          <img src={it.image_url} alt="" className="w-10 h-10 rounded-lg object-cover bg-stone-100 shrink-0" />
+                          <div className="min-w-0">
+                            <div className="font-bold text-[#101410] truncate">{it.product_name}</div>
+                            <div className="text-stone-500 flex items-center gap-2 flex-wrap">
+                              <span>Độ mới {it.condition_pct}% · Số lượng: {it.quantity}</span>
+                              {Boolean(it.is_negotiated) && (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 text-[10px] font-semibold border border-amber-200">
+                                  Giá trả giá
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
-                        <div className="font-mono font-bold text-[#101410]">
-                          {formatVND(it.price * it.quantity)}
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {Boolean(it.is_negotiated) && it.original_price && it.original_price > it.price && (
+                            <span className="line-through text-stone-400 font-mono text-[11px]">
+                              {formatVND(it.original_price * it.quantity)}
+                            </span>
+                          )}
+                          <span className="font-mono font-bold text-[#101410]">
+                            {formatVND(it.price * it.quantity)}
+                          </span>
                         </div>
                       </div>
                     ))}
@@ -1653,11 +1684,11 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                   </h4>
 
                   <div className="border-l-2 border-[#D8CEBE] ml-3 pl-4 space-y-3">
-                    {selectedOrder.shipment_events?.map((ev, idx) => (
+                    {[...(selectedOrder.shipment_events || [])].reverse().map((ev, idx) => (
                       <div key={idx} className="relative">
                         <div className="absolute -left-[23px] top-1.5 w-3 h-3 rounded-full bg-[#47533E] ring-4 ring-white" />
                         <div className="text-xs font-bold text-[#101410]">
-                          {ev.status} · {ev.location}
+                          {ev.label || ev.status || ev.event} · {ev.location}
                         </div>
                         <div className="text-[10px] text-stone-400">{formatDate(ev.created_at)}</div>
                         {ev.note && <p className="text-xs text-stone-600 mt-0.5">{ev.note}</p>}
@@ -1943,7 +1974,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                         />
                         <div className="min-w-0">
                           <h4 className="font-bold text-sm text-[#101410] truncate">{offer.product_name}</h4>
-                          <p className="text-xs text-[#5E5E61] mt-0.5">Khách: <strong>{offer.buyer_name || 'Khách hàng'}</strong> ({offer.buyer_phone})</p>
+                          <p className="text-xs text-[#5E5E61] mt-0.5">Khách: <strong>{offer.buyer_name || 'Khách hàng'}</strong>{offer.buyer_phone ? ` (${offer.buyer_phone})` : ''}</p>
                           <div className="flex items-center gap-2 mt-1 text-xs">
                             <span className="text-[#5E5E61]">Giá gốc:</span>
                             <span className="line-through font-mono text-[#5E5E61]">{formatVND(offer.original_price)}</span>
@@ -2139,16 +2170,60 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                     return (
                       <div key={msg.id} className={`flex flex-col ${isSeller ? 'items-end' : 'items-start'}`}>
                         {msg.context_card && (
-                          <div className="mb-1 p-2 rounded-xl bg-white border border-[#DAE7C7] flex items-center gap-2 max-w-[80%] text-xs shadow-2xs">
-                            {(msg.context_card.image || msg.context_card.image_url) && (
-                              <img src={msg.context_card.image || msg.context_card.image_url} alt="" className="w-10 h-10 rounded-lg object-cover bg-[#DAE7C7]" />
+                          <div className={`mb-1.5 p-2 rounded-xl bg-white border flex items-center gap-2.5 max-w-[85%] sm:max-w-xs text-xs shadow-xs min-w-0 ${
+                            isSeller ? 'border-[#08482D]/30 bg-emerald-50/40' : 'border-[#DAE7C7]'
+                          }`}>
+                            {(msg.context_card.image || msg.context_card.image_url) ? (
+                              <img
+                                src={msg.context_card.image || msg.context_card.image_url}
+                                alt=""
+                                className="w-10 h-10 rounded-lg object-cover bg-[#DAE7C7] border border-stone-200 shrink-0"
+                              />
+                            ) : (
+                              <div className="w-10 h-10 rounded-lg bg-[#DAE7C7] flex items-center justify-center text-lg shrink-0">
+                                {msg.context_card.kind === 'order' || msg.context_card.type === 'order' ? '📦' : '🛍️'}
+                              </div>
                             )}
-                            <div className="min-w-0">
-                              <p className="font-bold truncate text-[#101410]">{msg.context_card.title}</p>
-                              {msg.context_card.price && (
-                                <p className="font-mono text-[#08482D] font-bold">{formatVND(msg.context_card.price)}</p>
+                            <div className="min-w-0 flex-1">
+                              <span className="text-[9px] font-bold uppercase tracking-wider text-stone-500 block">
+                                {msg.context_card.kind === 'order' || msg.context_card.type === 'order' ? 'Đơn hàng' : 'Sản phẩm'}
+                              </span>
+                              <p className="font-bold truncate text-[#101410] text-xs">{msg.context_card.title}</p>
+                              {msg.context_card.price != null && (
+                                <p className="font-mono text-[#C2522D] font-bold text-xs">{formatVND(msg.context_card.price)}</p>
                               )}
                             </div>
+                            {(msg.context_card.kind === 'product' || msg.context_card.type === 'product' || msg.context_card.product_id || msg.context_card.ref_id) && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const pid = msg.context_card?.product_id || msg.context_card?.ref_id;
+                                  if (pid) {
+                                    window.history.pushState(null, '', `/product/${pid}`);
+                                    window.dispatchEvent(new PopStateEvent('popstate'));
+                                  }
+                                }}
+                                className="px-2 py-1 text-[10px] font-bold text-[#08482D] bg-[#DAE7C7] hover:bg-[#c9dbb1] rounded-md transition-colors shrink-0 cursor-pointer"
+                              >
+                                Xem sản phẩm
+                              </button>
+                            )}
+                            {(msg.context_card.kind === 'order' || msg.context_card.type === 'order' || msg.context_card.order_code) && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const code = msg.context_card?.order_code || msg.context_card?.ref_id;
+                                  if (code) {
+                                    const found = orders.find(o => o.code === String(code) || String(o.id) === String(code));
+                                    if (found) setSelectedOrder(found);
+                                    setActiveTab('orders');
+                                  }
+                                }}
+                                className="px-2 py-1 text-[10px] font-bold text-[#08482D] bg-[#DAE7C7] hover:bg-[#c9dbb1] rounded-md transition-colors shrink-0 cursor-pointer"
+                              >
+                                Xem đơn
+                              </button>
+                            )}
                           </div>
                         )}
                         <div className={`max-w-[80%] px-4 py-2.5 text-xs rounded-2xl shadow-xs break-words ${
@@ -2274,7 +2349,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                           Đơn hàng #{item.order_code}
                         </span>
                         <span className="text-xs text-[#5E5E61] ml-2">
-                          Khách: <strong>{item.buyer_name}</strong> ({item.buyer_phone})
+                          Khách: <strong>{item.buyer_name || 'Khách hàng'}</strong>{item.buyer_phone ? ` (${item.buyer_phone})` : ''}
                         </span>
                       </div>
 
@@ -3206,6 +3281,13 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                     onClick={() => {
                       setEventStatus(sug.status);
                       setEventNote(sug.note);
+                      if (sug.status.toLowerCase().includes('bàn giao')) {
+                        setEventLocation(currentShop?.pickup_address || (currentShop as any)?.pickupAddress || 'Địa chỉ kho của shop');
+                      } else if (sug.status.toLowerCase().includes('phân loại')) {
+                        setEventLocation('Kho phân loại Tân Bình, TP.HCM');
+                      } else {
+                        setEventLocation(shipmentEventModalOrder?.address || 'Địa chỉ người nhận');
+                      }
                     }}
                     className="text-[11px] px-2.5 py-1 bg-[#FAF7F2] border border-[#E6DFD5] rounded-lg text-[#47533E] hover:bg-[#EFE9DF] font-medium"
                   >

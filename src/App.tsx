@@ -271,12 +271,18 @@ function MainShopApp() {
       // 4. AUTH ROUTES (MODALS ON TOP OF CURRENT / HOME)
       if (path === '/seller/register') {
         if (!user) setAuthModal({ open: true, role: 'seller', initialIsRegister: true });
-        else if (user.role === 'seller') setCurrentView('seller');
+        else if (user.role === 'seller') {
+          setCurrentView('seller');
+          window.history.replaceState({}, '', '/seller');
+        }
         return;
       }
       if (path === '/seller/login') {
         if (!user) setAuthModal({ open: true, role: 'seller', initialIsRegister: false });
-        else if (user.role === 'seller') setCurrentView('seller');
+        else if (user.role === 'seller') {
+          setCurrentView('seller');
+          window.history.replaceState({}, '', '/seller');
+        }
         return;
       }
       if (path === '/register') {
@@ -668,6 +674,9 @@ function MainShopApp() {
     if (authModal.role === 'seller') {
       setCurrentView('seller');
       setPendingAction(null);
+      if (typeof window !== 'undefined') {
+        window.history.replaceState({}, '', '/seller');
+      }
       return;
     }
 

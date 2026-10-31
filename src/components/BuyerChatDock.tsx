@@ -28,7 +28,7 @@ export const BuyerChatDock: React.FC<BuyerChatDockProps> = ({ onNavigateToShop }
 
   const [isOpen, setIsOpen] = useState(false);
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
-  const [selectedConvId, setSelectedConvId] = useState<number | null>(null);
+  const [selectedConvId, setSelectedConvId] = useState<string | number | null>(null);
   const [activeMessages, setActiveMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -124,7 +124,13 @@ export const BuyerChatDock: React.FC<BuyerChatDockProps> = ({ onNavigateToShop }
       try {
         setLoading(true);
         const res = await api.startShopChat(targetShopId, contextPayload);
-        await loadConversations();
+        setConversations(prev => {
+          const exists = prev.some(c => String(c.id) === String(res.conversation.id));
+          if (exists) {
+            return prev.map(c => String(c.id) === String(res.conversation.id) ? res.conversation : c);
+          }
+          return [res.conversation, ...prev];
+        });
         setSelectedConvId(res.conversation.id);
         setActiveMessages(res.conversation.messages || []);
         setMobileView('chat');
@@ -169,7 +175,7 @@ export const BuyerChatDock: React.FC<BuyerChatDockProps> = ({ onNavigateToShop }
   // Only render for buyers or guests
   if (user && user.role !== 'buyer') return null;
 
-  const currentConv = conversations.find(c => c.id === selectedConvId);
+  const currentConv = conversations.find(c => String(c.id) === String(selectedConvId));
 
   const filteredConversations = conversations.filter(c => {
     if (!searchQuery.trim()) return true;
@@ -265,7 +271,7 @@ export const BuyerChatDock: React.FC<BuyerChatDockProps> = ({ onNavigateToShop }
                   </div>
                 ) : (
                   filteredConversations.map(c => {
-                    const isSelected = c.id === selectedConvId;
+                    const isSelected = String(c.id) === String(selectedConvId);
                     const hasUnread = (c.buyer_unread || 0) > 0;
                     return (
                       <button
@@ -390,42 +396,66 @@ export const BuyerChatDock: React.FC<BuyerChatDockProps> = ({ onNavigateToShop }
                             {/* Context Card Attachment if present */}
                             {msg.context_card && (
                               <div 
-                                onClick={() => {
-                                  if (msg.context_card?.product_id) {
-                                    window.history.pushState(null, '', `/product/${msg.context_card.product_id}`);
-                                    window.dispatchEvent(new PopStateEvent('popstate'));
-                                  }
-                                }}
-                                className={`mb-1.5 p-2.5 rounded-xl border max-w-[85%] sm:max-w-xs shadow-xs text-xs cursor-pointer hover:border-[#08482D] transition-colors min-w-0 ${
-                                  isBuyer ? 'bg-emerald-50 border-emerald-200' : 'bg-stone-50 border-stone-200'
+                                className={`mb-1.5 p-2 rounded-xl border max-w-[85%] sm:max-w-xs shadow-xs text-xs min-w-0 flex items-center gap-2.5 ${
+                                  isBuyer ? 'bg-emerald-50/70 border-emerald-200' : 'bg-stone-50 border-stone-200'
                                 }`}
                               >
-                                <div className="flex items-center gap-2.5 min-w-0">
-                                  {msg.context_card.image_url || msg.context_card.image ? (
-                                    <ProductImage
-                                      src={msg.context_card.image_url || msg.context_card.image}
-                                      alt=""
-                                      productName={msg.context_card.title}
-                                      className="w-12 h-12 rounded-lg shrink-0"
-                                      imgClassName="w-full h-full object-cover border border-stone-200"
-                                    />
-                                  ) : (
-                                    <Package className="w-8 h-8 text-stone-400 shrink-0" />
-                                  )}
-                                  <div className="min-w-0 flex-1">
-                                    <span className="text-[10px] font-bold uppercase tracking-wider text-stone-500 block">
-                                      {msg.context_card.type === 'product' ? 'Hỏi về sản phẩm' : 'Đơn hàng'}
-                                    </span>
-                                    <p className="font-bold text-stone-900 truncate">
-                                      {msg.context_card.title}
-                                    </p>
-                                    {msg.context_card.price && (
-                                      <p className="font-bold text-[#C2522D] text-xs">
-                                        {formatVND(msg.context_card.price)}
-                                      </p>
-                                    )}
+                                {msg.context_card.image_url || msg.context_card.image ? (
+                                  <img
+                                    src={msg.context_card.image_url || msg.context_card.image}
+                                    alt=""
+                                    className="w-10 h-10 rounded-lg object-cover border border-stone-200 shrink-0 bg-[#DAE7C7]"
+                                  />
+                                ) : (
+                                  <div className="w-10 h-10 rounded-lg bg-[#DAE7C7] flex items-center justify-center text-lg shrink-0">
+                                    {msg.context_card.kind === 'order' || msg.context_card.type === 'order' ? '📦' : '🛍️'}
                                   </div>
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <span className="text-[9px] font-bold uppercase tracking-wider text-stone-500 block">
+                                    {msg.context_card.kind === 'order' || msg.context_card.type === 'order' ? 'Đơn hàng' : 'Sản phẩm'}
+                                  </span>
+                                  <p className="font-bold text-stone-900 truncate text-xs">
+                                    {msg.context_card.title}
+                                  </p>
+                                  {msg.context_card.price != null && (
+                                    <p className="font-bold text-[#C2522D] text-xs font-mono">
+                                      {formatVND(msg.context_card.price)}
+                                    </p>
+                                  )}
                                 </div>
+                                {(msg.context_card.kind === 'product' || msg.context_card.type === 'product' || msg.context_card.product_id || msg.context_card.ref_id) && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const pid = msg.context_card?.product_id || msg.context_card?.ref_id;
+                                      if (pid) {
+                                        window.history.pushState(null, '', `/product/${pid}`);
+                                        window.dispatchEvent(new PopStateEvent('popstate'));
+                                      }
+                                    }}
+                                    className="px-2 py-1 text-[10px] font-bold text-[#08482D] bg-[#DAE7C7] hover:bg-[#c9dbb1] rounded-md transition-colors shrink-0 cursor-pointer"
+                                  >
+                                    Xem sản phẩm
+                                  </button>
+                                )}
+                                {(msg.context_card.kind === 'order' || msg.context_card.type === 'order' || msg.context_card.order_code) && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const code = msg.context_card?.order_code || msg.context_card?.ref_id;
+                                      if (code) {
+                                        window.history.pushState(null, '', `/orders?code=${code}`);
+                                        window.dispatchEvent(new PopStateEvent('popstate'));
+                                      }
+                                    }}
+                                    className="px-2 py-1 text-[10px] font-bold text-[#08482D] bg-[#DAE7C7] hover:bg-[#c9dbb1] rounded-md transition-colors shrink-0 cursor-pointer"
+                                  >
+                                    Xem đơn
+                                  </button>
+                                )}
                               </div>
                             )}
 
@@ -477,6 +507,12 @@ export const BuyerChatDock: React.FC<BuyerChatDockProps> = ({ onNavigateToShop }
                       type="text"
                       value={inputText}
                       onChange={(e) => setInputText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSendMessage();
+                        }
+                      }}
                       placeholder={`Nhắn tin cho ${currentConv.shop_name}...`}
                       className="flex-1 min-w-0 px-3.5 py-2 text-xs bg-stone-100 rounded-xl focus:bg-white focus:outline-none focus:border-[#08482D] border border-transparent"
                     />

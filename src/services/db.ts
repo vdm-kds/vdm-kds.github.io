@@ -519,7 +519,10 @@ function normalizeOrderDoc(docData: DocumentData, code: string): Order {
       product_id: it.productId as any,
       product_name: it.name,
       condition_pct: it.conditionPct || 90,
-      price: it.price,
+      price: Number(it.price || 0),
+      original_price: Number(it.originalPrice || it.original_price || it.price || 0),
+      is_negotiated: Boolean(it.negotiated || it.is_negotiated),
+      offer_id: it.offerId || it.offer_id || undefined,
       quantity: it.qty,
       image_url: it.icon ? createVintageProductSvg(it.name, '', 0, docData.shopName) : ''
     })) : [],
@@ -1519,26 +1522,75 @@ export class DCCTDatabaseService {
     const db = getActiveFirestore();
     const createdOrders: Order[] = [];
 
-    const productsMap = new Map<string, any>();
-    for (const it of payload.items) {
-      const snap = await getDoc(doc(db, 'products', String(it.product_id)));
-      if (!snap.exists()) throw new Error('Sản phẩm không tồn tại');
-      productsMap.set(String(it.product_id), { snap, data: snap.data() });
-    }
-
     await runTransaction(db, async (txn) => {
+      // 1. ALL READS:
+      // A. Read all products
+      const productSnaps = new Map<string, any>();
       for (const it of payload.items) {
-        const pRef = doc(db, 'products', String(it.product_id));
-        const pSnap = await txn.get(pRef);
-        if (!pSnap.exists() || pSnap.data().isActive === false) {
-          throw new Error('Sản phẩm không tồn tại hoặc đã ngừng bán');
+        const pid = String(it.product_id);
+        if (!productSnaps.has(pid)) {
+          const pRef = doc(db, 'products', pid);
+          const pSnap = await txn.get(pRef);
+          if (!pSnap.exists() || pSnap.data().isActive === false) {
+            throw new Error('Sản phẩm không tồn tại hoặc đã ngừng bán');
+          }
+          productSnaps.set(pid, pSnap.data());
         }
-        const pData = pSnap.data();
+      }
+
+      // Check stock
+      for (const it of payload.items) {
+        const pData = productSnaps.get(String(it.product_id));
         if (pData.stock < it.quantity) {
           throw new Error(`${pData.name} vừa có chủ mới`);
         }
       }
 
+      // B. Read all offers for items that have offer_id
+      const validOffersMap = new Map<string, any>();
+      for (const it of payload.items) {
+        const offId = it.offer_id || (it as any).offerId;
+        if (offId) {
+          const offStr = String(offId);
+          if (!validOffersMap.has(offStr)) {
+            const offRef = doc(db, 'offers', offStr);
+            const offSnap = await txn.get(offRef);
+            if (offSnap.exists()) {
+              const offData = offSnap.data();
+              const now = Date.now();
+              const isPast24h = offData.expiresAt
+                ? new Date(offData.expiresAt).getTime() < now
+                : (offData.createdAt?.toDate ? now - offData.createdAt.toDate().getTime() > 24 * 3600 * 1000 : false);
+
+              if (
+                offData.buyerUid === cur.uid &&
+                String(offData.productId) === String(it.product_id) &&
+                offData.status === 'accepted' &&
+                !isPast24h
+              ) {
+                validOffersMap.set(offStr, offData);
+              }
+            }
+          }
+        }
+      }
+
+      // C. Read all unique shops
+      const shopGroups = new Map<string, any[]>();
+      for (const it of payload.items) {
+        const pData = productSnaps.get(String(it.product_id));
+        const sId = pData.shopId || 'do-cu-con-thuong';
+        if (!shopGroups.has(sId)) shopGroups.set(sId, []);
+        shopGroups.get(sId)!.push({ it, pData });
+      }
+
+      const shopDataMap = new Map<string, any>();
+      for (const shopId of shopGroups.keys()) {
+        const sSnap = await txn.get(doc(db, 'shops', shopId));
+        shopDataMap.set(shopId, sSnap.exists() ? sSnap.data() : { name: 'Đồ Cũ Còn Thương', ownerUid: 'seller_admin' });
+      }
+
+      // D. Read coupon if provided
       let couponData: any = null;
       if (payload.coupon_code) {
         const cRef = doc(db, 'coupons', payload.coupon_code.toUpperCase().trim());
@@ -1548,14 +1600,8 @@ export class DCCTDatabaseService {
         }
       }
 
-      const shopGroups = new Map<string, any[]>();
-      for (const it of payload.items) {
-        const pData = productsMap.get(String(it.product_id))!.data;
-        const sId = pData.shopId || 'do-cu-con-thuong';
-        if (!shopGroups.has(sId)) shopGroups.set(sId, []);
-        shopGroups.get(sId)!.push({ it, pData });
-      }
-
+      // --- END OF ALL READS ---
+      // 2. NOW PERFORM CALCULATIONS AND WRITES:
       const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
       let orderIndex = 0;
 
@@ -1563,12 +1609,27 @@ export class DCCTDatabaseService {
         orderIndex++;
         const randomSuffix = Math.floor(1000 + Math.random() * 9000);
         const orderCode = `DCCT-${todayStr}-${randomSuffix}`;
-        const shopSnap = await txn.get(doc(db, 'shops', shopId));
-        const shopData = shopSnap.exists() ? shopSnap.data() : { name: 'Đồ Cũ Còn Thương', ownerUid: 'seller_admin' };
+        const shopData = shopDataMap.get(shopId) || { name: 'Đồ Cũ Còn Thương', ownerUid: 'seller_admin' };
 
         let subtotal = 0;
         const orderItems = group.map(({ it, pData }) => {
-          const itemPrice = Number(pData.price || 0);
+          const offId = it.offer_id || (it as any).offerId;
+          const validOffer = offId ? validOffersMap.get(String(offId)) : null;
+
+          let itemPrice = Number(pData.price || 0);
+          let isNegotiated = false;
+          const originalPrice = itemPrice;
+
+          if (validOffer) {
+            const finalOffered = validOffer.counterPrice != null
+              ? Number(validOffer.counterPrice)
+              : Number(validOffer.offeredPrice || validOffer.price || 0);
+            if (finalOffered > 0) {
+              itemPrice = finalOffered;
+              isNegotiated = true;
+            }
+          }
+
           subtotal += itemPrice * it.quantity;
           return {
             productId: String(it.product_id),
@@ -1576,8 +1637,10 @@ export class DCCTDatabaseService {
             icon: pData.icon || getProductEmoji(pData.name, pData.category),
             conditionPct: pData.conditionPct || 90,
             price: itemPrice,
+            originalPrice,
             qty: it.quantity,
-            negotiated: !!it.offer_id
+            negotiated: isNegotiated,
+            offerId: validOffer ? String(offId) : null
           };
         });
 
@@ -1665,17 +1728,20 @@ export class DCCTDatabaseService {
 
         txn.set(doc(db, 'orders', orderCode), orderDoc);
 
-        for (const { it } of group) {
-          const pRef = doc(db, 'products', String(it.product_id));
+        for (const it of orderItems) {
+          const pRef = doc(db, 'products', it.productId);
           txn.update(pRef, {
-            stock: increment(-it.quantity),
-            sold: increment(it.quantity),
+            stock: increment(-it.qty),
+            sold: increment(it.qty),
             updatedAt: serverTimestamp()
           });
 
-          if (it.offer_id) {
-            txn.update(doc(db, 'offers', String(it.offer_id)), {
-              status: 'used'
+          if (it.offerId) {
+            txn.update(doc(db, 'offers', it.offerId), {
+              status: 'used',
+              orderCode,
+              usedAt: serverTimestamp(),
+              updatedAt: serverTimestamp()
             });
           }
         }
@@ -2058,6 +2124,7 @@ export class DCCTDatabaseService {
         seller_id: data.sellerUid as any,
         buyer_id: data.buyerUid as any,
         buyer_name: data.buyerName,
+        buyer_phone: data.buyerPhone || '',
         product_id: data.productId as any,
         product_name: data.productName,
         original_price: Number(data.originalPrice || 0),
@@ -2115,6 +2182,7 @@ export class DCCTDatabaseService {
         seller_id: data.sellerUid as any,
         buyer_id: data.buyerUid as any,
         buyer_name: data.buyerName,
+        buyer_phone: data.buyerPhone || '',
         product_id: data.productId as any,
         product_name: data.productName,
         original_price: Number(data.originalPrice || 0),
@@ -2181,6 +2249,7 @@ export class DCCTDatabaseService {
       sellerUid: prod.ownerUid || 'seller_admin',
       buyerUid: cur.uid,
       buyerName: cur.full_name,
+      buyerPhone: cur.phone || '',
       originalPrice: Number(prod.price || 0),
       offeredPrice,
       counterPrice: null,
@@ -2213,6 +2282,7 @@ export class DCCTDatabaseService {
         seller_id: prod.ownerUid as any,
         buyer_id: cur.uid as any,
         buyer_name: cur.full_name,
+        buyer_phone: cur.phone || '',
         product_id: pid as any,
         product_name: prod.name,
         original_price: Number(prod.price || 0),
@@ -2418,31 +2488,52 @@ export class DCCTDatabaseService {
     assertDocSize(reviewDoc);
 
     await runTransaction(db, async (txn) => {
-      txn.set(doc(db, 'reviews', reviewId), reviewDoc);
-
+      const reviewRef = doc(db, 'reviews', reviewId);
       const prodRef = doc(db, 'products', pid);
+      const shopRef = doc(db, 'shops', pData.shopId || 'do-cu-con-thuong');
+
+      // 1. ALL READS:
+      const rSnap = await txn.get(reviewRef);
       const prSnap = await txn.get(prodRef);
+      const shSnap = await txn.get(shopRef);
+
+      // 2. VALIDATION & CALCULATIONS:
+      if (rSnap.exists()) {
+        throw new Error('Bạn đã đánh giá món này rồi');
+      }
+
+      let newProdCount = 1;
+      let newProdAvg = Number(payload.rating);
       if (prSnap.exists()) {
-        const curCount = prSnap.data().ratingCount || 0;
-        const curAvg = prSnap.data().ratingAvg || 0;
-        const newCount = curCount + 1;
-        const newAvg = Number(((curAvg * curCount + payload.rating) / newCount).toFixed(1));
+        const curCount = Number(prSnap.data().ratingCount || 0);
+        const curAvg = Number(prSnap.data().ratingAvg || 0);
+        newProdCount = curCount + 1;
+        newProdAvg = Number(((curAvg * curCount + payload.rating) / newProdCount).toFixed(1));
+      }
+
+      let newShopCount = 1;
+      let newShopAvg = Number(payload.rating);
+      if (shSnap.exists()) {
+        const curCount = Number(shSnap.data().ratingCount || 0);
+        const curAvg = Number(shSnap.data().ratingAvg || 0);
+        newShopCount = curCount + 1;
+        newShopAvg = Number(((curAvg * curCount + payload.rating) / newShopCount).toFixed(1));
+      }
+
+      // 3. ALL WRITES:
+      txn.set(reviewRef, reviewDoc);
+
+      if (prSnap.exists()) {
         txn.update(prodRef, {
-          ratingCount: newCount,
-          ratingAvg: newAvg
+          ratingCount: newProdCount,
+          ratingAvg: newProdAvg
         });
       }
 
-      const shopRef = doc(db, 'shops', pData.shopId);
-      const shSnap = await txn.get(shopRef);
       if (shSnap.exists()) {
-        const curCount = shSnap.data().ratingCount || 0;
-        const curAvg = shSnap.data().ratingAvg || 0;
-        const newCount = curCount + 1;
-        const newAvg = Number(((curAvg * curCount + payload.rating) / newCount).toFixed(1));
         txn.update(shopRef, {
-          ratingCount: newCount,
-          ratingAvg: newAvg
+          ratingCount: newShopCount,
+          ratingAvg: newShopAvg
         });
       }
     });
@@ -4162,6 +4253,7 @@ export class DCCTDatabaseService {
           seller_id: data.sellerUid as any,
           buyer_id: data.buyerUid as any,
           buyer_name: data.buyerName,
+          buyer_phone: data.buyerPhone || '',
           product_id: data.productId as any,
           product_name: data.productName,
           original_price: data.originalPrice,
