@@ -119,14 +119,25 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   }, [initialOpenOffer, initialOpenChat]);
 
   useEffect(() => {
-    const sId = fullProduct.shop_id || 'do-cu-con-thuong';
+    const sId = fullProduct.shop_slug || fullProduct.shop_id || 'do-cu-con-thuong';
     api.getShopById(sId).then(res => setShopInfo(res.shop)).catch(() => {});
     const unsubShop = api.subscribeShop(sId, (sh) => setShopInfo(sh));
+    const unsubReviews = api.subscribePublicShopReviews(sId, (res: any) => {
+      setShopReviewsData({
+        reviews: res.reviews || [],
+        total_reviews: res.total || 0,
+        average_rating: res.avg || 0,
+        distribution: res.distribution || { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
+      });
+    });
     api.listProductsByShop(sId).then(res => {
       setOtherShopProducts((res.products || []).filter(p => p.id !== fullProduct.id).slice(0, 4));
     }).catch(() => {});
-    return () => unsubShop();
-  }, [fullProduct.shop_id, fullProduct.id]);
+    return () => {
+      unsubShop();
+      unsubReviews();
+    };
+  }, [fullProduct.shop_slug, fullProduct.shop_id, fullProduct.id]);
 
   const fetchActiveOffer = async () => {
     if (!currentUser || !fullProduct?.id) {
@@ -230,7 +241,8 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
         .catch(() => setReviewsData(null))
         .finally(() => setLoadingReviews(false));
 
-      api.getShopReviews()
+      const sId = product.shop_slug || product.shop_id || 'do-cu-con-thuong';
+      api.getPublicShopReviews(sId)
         .then(res => setShopReviewsData(res))
         .catch(() => setShopReviewsData(null));
     }
@@ -1235,21 +1247,24 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                       </span>
                     </div>
                     <div className="flex items-center gap-2 text-[11px] text-[#5E5E61] mt-0.5">
-                      {(shopInfo && (shopInfo.rating_count || 0) > 0) ? (
-                        <span className="flex items-center gap-0.5">
-                          <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
-                          <strong className="text-stone-800">{shopInfo.rating_avg ? shopInfo.rating_avg.toFixed(1) : '5.0'}</strong>
-                          <span className="text-[#5E5E61]">({shopInfo.rating_count} đánh giá)</span>
-                        </span>
-                      ) : (shopReviewsData && shopReviewsData.total_reviews > 0) ? (
-                        <span className="flex items-center gap-0.5">
-                          <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
-                          <strong className="text-stone-800">{shopReviewsData.average_rating}</strong>
-                          <span className="text-[#5E5E61]">({shopReviewsData.total_reviews} đánh giá)</span>
-                        </span>
-                      ) : (
-                        <span>Chưa có đánh giá</span>
-                      )}
+                      {(() => {
+                        const sCount = Number(
+                          shopInfo?.total_reviews ?? shopInfo?.rating_count ?? shopInfo?.review_count ?? shopReviewsData?.total_reviews ?? shopReviewsData?.total ?? 0
+                        );
+                        const sAvg = Number(
+                          shopInfo?.average_rating ?? shopInfo?.rating_avg ?? shopReviewsData?.average_rating ?? shopReviewsData?.avg ?? (sCount > 0 ? 5.0 : 0)
+                        );
+                        if (sCount > 0) {
+                          return (
+                            <span className="flex items-center gap-0.5">
+                              <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
+                              <strong className="text-stone-800">{sAvg.toFixed(1)}</strong>
+                              <span className="text-[#5E5E61]">({sCount} đánh giá)</span>
+                            </span>
+                          );
+                        }
+                        return <span>Chưa có đánh giá</span>;
+                      })()}
                       <span>·</span>
                       <span><strong>{shopInfo?.product_count || otherShopProducts.length + 1}</strong> sản phẩm</span>
                     </div>

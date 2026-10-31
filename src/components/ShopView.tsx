@@ -101,25 +101,13 @@ export const ShopView: React.FC<ShopViewProps> = ({
         setSavedCouponCodes(codeSet);
       }
 
-      // Load shop reviews
-      const revRes = await api.getShopReviews();
-      // filter reviews belonging to this shop's products
-      const shopProdIds = new Set((prodRes.products || []).map((p: Product) => p.id));
-      const shopRevList = (revRes.reviews || []).filter((r: Review) => r.shop_id === currentShop.id || shopProdIds.has(r.product_id));
-      
-      const totalRev = shopRevList.length;
-      const avgRev = totalRev > 0 ? Number((shopRevList.reduce((acc, r) => acc + r.rating, 0) / totalRev).toFixed(1)) : 0;
-      const dist: Record<string, number> = { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 };
-      for (const r of shopRevList) {
-        const k = String(r.rating);
-        if (dist[k] !== undefined) dist[k]++;
-      }
-
+      // Load public shop reviews
+      const revRes = await api.getPublicShopReviews(currentShop.slug || slug);
       setReviewsData({
-        reviews: shopRevList,
-        total_reviews: totalRev,
-        average_rating: avgRev,
-        distribution: dist
+        reviews: revRes.reviews || [],
+        total_reviews: revRes.total || 0,
+        average_rating: revRes.avg || 0,
+        distribution: revRes.distribution || { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 }
       });
 
     } catch (err: any) {
@@ -133,6 +121,24 @@ export const ShopView: React.FC<ShopViewProps> = ({
     if (slug) {
       loadShopData();
       window.scrollTo({ top: 0, behavior: 'smooth' });
+
+      const unsubShop = api.subscribeShop(slug, (updatedShop: any) => {
+        setShop(updatedShop);
+      });
+
+      const unsubReviews = api.subscribePublicShopReviews(slug, (res: any) => {
+        setReviewsData({
+          reviews: res.reviews || [],
+          total_reviews: res.total || 0,
+          average_rating: res.avg || 0,
+          distribution: res.distribution || { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 }
+        });
+      });
+
+      return () => {
+        unsubShop();
+        unsubReviews();
+      };
     }
   }, [slug, user]);
 
@@ -257,6 +263,13 @@ export const ShopView: React.FC<ShopViewProps> = ({
   });
 
   const followerCount = shop.follower_ids?.length || 0;
+
+  const displayReviewsCount = Number(
+    shop?.total_reviews ?? shop?.rating_count ?? shop?.review_count ?? reviewsData.total_reviews ?? 0
+  );
+  const displayRatingAvg = Number(
+    shop?.average_rating ?? shop?.rating_avg ?? reviewsData.average_rating ?? (displayReviewsCount > 0 ? 5.0 : 0)
+  );
 
   return (
     <div className="min-h-screen bg-[#F5F8EF] pb-20">
@@ -400,7 +413,7 @@ export const ShopView: React.FC<ShopViewProps> = ({
                 <div>
                   <span className="text-stone-400 block text-[10px]">Đánh giá:</span>
                   <span className="font-bold text-stone-800">
-                    {reviewsData.total_reviews > 0 ? `${reviewsData.average_rating} (${reviewsData.total_reviews} đánh giá)` : 'Chưa có đánh giá'}
+                    {displayReviewsCount > 0 ? `★ ${displayRatingAvg.toFixed(1)} (${displayReviewsCount} đánh giá)` : 'Chưa có đánh giá'}
                   </span>
                 </div>
               </div>
@@ -514,7 +527,7 @@ export const ShopView: React.FC<ShopViewProps> = ({
                 : 'border-transparent text-stone-500 hover:text-stone-800'
             }`}
           >
-            <Star className="w-4 h-4" /> Đánh giá shop ({reviewsData.total_reviews})
+            <Star className="w-4 h-4" /> Đánh giá shop ({displayReviewsCount})
           </button>
         </div>
 
@@ -672,20 +685,20 @@ export const ShopView: React.FC<ShopViewProps> = ({
             {/* Rating Summary Box */}
             <div className="bg-white p-6 rounded-3xl border border-stone-200 shadow-sm flex flex-col md:flex-row items-center gap-8">
               <div className="text-center md:border-r md:border-stone-100 md:pr-8">
-                {reviewsData.total_reviews > 0 ? (
+                {displayReviewsCount > 0 ? (
                   <>
                     <span className="text-5xl font-black text-[#08482D]">
-                      {reviewsData.average_rating}
+                      {displayRatingAvg.toFixed(1)}
                     </span>
                     <div className="flex items-center justify-center gap-1 text-amber-500 my-1">
                       {[1, 2, 3, 4, 5].map(st => (
                         <Star
                           key={st}
-                          className={`w-4 h-4 ${st <= Math.round(reviewsData.average_rating) ? 'fill-amber-500' : 'text-stone-300'}`}
+                          className={`w-4 h-4 ${st <= Math.round(displayRatingAvg) ? 'fill-amber-500 text-amber-500' : 'text-stone-300'}`}
                         />
                       ))}
                     </div>
-                    <p className="text-xs text-stone-500">{reviewsData.total_reviews} lượt đánh giá</p>
+                    <p className="text-xs text-stone-500">{displayReviewsCount} lượt đánh giá</p>
                   </>
                 ) : (
                   <div className="py-2">
@@ -707,7 +720,7 @@ export const ShopView: React.FC<ShopViewProps> = ({
                       : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
                   }`}
                 >
-                  Tất cả ({reviewsData.total_reviews})
+                  Tất cả ({displayReviewsCount})
                 </button>
                 {[5, 4, 3, 2, 1].map(st => (
                   <button
@@ -733,59 +746,110 @@ export const ShopView: React.FC<ShopViewProps> = ({
               </div>
             ) : (
               <div className="space-y-3">
-                {filteredReviews.map(rev => (
-                  <div key={rev.id} className="bg-white p-5 rounded-2xl border border-stone-200 shadow-xs">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-xs text-stone-900">{rev.buyer_name || rev.author_name}</span>
-                          <span className="text-[11px] text-stone-400">
-                            {new Date(rev.created_at).toLocaleDateString('vi-VN')}
-                          </span>
+                {filteredReviews.map(rev => {
+                  const rawAuthorName = rev.buyer_name || rev.author_name || rev.user_name || 'Khách hàng';
+                  const avatarInitial = (rawAuthorName.trim() || 'K')[0].toUpperCase();
+                  const displayedName = rev.is_anonymous
+                    ? (() => {
+                        const parts = rawAuthorName.trim().split(/\s+/).filter(Boolean);
+                        if (parts.length === 1) {
+                          const single = parts[0];
+                          return single.length > 2 ? `${single[0]}***${single.slice(-1)}` : `${single[0]}***`;
+                        }
+                        return `${parts[0][0]}***${parts[parts.length - 1].slice(-1)}`;
+                      })()
+                    : rawAuthorName;
+
+                  return (
+                    <div key={rev.id} className="bg-white p-5 rounded-2xl border border-stone-200 shadow-xs space-y-3">
+                      {/* Customer info & Product thumbnail */}
+                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-full bg-[#DAE7C7] text-[#08482D] font-bold flex items-center justify-center text-xs shrink-0">
+                            {avatarInitial}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-xs text-stone-900">{displayedName}</span>
+                              <span className="text-[11px] text-stone-400">
+                                {new Date(rev.created_at).toLocaleDateString('vi-VN')}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-0.5 text-amber-500 mt-0.5">
+                              {[1, 2, 3, 4, 5].map(st => (
+                                <Star
+                                  key={st}
+                                  className={`w-3.5 h-3.5 ${st <= rev.rating ? 'fill-amber-500 text-amber-500' : 'text-stone-300'}`}
+                                />
+                              ))}
+                            </div>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-0.5 text-amber-500 my-1">
-                          {[1, 2, 3, 4, 5].map(st => (
-                            <Star
-                              key={st}
-                              className={`w-3 h-3 ${st <= rev.rating ? 'fill-amber-500' : 'text-stone-300'}`}
+
+                        {rev.product_name && (
+                          <div className="flex items-center gap-2 bg-[#F5F8EF] border border-[#DAE7C7] px-2.5 py-1.5 rounded-xl self-start sm:self-auto max-w-full sm:max-w-xs">
+                            {rev.product_image && (
+                              <img
+                                src={rev.product_image}
+                                alt={rev.product_name}
+                                className="w-8 h-8 rounded-lg object-cover border border-[#DAE7C7] shrink-0"
+                              />
+                            )}
+                            <div className="min-w-0">
+                              <span className="text-[10px] text-stone-500 block">Sản phẩm đã mua:</span>
+                              <span className="text-xs font-bold text-stone-800 line-clamp-1 truncate block">{rev.product_name}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Criterion chips (tags) */}
+                      {Array.isArray(rev.tags) && rev.tags.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {rev.tags.map((tag: string, tIdx: number) => (
+                            <span key={tIdx} className="text-[10px] bg-[#F5F8EF] border border-[#DAE7C7] text-[#08482D] font-medium px-2 py-0.5 rounded-md">
+                              ✓ {tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Content */}
+                      <p className="text-xs sm:text-sm text-stone-700 leading-relaxed whitespace-pre-line">
+                        {rev.comment}
+                      </p>
+
+                      {/* Review Images */}
+                      {rev.images && rev.images.length > 0 && (
+                        <div className="flex items-center gap-2 mt-2 overflow-x-auto">
+                          {rev.images.map((img: string, i: number) => (
+                            <img
+                              key={i}
+                              src={img}
+                              alt=""
+                              className="w-16 h-16 rounded-xl object-cover border border-stone-200"
                             />
                           ))}
                         </div>
-                      </div>
-                      {rev.product_name && (
-                        <span className="text-[11px] text-stone-500 bg-stone-50 border border-stone-200 px-2.5 py-1 rounded-lg">
-                          Món: <strong className="text-stone-800">{rev.product_name}</strong>
-                        </span>
+                      )}
+
+                      {/* Seller Reply */}
+                      {rev.seller_reply && (
+                        <div className="mt-3 bg-[#DAE7C7]/30 p-3 rounded-xl border border-[#DAE7C7] text-xs space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-[#08482D]">Phản hồi của {shop.name}:</span>
+                            {rev.seller_reply_at && (
+                              <span className="text-[10px] font-mono text-[#5E5E61]">
+                                {new Date(rev.seller_reply_at).toLocaleDateString('vi-VN')}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-stone-800 italic">"{rev.seller_reply}"</p>
+                        </div>
                       )}
                     </div>
-
-                    <p className="text-xs sm:text-sm text-stone-700 mt-2 leading-relaxed">
-                      {rev.comment}
-                    </p>
-
-                    {/* Review Images */}
-                    {rev.images && rev.images.length > 0 && (
-                      <div className="flex items-center gap-2 mt-3 overflow-x-auto">
-                        {rev.images.map((img, i) => (
-                          <img
-                            key={i}
-                            src={img}
-                            alt=""
-                            className="w-16 h-16 rounded-xl object-cover border border-stone-200"
-                          />
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Seller Reply */}
-                    {rev.seller_reply && (
-                      <div className="mt-3 bg-[#F5F8EF] p-3 rounded-xl border-l-2 border-[#08482D] text-xs">
-                        <span className="font-bold text-[#08482D] block mb-0.5">Phản hồi của {shop.name}:</span>
-                        <p className="text-stone-700">{rev.seller_reply}</p>
-                      </div>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

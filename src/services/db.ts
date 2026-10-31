@@ -406,25 +406,30 @@ function normalizeUserDoc(docData: DocumentData, uid: string): User {
 
 // Normalizer from Firestore shop doc to Shop interface
 function normalizeShopDoc(docData: DocumentData, slug: string): Shop {
-    const rawAvatar = docData.avatar;
-    const shopAvatar = rawAvatar && !rawAvatar.includes('unsplash.com') && !rawAvatar.includes('photo-1544816155-12df9643f363')
-      ? rawAvatar
-      : createShopAvatarSvg(docData.name, docData.coverColor, slug);
-    return {
-      id: slug as any,
-      owner_user_id: docData.ownerUid as any,
-      name: docData.name,
-      slug: docData.slug || slug,
-      description: docData.description || '',
-      avatar: shopAvatar,
+  const rawAvatar = docData.avatar;
+  const shopAvatar = rawAvatar && !rawAvatar.includes('unsplash.com') && !rawAvatar.includes('photo-1544816155-12df9643f363')
+    ? rawAvatar
+    : createShopAvatarSvg(docData.name, docData.coverColor, slug);
+  const rAvg = Number(docData.ratingAvg ?? docData.rating_avg ?? docData.average_rating ?? 0);
+  const rCount = Number(docData.ratingCount ?? docData.rating_count ?? docData.review_count ?? docData.total_reviews ?? 0);
+  return {
+    id: slug as any,
+    owner_user_id: docData.ownerUid as any,
+    name: docData.name,
+    slug: docData.slug || slug,
+    description: docData.description || '',
+    avatar: shopAvatar,
     cover_color: docData.coverColor || '#08482D',
     cover_image: docData.coverImage || '',
     pickup_address: docData.pickupAddress || '',
     phone: docData.phone || '',
     follower_ids: (docData.followerUids || []).map((u: string) => u as any),
     follower_count: docData.followerCount || (docData.followerUids ? docData.followerUids.length : 0),
-    rating_avg: docData.ratingAvg || 0,
-    review_count: docData.ratingCount || 0,
+    rating_avg: rAvg,
+    average_rating: rAvg,
+    rating_count: rCount,
+    review_count: rCount,
+    total_reviews: rCount,
     response_rate: 98,
     joined_text: 'Đang hoạt động',
     created_at: docData.createdAt?.toDate ? docData.createdAt.toDate().toISOString() : new Date().toISOString()
@@ -2671,6 +2676,74 @@ export class DCCTDatabaseService {
     };
   }
 
+  async getPublicShopReviews(shopSlugOrId: string | number): Promise<{ reviews: Review[]; avg: number; total: number; distribution: Record<string, number> }> {
+    const db = getActiveFirestore();
+    const strSlug = String(shopSlugOrId);
+    const q = query(collection(db, 'reviews'), where('shopId', '==', strSlug));
+    const snap = await getDocs(q);
+
+    const prodMap = new Map<string, { name: string; image: string }>();
+    for (const d of snap.docs) {
+      const data = d.data();
+      const pid = String(data.productId || '');
+      if ((!data.productName || !data.productImage) && pid && !prodMap.has(pid)) {
+        try {
+          const pSnap = await getDoc(doc(db, 'products', pid));
+          if (pSnap.exists()) {
+            const pInfo = pSnap.data();
+            prodMap.set(pid, {
+              name: pInfo.name || '',
+              image: (pInfo.images && pInfo.images[0]) || pInfo.imageUrl || ''
+            });
+          }
+        } catch {}
+      }
+    }
+
+    const list: Review[] = [];
+    let sum = 0;
+    const dist: Record<string, number> = { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 };
+
+    snap.forEach((d) => {
+      const data = d.data();
+      if (data.hidden) return;
+      const rating = Number(data.rating || 0);
+      sum += rating;
+      const k = String(rating);
+      if (dist[k] !== undefined) dist[k]++;
+
+      const pid = String(data.productId || '');
+      const fallback = prodMap.get(pid);
+      list.push({
+        id: d.id as any,
+        order_id: data.orderId,
+        product_id: data.productId,
+        product_name: data.productName || fallback?.name || '',
+        product_image: data.productImage || fallback?.image || '',
+        user_id: data.buyerUid,
+        user_name: data.buyerDisplayName,
+        buyer_name: data.buyerDisplayName,
+        author_name: data.buyerDisplayName,
+        is_anonymous: !!data.anonymous,
+        rating,
+        tags: data.tags || [],
+        comment: data.comment || '',
+        images: data.images || [],
+        video_url: data.videoLocalId || data.videoUrl || null,
+        video_poster: data.videoThumb || null,
+        helpful_count: data.helpfulCount || 0,
+        seller_reply: data.sellerReply?.text || (typeof data.sellerReply === 'string' ? data.sellerReply : null),
+        seller_reply_at: data.sellerReply?.at || null,
+        created_at: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : (data.createdAt || new Date().toISOString())
+      });
+    });
+
+    list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    const total = list.length;
+    const avg = total > 0 ? Number((sum / total).toFixed(1)) : 0;
+    return { reviews: list, avg, total, distribution: dist };
+  }
+
   async getSellerReviews(): Promise<{ reviews: Review[]; avg: number; total: number; unreplied_count: number }> {
     return this.getShopReviews();
   }
@@ -4441,6 +4514,80 @@ export class DCCTDatabaseService {
       }
     }, (err) => {
       console.warn('subscribeShop error:', err);
+    });
+  }
+
+  subscribePublicShopReviews(
+    shopSlugOrId: string | number,
+    cb: (res: { reviews: Review[]; avg: number; total: number; distribution: Record<string, number> }) => void
+  ): Unsubscribe {
+    const db = getActiveFirestore();
+    const strSlug = String(shopSlugOrId);
+    const q = query(collection(db, 'reviews'), where('shopId', '==', strSlug));
+
+    return onSnapshot(q, async (snap) => {
+      const prodMap = new Map<string, { name: string; image: string }>();
+      for (const d of snap.docs) {
+        const data = d.data();
+        const pid = String(data.productId || '');
+        if ((!data.productName || !data.productImage) && pid && !prodMap.has(pid)) {
+          try {
+            const pSnap = await getDoc(doc(db, 'products', pid));
+            if (pSnap.exists()) {
+              const pInfo = pSnap.data();
+              prodMap.set(pid, {
+                name: pInfo.name || '',
+                image: (pInfo.images && pInfo.images[0]) || pInfo.imageUrl || ''
+              });
+            }
+          } catch {}
+        }
+      }
+
+      const list: Review[] = [];
+      let sum = 0;
+      const dist: Record<string, number> = { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 };
+
+      snap.forEach((d) => {
+        const data = d.data();
+        if (data.hidden) return;
+        const rating = Number(data.rating || 0);
+        sum += rating;
+        const k = String(rating);
+        if (dist[k] !== undefined) dist[k]++;
+
+        const pid = String(data.productId || '');
+        const fallback = prodMap.get(pid);
+        list.push({
+          id: d.id as any,
+          order_id: data.orderId,
+          product_id: data.productId,
+          product_name: data.productName || fallback?.name || '',
+          product_image: data.productImage || fallback?.image || '',
+          user_id: data.buyerUid,
+          user_name: data.buyerDisplayName,
+          buyer_name: data.buyerDisplayName,
+          author_name: data.buyerDisplayName,
+          is_anonymous: !!data.anonymous,
+          rating,
+          tags: data.tags || [],
+          comment: data.comment || '',
+          images: data.images || [],
+          video_url: data.videoLocalId || data.videoUrl || null,
+          video_poster: data.videoThumb || null,
+          helpful_count: data.helpfulCount || 0,
+          seller_reply: data.sellerReply?.text || (typeof data.sellerReply === 'string' ? data.sellerReply : null),
+          seller_reply_at: data.sellerReply?.at || null,
+          created_at: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : (data.createdAt || new Date().toISOString())
+        });
+      });
+
+      list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      const total = list.length;
+      const avg = total > 0 ? Number((sum / total).toFixed(1)) : 0;
+      cb({ reviews: list, avg, total, distribution: dist });
+    }, (err) => {
+      console.warn('subscribePublicShopReviews error:', err);
     });
   }
 

@@ -185,6 +185,9 @@ export const api = {
   getShopReviews: () =>
     db.getShopReviews(),
 
+  getPublicShopReviews: (shopSlugOrId: number | string) =>
+    db.getPublicShopReviews(shopSlugOrId),
+
   getSellerReviews: async () => {
     const res = await db.getSellerReviews();
     return {
@@ -587,6 +590,12 @@ export const api = {
 
   subscribeShop: (shopId: number | string, cb: (shop: any) => void) =>
     db.subscribeShop(shopId, cb),
+
+  subscribePublicShopReviews: (
+    shopSlugOrId: number | string,
+    cb: (res: { reviews: Review[]; avg: number; total: number; distribution: Record<string, number> }) => void
+  ) =>
+    db.subscribePublicShopReviews(shopSlugOrId, cb),
 
   subscribeMyOfferForProduct: (productId: number | string, cb: (offer: Offer | null) => void) =>
     db.subscribeMyOfferForProduct(productId, cb)
