@@ -4,6 +4,7 @@ import { Product } from '../types';
 import { formatVND } from '../utils/format';
 import { api } from '../services/api';
 import { Button } from './Button';
+import { ProductImage } from './ProductImage';
 
 interface OfferModalProps {
   product: Product;
@@ -108,13 +109,13 @@ export const OfferModal: React.FC<OfferModalProps> = ({ product, onClose, onSucc
 
         {/* Product mini info */}
         <div className="p-3 rounded-2xl bg-[#F5F8EF] border border-[#E2E8D8] flex items-center gap-3 mb-4 shrink-0">
-          <img
+          <ProductImage
             src={product.thumb || (Array.isArray(product.images) && product.images[0]) || product.image_url}
             alt={product.name}
+            productName={product.name}
+            category={product.category}
+            conditionPct={product.condition_pct}
             className="w-14 h-14 rounded-xl object-cover bg-white border border-[#E2E8D8] shrink-0"
-            onError={(e) => {
-              (e.target as HTMLElement).style.display = 'none';
-            }}
           />
           <div className="min-w-0 flex-1">
             <h3 className="text-sm font-semibold text-[#101410] truncate">{product.name}</h3>

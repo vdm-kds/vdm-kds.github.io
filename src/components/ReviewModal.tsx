@@ -3,6 +3,7 @@ import { Star, X, Camera, Video, Upload, AlertCircle, Play, Check } from 'lucide
 import { api } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { Button } from './Button';
+import { ProductImage } from './ProductImage';
 
 interface ReviewModalProps {
   isOpen: boolean;
@@ -375,9 +376,11 @@ export function ReviewModal({
           <div className="p-6 space-y-5 overflow-y-auto flex-1">
           {/* Product Block */}
           <div className="flex items-center gap-3.5 p-3.5 bg-[#F5F8EF] rounded-2xl border border-[#DAE7C7]">
-            <img
+            <ProductImage
               src={product.thumb || product.image_url}
               alt={product.name}
+              productName={product.name}
+              conditionPct={product.condition_pct}
               className="w-16 h-16 rounded-xl object-cover border border-[#DAE7C7] flex-shrink-0"
             />
             <div className="min-w-0">

@@ -13,7 +13,7 @@ import { ProductImage } from './ProductImage';
 import { ProductFallbackImage } from './ProductFallbackImage';
 import { OfferModal } from './OfferModal';
 import { ChatDrawer } from './ChatDrawer';
-import { createShopAvatarSvg } from '../services/db';
+import { createShopAvatarSvg, isValidImageSrc } from '../services/db';
 
 interface ProductDetailModalProps {
   product: Product | null;
@@ -187,7 +187,13 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     if (list.length === 0 && fullProduct.image_url) {
       list = [fullProduct.image_url];
     }
-    return list.filter(Boolean);
+    const filtered = list.filter(img => isValidImageSrc(img));
+    // If real images exist (non-SVG data URLs), return only real photos
+    const realNonSvg = filtered.filter(img => !img.startsWith('data:image/svg+xml'));
+    if (realNonSvg.length > 0) {
+      return realNonSvg;
+    }
+    return filtered.length > 0 ? filtered : list.filter(Boolean);
   }, [fullProduct]);
 
   // Parse flaws array
@@ -303,7 +309,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   const distribution = reviewsData?.distribution || { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
   const mediaCount = reviewsData?.media_count || 0;
 
-  const currentDisplayImage = imageList[selectedImageIndex] || fullProduct.image_url;
+  const currentDisplayImage = imageList[selectedImageIndex] || imageList[0] || fullProduct.thumb || fullProduct.image_url;
 
   // Collect all media from reviews for horizontal media strip
   const buyerMediaItems = React.useMemo(() => {
@@ -1333,7 +1339,14 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                         }}
                         className="p-1.5 bg-[#F5F8EF] rounded-xl border border-[#DAE7C7] hover:border-[#08482D] transition-all cursor-pointer group text-left"
                       >
-                        <img src={p.image_url} alt="" className="w-full aspect-square rounded-lg object-cover mb-1" />
+                        <ProductImage
+                          src={p.thumb || p.image_url}
+                          alt={p.name}
+                          productName={p.name}
+                          category={p.category}
+                          conditionPct={p.condition_pct}
+                          className="w-full aspect-square rounded-lg object-cover mb-1"
+                        />
                         <p className="text-[11px] font-bold text-stone-900 truncate group-hover:text-[#08482D]">{p.name}</p>
                         <p className="text-[10px] font-mono font-bold text-[#C2522D]">{formatVND(p.price)}</p>
                       </div>

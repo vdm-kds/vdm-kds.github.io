@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { isLegacyOrEmptyImage, createVintageProductSvg } from '../services/db';
+import React, { useState, useEffect } from 'react';
+import { isValidImageSrc, createVintageProductSvg } from '../services/db';
 
 export interface ProductImageProps {
   src?: string | null;
@@ -31,8 +31,13 @@ export const ProductImage: React.FC<ProductImageProps> = ({
   const [hasError, setHasError] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // If no source or error triggered or is legacy empty image -> use clean mint SVG generator
-  const isFallbackNeeded = !src || hasError || isLegacyOrEmptyImage(src);
+  useEffect(() => {
+    setHasError(false);
+    setIsLoaded(false);
+  }, [src]);
+
+  // If no source or error triggered or not a valid image source -> fallback to vintage SVG
+  const isFallbackNeeded = !src || hasError || !isValidImageSrc(src);
 
   if (isFallbackNeeded) {
     const generatedSvg = createVintageProductSvg(productName || alt, category, variantIndex);

@@ -401,9 +401,10 @@ export const BuyerChatDock: React.FC<BuyerChatDockProps> = ({ onNavigateToShop }
                                 }`}
                               >
                                 {msg.context_card.image_url || msg.context_card.image ? (
-                                  <img
+                                  <ProductImage
                                     src={msg.context_card.image_url || msg.context_card.image}
-                                    alt=""
+                                    alt={msg.context_card.title}
+                                    productName={msg.context_card.title}
                                     className="w-10 h-10 rounded-lg object-cover border border-stone-200 shrink-0 bg-[#DAE7C7]"
                                   />
                                 ) : (

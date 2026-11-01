@@ -8,6 +8,7 @@ import { api } from '../services/api';
 import { formatVND } from '../utils/format';
 import { Button } from './Button';
 import { ProductCard } from './ProductCard';
+import { ProductImage } from './ProductImage';
 import { ProductFallbackImage } from './ProductFallbackImage';
 
 interface BuyerHomeViewProps {
@@ -340,19 +341,15 @@ export const BuyerHomeView: React.FC<BuyerHomeViewProps> = ({
               className="w-64 sm:w-72 shrink-0 snap-start bg-white rounded-3xl border border-[#E2E8D8] p-3 flex flex-col justify-between hover:shadow-md hover:border-[#08482D] transition-all cursor-pointer group"
             >
               <div className="relative aspect-4/3 rounded-2xl overflow-hidden bg-[#F5F8EF] mb-3">
-                {prod.image_url ? (
-                  <img 
-                    src={prod.image_url} 
-                    alt={prod.name}
-                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                  />
-                ) : (
-                  <ProductFallbackImage 
-                    name={prod.name}
-                    category={prod.category}
-                    compact
-                  />
-                )}
+                <ProductImage
+                  src={prod.image_url || prod.thumb}
+                  alt={prod.name}
+                  productName={prod.name}
+                  category={prod.category}
+                  conditionPct={prod.condition_pct}
+                  className="w-full h-full"
+                  imgClassName="transition-transform duration-300 group-hover:scale-105"
+                />
                 <div className="absolute top-2 left-2 bg-[#DAE7C7]/95 backdrop-blur-xs text-[#08482D] text-[10px] font-bold font-mono px-2 py-0.5 rounded-full border border-white/60">
                   {prod.condition_pct}% MỚI
                 </div>

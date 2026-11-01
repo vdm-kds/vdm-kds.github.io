@@ -13,6 +13,7 @@ import { useToast } from '../context/ToastContext';
 import { SellerShippingKanban } from './SellerShippingKanban';
 import { ShippingLabelModal } from './ShippingLabelModal';
 import { Button } from './Button';
+import { ProductImage } from './ProductImage';
 import { compressImageFile, compressProductImage, compressShopCoverImage } from '../utils/image';
 
 interface SellerDashboardProps {
@@ -1656,7 +1657,13 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                     {selectedOrder.items?.map(it => (
                       <div key={it.id} className="p-3 flex items-center justify-between text-xs bg-white">
                         <div className="flex items-center gap-3 min-w-0">
-                          <img src={it.image_url} alt="" className="w-10 h-10 rounded-lg object-cover bg-stone-100 shrink-0" />
+                          <ProductImage
+                            src={it.thumb || it.image_url}
+                            alt={it.product_name}
+                            productName={it.product_name}
+                            conditionPct={it.condition_pct}
+                            className="w-10 h-10 rounded-lg object-cover bg-stone-100 shrink-0"
+                          />
                           <div className="min-w-0">
                             <div className="font-bold text-[#101410] truncate">{it.product_name}</div>
                             <div className="text-stone-500 flex items-center gap-2 flex-wrap">
@@ -1780,7 +1787,14 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                     {products.map(prod => (
                       <tr key={prod.id} className="hover:bg-[#FAF7F2]">
                         <td className="py-3 px-4">
-                          <img src={prod.image_url} alt="" className="w-12 h-12 rounded-lg object-cover bg-[#F4EFEA]" />
+                          <ProductImage
+                            src={prod.thumb || prod.image_url}
+                            alt={prod.name}
+                            productName={prod.name}
+                            category={prod.category}
+                            conditionPct={prod.condition_pct}
+                            className="w-12 h-12 rounded-lg object-cover bg-[#F4EFEA]"
+                          />
                         </td>
                         <td className="py-3 px-4">
                           <div className="font-bold text-[#101410]">{prod.name}</div>
@@ -1979,9 +1993,10 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                   <div key={offer.id} className="bg-white rounded-3xl border border-[#E2E8D8] p-5 shadow-xs space-y-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-3">
-                        <img
-                          src={offer.product_image}
-                          alt={offer.product_name}
+                        <ProductImage
+                          src={offer.product_image || (offer as any).thumb || (offer as any).image_url}
+                          alt={offer.product_name || 'Sản phẩm trả giá'}
+                          productName={offer.product_name}
                           className="w-16 h-16 rounded-2xl object-cover bg-[#F5F8EF] border border-[#DAE7C7] shrink-0"
                         />
                         <div className="min-w-0">
@@ -2186,9 +2201,10 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                             isSeller ? 'border-[#08482D]/30 bg-emerald-50/40' : 'border-[#DAE7C7]'
                           }`}>
                             {(msg.context_card.image || msg.context_card.image_url) ? (
-                              <img
+                              <ProductImage
                                 src={msg.context_card.image || msg.context_card.image_url}
-                                alt=""
+                                alt={msg.context_card.title}
+                                productName={msg.context_card.title}
                                 className="w-10 h-10 rounded-lg object-cover bg-[#DAE7C7] border border-stone-200 shrink-0"
                               />
                             ) : (
@@ -2631,9 +2647,10 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                             </div>
                             <div className="flex items-center gap-1.5 mt-0.5">
                               {rev.product_image && (
-                                <img
+                                <ProductImage
                                   src={rev.product_image}
-                                  alt=""
+                                  alt={rev.product_name || ''}
+                                  productName={rev.product_name}
                                   className="w-5 h-5 rounded object-cover border border-[#DAE7C7]"
                                 />
                               )}

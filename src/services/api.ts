@@ -1,7 +1,7 @@
-import { db, getCurrentSession, setCurrentSession, clearCurrentSession, createVintageProductSvg, isLegacyOrEmptyImage, createShopAvatarSvg } from './db';
+import { db, getCurrentSession, setCurrentSession, clearCurrentSession, createVintageProductSvg, isLegacyOrEmptyImage, isValidImageSrc, createShopAvatarSvg } from './db';
 import { Product, CartItem, Order, User, SellerStats, Address, ReturnRequest, Review, NotificationItem, Offer, ChatConversation, ChatMessage, Coupon, CheckoutCalculation, CheckoutShopBreakdown } from '../types';
 
-export { createVintageProductSvg, isLegacyOrEmptyImage, createShopAvatarSvg };
+export { createVintageProductSvg, isLegacyOrEmptyImage, isValidImageSrc, createShopAvatarSvg };
 
 export function getStoredToken(): string | null {
   const session = getCurrentSession();

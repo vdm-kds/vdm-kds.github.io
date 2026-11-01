@@ -184,12 +184,25 @@ export function createShopAvatarSvg(name: string, coverColor: string = '#08482D'
   return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
 }
 
+export function isValidImageSrc(src?: any): boolean {
+  if (!src || typeof src !== 'string') return false;
+  const s = src.trim();
+  if (!s) return false;
+  if (
+    s.startsWith('/') ||
+    s.startsWith('./') ||
+    s.startsWith('blob:') ||
+    s.startsWith('data:image/') ||
+    s.startsWith('http://') ||
+    s.startsWith('https://')
+  ) {
+    return true;
+  }
+  return false;
+}
+
 export function isLegacyOrEmptyImage(src?: string): boolean {
-  if (!src) return true;
-  if (src.startsWith('data:image/svg+xml')) return false;
-  if (src.startsWith('data:image/')) return false;
-  if (src.startsWith('http://') || src.startsWith('https://')) return false;
-  return true;
+  return !isValidImageSrc(src);
 }
 
 export function createSvgPlaceholder(
@@ -405,7 +418,6 @@ function normalizeUserDoc(docData: DocumentData, uid: string): User {
   };
 }
 
-// Normalizer from Firestore shop doc to Shop interface
 function normalizeShopDoc(docData: DocumentData, slug: string): Shop {
   const rawAvatar = docData.avatar;
   const shopAvatar = rawAvatar && !rawAvatar.includes('unsplash.com') && !rawAvatar.includes('photo-1544816155-12df9643f363')
@@ -413,6 +425,10 @@ function normalizeShopDoc(docData: DocumentData, slug: string): Shop {
     : createShopAvatarSvg(docData.name, docData.coverColor, slug);
   const rAvg = Number(docData.ratingAvg ?? docData.rating_avg ?? docData.average_rating ?? 0);
   const rCount = Number(docData.ratingCount ?? docData.rating_count ?? docData.review_count ?? docData.total_reviews ?? 0);
+  const seedCover = SEED_MEDIA_DEFAULTS.shops[slug as keyof typeof SEED_MEDIA_DEFAULTS.shops]?.coverImage;
+  const rawCover = docData.coverImage || docData.cover_image;
+  const effectiveCover = (rawCover && isValidImageSrc(rawCover)) ? rawCover : (seedCover || '');
+
   return {
     id: slug as any,
     owner_user_id: docData.ownerUid as any,
@@ -421,8 +437,8 @@ function normalizeShopDoc(docData: DocumentData, slug: string): Shop {
     description: docData.description || '',
     avatar: shopAvatar,
     cover_color: docData.coverColor || '#08482D',
-    cover_image: docData.coverImage || docData.cover_image || '',
-    coverImage: docData.coverImage || docData.cover_image || '',
+    cover_image: effectiveCover,
+    coverImage: effectiveCover,
     pickup_address: docData.pickupAddress || '',
     phone: docData.phone || '',
     follower_ids: (docData.followerUids || []).map((u: string) => u as any),
@@ -440,9 +456,29 @@ function normalizeShopDoc(docData: DocumentData, slug: string): Shop {
 
 // Normalizer from Firestore product doc to Product interface
 function normalizeProductDoc(docData: DocumentData, id: string): Product {
-  const images = Array.isArray(docData.images) && docData.images.length > 0 ? docData.images : [];
-  const primaryImg = images[0] || docData.imageUrl || docData.image_url || createVintageProductSvg(docData.name, docData.category, 0, docData.shopName);
-  const thumb = docData.thumb || docData.thumbnail || primaryImg;
+  const seedProduct = SEED_MEDIA_DEFAULTS.products[id as keyof typeof SEED_MEDIA_DEFAULTS.products];
+  let images = Array.isArray(docData.images) && docData.images.length > 0 ? docData.images : [];
+  
+  if (images.length === 0 || images.every((img: string) => !isValidImageSrc(img) || img.startsWith('data:image/svg+xml'))) {
+    if (seedProduct?.images && seedProduct.images.length > 0) {
+      images = seedProduct.images;
+    }
+  }
+
+  const primaryImg = (images[0] && isValidImageSrc(images[0]) && !images[0].startsWith('data:image/svg+xml'))
+    ? images[0]
+    : (docData.imageUrl && isValidImageSrc(docData.imageUrl) && !docData.imageUrl.startsWith('data:image/svg+xml')
+        ? docData.imageUrl
+        : (docData.image_url && isValidImageSrc(docData.image_url) && !docData.image_url.startsWith('data:image/svg+xml')
+            ? docData.image_url
+            : (seedProduct?.images[0] || images[0] || createVintageProductSvg(docData.name, docData.category, 0, docData.shopName))));
+
+  const thumb = (docData.thumb && isValidImageSrc(docData.thumb) && !docData.thumb.startsWith('data:image/svg+xml'))
+    ? docData.thumb
+    : (docData.thumbnail && isValidImageSrc(docData.thumbnail) && !docData.thumbnail.startsWith('data:image/svg+xml')
+        ? docData.thumbnail
+        : (seedProduct?.thumb || primaryImg));
+
   return {
     id: id as any,
     shop_id: docData.shopId as any,
@@ -532,20 +568,28 @@ function normalizeOrderDoc(docData: DocumentData, code: string): Order {
     carrier: docData.carrier || undefined,
     tracking_code: docData.trackingCode || undefined,
     cancel_reason: docData.cancelReason || undefined,
-    items: Array.isArray(docData.items) ? docData.items.map((it: any, idx: number) => ({
-      id: idx + 1,
-      order_id: code as any,
-      product_id: it.productId as any,
-      product_name: it.name,
-      condition_pct: it.conditionPct || 90,
-      price: Number(it.price || 0),
-      original_price: Number(it.originalPrice || it.original_price || it.price || 0),
-      is_negotiated: Boolean(it.negotiated || it.is_negotiated),
-      offer_id: it.offerId || it.offer_id || undefined,
-      quantity: it.qty,
-      thumb: it.thumb || it.image_url || it.imageUrl || '',
-      image_url: it.thumb || it.image_url || it.imageUrl || (it.icon ? createVintageProductSvg(it.name, '', 0, docData.shopName) : '')
-    })) : [],
+    items: Array.isArray(docData.items) ? docData.items.map((it: any, idx: number) => {
+      const pid = String(it.productId ?? it.product_id ?? '');
+      const seedThumb = SEED_MEDIA_DEFAULTS.products[pid as keyof typeof SEED_MEDIA_DEFAULTS.products]?.thumb;
+      const rawThumb = it.thumb || it.image_url || it.imageUrl;
+      const effectiveThumb = (rawThumb && isValidImageSrc(rawThumb) && !rawThumb.startsWith('data:image/svg+xml'))
+        ? rawThumb
+        : (seedThumb || (rawThumb && isValidImageSrc(rawThumb) ? rawThumb : ''));
+      return {
+        id: idx + 1,
+        order_id: code as any,
+        product_id: (it.productId ?? it.product_id) as any,
+        product_name: it.name || it.product_name,
+        condition_pct: it.conditionPct || it.condition_pct || 90,
+        price: Number(it.price || 0),
+        original_price: Number(it.originalPrice || it.original_price || it.price || 0),
+        is_negotiated: Boolean(it.negotiated || it.is_negotiated),
+        offer_id: it.offerId || it.offer_id || undefined,
+        quantity: it.qty || it.quantity,
+        thumb: effectiveThumb,
+        image_url: effectiveThumb || (it.icon ? createVintageProductSvg(it.name || it.product_name, '', 0, docData.shopName) : '')
+      };
+    }) : [],
     shipment_events: Array.isArray(docData.shipmentEvents) ? docData.shipmentEvents.map((ev: any, idx: number) => ({
       id: idx + 1,
       order_id: code as any,
