@@ -13,7 +13,7 @@ import { useToast } from '../context/ToastContext';
 import { SellerShippingKanban } from './SellerShippingKanban';
 import { ShippingLabelModal } from './ShippingLabelModal';
 import { Button } from './Button';
-import { compressImageFile } from '../utils/image';
+import { compressImageFile, compressProductImage, compressShopCoverImage } from '../utils/image';
 
 interface SellerDashboardProps {
   onViewPreview?: () => void;
@@ -252,7 +252,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
       const fileList = Array.from(files).slice(0, 5);
       const compressedUrls: string[] = [];
       for (const file of fileList) {
-        const dataUrl = await compressImageFile(file, 1280, 0.85);
+        const dataUrl = await compressProductImage(file, 1024, 150 * 1024);
         compressedUrls.push(dataUrl);
       }
       const existingUrls = prodForm.imagesText ? prodForm.imagesText.split('\n').filter(Boolean) : [];
@@ -262,11 +262,23 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
         image_url: prev.image_url || combined[0] || '',
         imagesText: combined.join('\n')
       }));
-      showToast(`Đã nén và nạp ${compressedUrls.length} ảnh (cạnh dài 1280px)`, 'success');
+      showToast(`Đã nén chuẩn WebP và nạp ${compressedUrls.length} ảnh (≤ 150KB/ảnh)`, 'success');
     } catch (err: any) {
       showToast(err.message || 'Lỗi tải ảnh', 'error');
     } finally {
       setUploadingImages(false);
+    }
+  };
+
+  const handleShopCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const comp = await compressShopCoverImage(file);
+      setShopEditForm(prev => ({ ...prev, cover_image: comp }));
+      showToast('Đã nén ảnh bìa shop chuẩn 16:9 (≤ 250KB)', 'success');
+    } catch (err: any) {
+      showToast(err.message || 'Lỗi nén ảnh bìa', 'error');
     }
   };
 
@@ -3809,14 +3821,26 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="font-semibold text-[#101410] block mb-1">URL ảnh bìa banner (tùy chọn)</label>
-                  <input
-                    type="text"
-                    value={shopEditForm.cover_image}
-                    onChange={e => setShopEditForm(prev => ({ ...prev, cover_image: e.target.value }))}
-                    placeholder="https://..."
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-[#DAE7C7] bg-[#F5F8EF] focus:outline-none focus:border-[#08482D]"
-                  />
+                  <label className="font-semibold text-[#101410] block mb-1">Ảnh bìa banner (16:9, ≤ 250KB)</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={shopEditForm.cover_image}
+                      onChange={e => setShopEditForm(prev => ({ ...prev, cover_image: e.target.value }))}
+                      placeholder="Dán URL hoặc tải từ máy"
+                      className="flex-1 px-3.5 py-2.5 rounded-xl border border-[#DAE7C7] bg-[#F5F8EF] focus:outline-none focus:border-[#08482D] text-xs"
+                    />
+                    <label className="px-3 py-2.5 bg-[#DAE7C7] text-[#08482D] hover:bg-[#c9dbb1] rounded-xl text-xs font-bold cursor-pointer transition-colors flex items-center gap-1 shrink-0">
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Tải ảnh</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleShopCoverUpload}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
                 </div>
               </div>
 

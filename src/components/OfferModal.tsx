@@ -109,7 +109,7 @@ export const OfferModal: React.FC<OfferModalProps> = ({ product, onClose, onSucc
         {/* Product mini info */}
         <div className="p-3 rounded-2xl bg-[#F5F8EF] border border-[#E2E8D8] flex items-center gap-3 mb-4 shrink-0">
           <img
-            src={product.image_url}
+            src={product.thumb || (Array.isArray(product.images) && product.images[0]) || product.image_url}
             alt={product.name}
             className="w-14 h-14 rounded-xl object-cover bg-white border border-[#E2E8D8] shrink-0"
             onError={(e) => {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings2, UserCheck, Shield, RotateCcw, X, Check, AlertTriangle, Eye, FastForward, Truck, Presentation, Sparkles, LogIn } from 'lucide-react';
+import { Settings2, UserCheck, Shield, RotateCcw, X, Check, AlertTriangle, Eye, FastForward, Truck, Presentation, Sparkles, LogIn, Image as ImageIcon } from 'lucide-react';
 import { api } from '../services/api';
 import { db } from '../services/db';
 import { useAuth } from '../context/AuthContext';
@@ -7,6 +7,7 @@ import { useToast } from '../context/ToastContext';
 import { Order } from '../types';
 import { formatVND } from '../utils/format';
 import { getStoredAccounts, StoredAccount, setActiveAccountKey } from '../firebase';
+import { SampleMediaModal } from './SampleMediaModal';
 
 interface DemoControllerProps {
   onRoleSwitched?: (role: 'buyer' | 'seller' | 'guest') => void;
@@ -43,6 +44,10 @@ export function DemoController({
   const [selectedOrderId, setSelectedOrderId] = useState<string | number | null>(null);
   const [fastForwarding, setFastForwarding] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
+
+  // Sample media modal state
+  const [showSampleMediaModal, setShowSampleMediaModal] = useState(false);
+  const [applyingSeedPhotos, setApplyingSeedPhotos] = useState(false);
 
   // Sync stored accounts list
   useEffect(() => {
@@ -216,6 +221,19 @@ export function DemoController({
     } finally {
       setInitializingMarket(false);
       setInitProgressMsg('');
+    }
+  };
+
+  const handleApplySeedPhotosDirect = async () => {
+    setApplyingSeedPhotos(true);
+    try {
+      const res = await api.applySeedPhotos();
+      showToast(res.message, 'success');
+      if (onDataReset) onDataReset();
+    } catch (err: any) {
+      showToast(err.message || 'Lỗi áp dụng ảnh mẫu', 'error');
+    } finally {
+      setApplyingSeedPhotos(false);
     }
   };
 
@@ -467,7 +485,40 @@ export function DemoController({
               )}
             </div>
 
-            {/* 4. KHỞI TẠO DỮ LIỆU CHỢ (Section 8) */}
+            {/* 4. ẢNH MẪU SẢN PHẨM & SHOP */}
+            <div className="pt-3 space-y-2">
+              <div className="flex items-center gap-2 text-[#08482D]">
+                <ImageIcon className="w-4 h-4" />
+                <span className="font-bold text-xs">Ảnh mẫu sản phẩm & shop</span>
+              </div>
+              <p className="text-[10px] text-[#5E5E61]">
+                Áp dụng 23 ảnh thật có sẵn hoặc mở hộp tải ảnh tùy chỉnh (tự nén WebP &lt; 150KB, thumb 240px).
+              </p>
+
+              <div className="space-y-1.5">
+                <button
+                  type="button"
+                  onClick={handleApplySeedPhotosDirect}
+                  disabled={applyingSeedPhotos}
+                  className="w-full py-2 bg-[#08482D] text-white hover:bg-[#063A24] rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
+                  title="Cập nhật ngay 23 ảnh có sẵn cho 10 sản phẩm & 3 shop không mất dữ liệu giao dịch"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-[#DAE7C7]" />
+                  <span>{applyingSeedPhotos ? 'Đang cập nhật ảnh...' : 'Áp dụng ảnh có sẵn cho 10 SP & 3 Shop'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowSampleMediaModal(true)}
+                  className="w-full py-2 bg-[#F5F8EF] border border-[#08482D]/30 text-[#08482D] hover:bg-[#DAE7C7]/50 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <ImageIcon className="w-3.5 h-3.5" />
+                  <span>Mở hộp quản lý ảnh mẫu chi tiết</span>
+                </button>
+              </div>
+            </div>
+
+            {/* 5. KHỞI TẠO DỮ LIỆU CHỢ (Section 8) */}
             <div className="pt-3 space-y-2">
               <div className="flex items-center gap-2 text-[#08482D]">
                 <Sparkles className="w-4 h-4" />
@@ -487,7 +538,7 @@ export function DemoController({
               </button>
             </div>
 
-            {/* 5. KHÔI PHỤC DỮ LIỆU DEMO (Section 8) */}
+            {/* 6. KHÔI PHỤC DỮ LIỆU DEMO (Section 8) */}
             <div className="pt-3 space-y-2">
               <div className="flex items-center gap-2 text-red-600">
                 <RotateCcw className="w-4 h-4" />
@@ -556,6 +607,15 @@ export function DemoController({
           </div>
         </div>
       )}
+
+      {/* Fullscreen Sample Media Modal */}
+      <SampleMediaModal
+        isOpen={showSampleMediaModal}
+        onClose={() => setShowSampleMediaModal(false)}
+        onSaved={() => {
+          if (onDataReset) onDataReset();
+        }}
+      />
     </div>
   );
 }

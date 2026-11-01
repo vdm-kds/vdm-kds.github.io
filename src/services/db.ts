@@ -63,6 +63,7 @@ import {
   ShipmentEvent,
   SellerStats
 } from '../types';
+import { SEED_MEDIA_DEFAULTS } from '../utils/image';
 
 export function cleanObject<T extends Record<string, any>>(obj: T): Partial<T> {
   const result: any = {};
@@ -420,7 +421,8 @@ function normalizeShopDoc(docData: DocumentData, slug: string): Shop {
     description: docData.description || '',
     avatar: shopAvatar,
     cover_color: docData.coverColor || '#08482D',
-    cover_image: docData.coverImage || '',
+    cover_image: docData.coverImage || docData.cover_image || '',
+    coverImage: docData.coverImage || docData.cover_image || '',
     pickup_address: docData.pickupAddress || '',
     phone: docData.phone || '',
     follower_ids: (docData.followerUids || []).map((u: string) => u as any),
@@ -439,7 +441,8 @@ function normalizeShopDoc(docData: DocumentData, slug: string): Shop {
 // Normalizer from Firestore product doc to Product interface
 function normalizeProductDoc(docData: DocumentData, id: string): Product {
   const images = Array.isArray(docData.images) && docData.images.length > 0 ? docData.images : [];
-  const primaryImg = images[0] || createVintageProductSvg(docData.name, docData.category, 0, docData.shopName);
+  const primaryImg = images[0] || docData.imageUrl || docData.image_url || createVintageProductSvg(docData.name, docData.category, 0, docData.shopName);
+  const thumb = docData.thumb || docData.thumbnail || primaryImg;
   return {
     id: id as any,
     shop_id: docData.shopId as any,
@@ -455,6 +458,7 @@ function normalizeProductDoc(docData: DocumentData, id: string): Product {
     stock: Number(docData.stock || 1),
     image_url: primaryImg,
     images: images.length > 0 ? images : [primaryImg],
+    thumb: thumb,
     flaws: Array.isArray(docData.defects) ? docData.defects.map((d: any, idx: number) => ({
       id: idx + 1,
       description: typeof d === 'string' ? d : d.text || '',
@@ -539,7 +543,8 @@ function normalizeOrderDoc(docData: DocumentData, code: string): Order {
       is_negotiated: Boolean(it.negotiated || it.is_negotiated),
       offer_id: it.offerId || it.offer_id || undefined,
       quantity: it.qty,
-      image_url: it.icon ? createVintageProductSvg(it.name, '', 0, docData.shopName) : ''
+      thumb: it.thumb || it.image_url || it.imageUrl || '',
+      image_url: it.thumb || it.image_url || it.imageUrl || (it.icon ? createVintageProductSvg(it.name, '', 0, docData.shopName) : '')
     })) : [],
     shipment_events: Array.isArray(docData.shipmentEvents) ? docData.shipmentEvents.map((ev: any, idx: number) => ({
       id: idx + 1,
@@ -1657,10 +1662,12 @@ export class DCCTDatabaseService {
           }
 
           subtotal += itemPrice * it.quantity;
+          const itemThumb = pData.thumb || (Array.isArray(pData.images) && pData.images[0]) || pData.imageUrl || '';
           return {
             productId: String(it.product_id),
             name: pData.name,
             icon: pData.icon || getProductEmoji(pData.name, pData.category),
+            thumb: itemThumb,
             conditionPct: pData.conditionPct || 90,
             price: itemPrice,
             originalPrice,
@@ -3916,8 +3923,23 @@ export class DCCTDatabaseService {
     const gocUid = gocSnap.data()?.uid;
     const retroUid = retroSnap.data()?.uid;
 
+    // Load any existing persistent backup media in seedMedia
+    const seedMediaMap: Record<string, any> = {};
+    try {
+      const seedSnap = await getDocs(collection(db, 'seedMedia'));
+      seedSnap.forEach((d) => {
+        seedMediaMap[d.id] = d.data();
+      });
+    } catch (e) {
+      console.warn('Could not read seedMedia in initMarketplace:', e);
+    }
+
     onProgress?.('Tạo 3 shop mẫu...');
     const batch1 = writeBatch(db);
+
+    const docuCover = seedMediaMap['shop_do-cu-con-thuong']?.coverImage || SEED_MEDIA_DEFAULTS.shops['do-cu-con-thuong'].coverImage;
+    const gocCover = seedMediaMap['shop_goc-sach-nhac']?.coverImage || SEED_MEDIA_DEFAULTS.shops['goc-sach-nhac'].coverImage;
+    const retroCover = seedMediaMap['shop_retro-tech']?.coverImage || SEED_MEDIA_DEFAULTS.shops['retro-tech'].coverImage;
 
     batch1.set(doc(db, 'shops', 'do-cu-con-thuong'), {
       slug: 'do-cu-con-thuong',
@@ -3926,7 +3948,8 @@ export class DCCTDatabaseService {
       description: 'Tiệm đồ second-hand có câu chuyện: thời trang, phụ kiện, đồ gia dụng đã kiểm định.',
       avatar: createShopAvatarSvg('Đồ Cũ Còn Thương', '#08482D'),
       coverColor: '#08482D',
-      coverImage: '',
+      coverImage: docuCover,
+      cover_image: docuCover,
       pickupAddress: '128 Đường Hai Bà Trưng, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh',
       phone: '0901234567',
       followerUids: [],
@@ -3944,7 +3967,8 @@ export class DCCTDatabaseService {
       description: 'Sách cũ còn thơm mùi giấy và nhạc cụ đã qua sử dụng, chỉnh âm kỹ trước khi giao.',
       avatar: createShopAvatarSvg('Góc Sách & Nhạc', '#7A4E2D'),
       coverColor: '#7A4E2D',
-      coverImage: '',
+      coverImage: gocCover,
+      cover_image: gocCover,
       pickupAddress: '45 Đường Đinh Tiên Hoàng, Phường Đa Kao, Quận 1, TP. Hồ Chí Minh',
       phone: '0902345678',
       followerUids: [],
@@ -3962,7 +3986,8 @@ export class DCCTDatabaseService {
       description: 'Đồ công nghệ cũ đã test kỹ: máy ảnh film, điện thoại, tai nghe, bàn phím cơ.',
       avatar: createShopAvatarSvg('Retro Tech', '#2F4B6B'),
       coverColor: '#2F4B6B',
-      coverImage: '',
+      coverImage: retroCover,
+      cover_image: retroCover,
       pickupAddress: '89 Đường Cách Mạng Tháng 8, Phường 7, Quận 3, TP. Hồ Chí Minh',
       phone: '0903456789',
       followerUids: [],
@@ -4057,6 +4082,14 @@ export class DCCTDatabaseService {
     ];
 
     for (const p of sampleProducts) {
+      const defaultSeed = (SEED_MEDIA_DEFAULTS.products as any)[p.id];
+      const seedProd = seedMediaMap[p.id];
+      const prodImages = (seedProd?.images && Array.isArray(seedProd.images) && seedProd.images.length > 0)
+        ? seedProd.images
+        : (defaultSeed?.images || []);
+      const prodThumb = seedProd?.thumb || (defaultSeed?.thumb || (prodImages[0] || ''));
+      const prodImgUrl = prodImages[0] || '';
+
       batch2.set(doc(db, 'products', p.id), {
         shopId: p.shopId,
         ownerUid: p.ownerUid,
@@ -4078,7 +4111,10 @@ export class DCCTDatabaseService {
             '✓ Đúng nguồn gốc và đúng như ảnh chụp thực tế'
           ]
         },
-        images: [],
+        images: prodImages,
+        thumb: prodThumb,
+        imageUrl: prodImgUrl,
+        image_url: prodImgUrl,
         icon: p.icon,
         stock: p.stock,
         sold: 0,
@@ -4096,6 +4132,207 @@ export class DCCTDatabaseService {
     onProgress?.('Hoàn thành khởi tạo dữ liệu chợ!');
 
     return { message: 'Khởi tạo dữ liệu chợ thành công' };
+  }
+
+  // --- SAMPLE MEDIA MANAGEMENT ---
+
+  async getSeedMedia(): Promise<{
+    products: Record<string, { images: string[]; thumb?: string }>;
+    shops: Record<string, { coverImage: string }>;
+  }> {
+    const db = getActiveFirestore();
+    const products: Record<string, { images: string[]; thumb?: string }> = {};
+    const shops: Record<string, { coverImage: string }> = {};
+
+    try {
+      const snap = await getDocs(collection(db, 'seedMedia'));
+      snap.forEach((d) => {
+        const id = d.id;
+        const data = d.data();
+        if (id.startsWith('shop_')) {
+          const slug = id.replace('shop_', '');
+          shops[slug] = { coverImage: data.coverImage || data.cover_image || '' };
+        } else {
+          products[id] = { images: data.images || [], thumb: data.thumb || '' };
+        }
+      });
+    } catch (err) {
+      console.warn('Error reading seedMedia:', err);
+    }
+
+    return { products, shops };
+  }
+
+  async saveSampleMedia(
+    payload: {
+      products: Array<{ id: string; images: string[]; thumb?: string }> | Record<string, { images: string[]; thumb?: string }>;
+      shops: Array<{ slug: string; coverImage: string }> | Record<string, { coverImage: string }>;
+    },
+    onProgress?: (msg: string, pct: number) => void
+  ): Promise<{ message: string; updatedProducts: number; updatedShops: number }> {
+    const cur = getCurrentUser();
+    if (!cur || !cur.is_owner) {
+      throw new Error('Chỉ tài khoản quản trị/gốc mới được cập nhật ảnh mẫu');
+    }
+    const db = getActiveFirestore();
+    let updatedProducts = 0;
+    let updatedShops = 0;
+
+    const prodItems = Array.isArray(payload.products)
+      ? payload.products
+      : Object.entries(payload.products || {}).map(([id, d]) => ({ id, ...d }));
+
+    const shopItems = Array.isArray(payload.shops)
+      ? payload.shops
+      : Object.entries(payload.shops || {}).map(([slug, d]) => ({ slug, ...d }));
+
+    const total = prodItems.length + shopItems.length;
+    let currentStep = 0;
+
+    for (const p of prodItems) {
+      currentStep++;
+      onProgress?.(`Đang lưu ảnh sản phẩm ${p.id}...`, Math.round((currentStep / total) * 100));
+      const ref = doc(db, 'products', p.id);
+      const snap = await getDoc(ref);
+      const images = p.images || [];
+      const thumb = p.thumb || (images[0] || '');
+      const imageUrl = images[0] || '';
+
+      if (snap.exists()) {
+        await updateDoc(ref, {
+          images,
+          thumb,
+          imageUrl,
+          image_url: imageUrl,
+          updatedAt: serverTimestamp()
+        });
+        updatedProducts++;
+      }
+
+      // Save persistent backup to seedMedia
+      await setDoc(
+        doc(db, 'seedMedia', p.id),
+        {
+          productId: p.id,
+          images,
+          thumb,
+          imageUrl,
+          updatedAt: serverTimestamp()
+        },
+        { merge: true }
+      );
+    }
+
+    for (const s of shopItems) {
+      currentStep++;
+      onProgress?.(`Đang lưu ảnh bìa shop ${s.slug}...`, Math.round((currentStep / total) * 100));
+      const ref = doc(db, 'shops', s.slug);
+      const snap = await getDoc(ref);
+      const coverImage = s.coverImage || '';
+
+      if (snap.exists()) {
+        await updateDoc(ref, {
+          coverImage,
+          cover_image: coverImage,
+          updatedAt: serverTimestamp()
+        });
+        updatedShops++;
+      }
+
+      // Save persistent backup to seedMedia
+      await setDoc(
+        doc(db, 'seedMedia', `shop_${s.slug}`),
+        {
+          slug: s.slug,
+          coverImage,
+          updatedAt: serverTimestamp()
+        },
+        { merge: true }
+      );
+    }
+
+    return {
+      message: `Đã cập nhật ảnh cho ${updatedProducts} sản phẩm, ${updatedShops} shop`,
+      updatedProducts,
+      updatedShops
+    };
+  }
+
+  async applySeedPhotos(
+    onProgress?: (msg: string, pct: number) => void
+  ): Promise<{ message: string; updatedProducts: number; updatedShops: number }> {
+    const cur = getCurrentUser();
+    if (!cur || !cur.is_owner) {
+      throw new Error('Chỉ tài khoản chủ/quản trị mới được cập nhật ảnh');
+    }
+    const db = getActiveFirestore();
+    let updatedProducts = 0;
+    let updatedShops = 0;
+
+    const prodEntries = Object.entries(SEED_MEDIA_DEFAULTS.products);
+    const shopEntries = Object.entries(SEED_MEDIA_DEFAULTS.shops);
+    const total = prodEntries.length + shopEntries.length;
+    let currentStep = 0;
+
+    for (const [pid, pdata] of prodEntries) {
+      currentStep++;
+      onProgress?.(`Đang cập nhật ảnh sản phẩm ${pid}...`, Math.round((currentStep / total) * 100));
+      const ref = doc(db, 'products', pid);
+      const snap = await getDoc(ref);
+      if (snap.exists()) {
+        await updateDoc(ref, {
+          images: pdata.images,
+          thumb: pdata.thumb,
+          imageUrl: pdata.images[0] || '',
+          image_url: pdata.images[0] || '',
+          updatedAt: serverTimestamp()
+        });
+        updatedProducts++;
+      }
+
+      await setDoc(
+        doc(db, 'seedMedia', pid),
+        {
+          productId: pid,
+          images: pdata.images,
+          thumb: pdata.thumb,
+          imageUrl: pdata.images[0] || '',
+          updatedAt: serverTimestamp()
+        },
+        { merge: true }
+      );
+    }
+
+    for (const [slug, sdata] of shopEntries) {
+      currentStep++;
+      onProgress?.(`Đang cập nhật ảnh bìa shop ${slug}...`, Math.round((currentStep / total) * 100));
+      const ref = doc(db, 'shops', slug);
+      const snap = await getDoc(ref);
+      if (snap.exists()) {
+        await updateDoc(ref, {
+          coverImage: sdata.coverImage,
+          cover_image: sdata.coverImage,
+          updatedAt: serverTimestamp()
+        });
+        updatedShops++;
+      }
+
+      await setDoc(
+        doc(db, 'seedMedia', `shop_${slug}`),
+        {
+          slug,
+          coverImage: sdata.coverImage,
+          updatedAt: serverTimestamp()
+        },
+        { merge: true }
+      );
+    }
+
+    return {
+      message: `Đã áp dụng ảnh có sẵn cho ${updatedProducts} sản phẩm và ${updatedShops} shop!`,
+      updatedProducts,
+      updatedShops
+    };
   }
 
   // --- DEMO RESET (Section 8) ---

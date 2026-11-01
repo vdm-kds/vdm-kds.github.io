@@ -598,5 +598,20 @@ export const api = {
     db.subscribePublicShopReviews(shopSlugOrId, cb),
 
   subscribeMyOfferForProduct: (productId: number | string, cb: (offer: Offer | null) => void) =>
-    db.subscribeMyOfferForProduct(productId, cb)
+    db.subscribeMyOfferForProduct(productId, cb),
+
+  // --- SAMPLE MEDIA MANAGEMENT ---
+  getSeedMedia: () =>
+    db.getSeedMedia(),
+
+  saveSampleMedia: (
+    payload: {
+      products: Array<{ id: string; images: string[]; thumb?: string }> | Record<string, { images: string[]; thumb?: string }>;
+      shops: Array<{ slug: string; coverImage: string }> | Record<string, { coverImage: string }>;
+    },
+    onProgress?: (msg: string, pct: number) => void
+  ) => db.saveSampleMedia(payload, onProgress),
+
+  applySeedPhotos: (onProgress?: (msg: string, pct: number) => void) =>
+    db.applySeedPhotos(onProgress)
 };

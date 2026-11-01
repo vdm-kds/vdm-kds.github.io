@@ -314,16 +314,16 @@ export const ShopView: React.FC<ShopViewProps> = ({
         <div className="bg-white rounded-3xl shadow-sm border border-stone-200 overflow-hidden">
           {/* Cover Banner (Color or Image) */}
           <div 
-            className="h-32 sm:h-44 w-full relative transition-colors"
+            className="h-36 sm:h-52 w-full relative transition-colors overflow-hidden"
             style={{ 
               backgroundColor: shop.cover_color || '#08482D',
-              backgroundImage: shop.cover_image ? `url(${shop.cover_image})` : undefined,
+              backgroundImage: (shop.coverImage || shop.cover_image) ? `url(${shop.coverImage || shop.cover_image})` : undefined,
               backgroundSize: 'cover',
               backgroundPosition: 'center'
             }}
           >
-            <div className="absolute inset-0 bg-black/20" />
-            <div className="absolute top-4 right-4">
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/30 to-black/10" />
+            <div className="absolute top-4 right-4 z-10">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white/90 text-stone-800 backdrop-blur-sm shadow-sm">
                 <ShieldCheck className="w-3.5 h-3.5 text-[#08482D]" /> Đã xác thực
               </span>

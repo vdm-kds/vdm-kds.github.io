@@ -7,6 +7,7 @@ export interface Shop {
   slug: string;
   avatar?: string;
   cover_image?: string;
+  coverImage?: string;
   cover_color: string;
   description: string;
   pickup_address: string;
@@ -70,6 +71,7 @@ export interface Product {
   stock: number;
   image_url: string;
   images?: string[];
+  thumb?: string;
   flaws?: ProductFlaw[];
   description?: string;
   inspection_date?: string;
@@ -164,6 +166,7 @@ export interface CartItem {
   condition_detail: string;
   stock: number;
   image_url: string;
+  thumb?: string;
   is_negotiated?: boolean | number;
   negotiated_price?: number;
   offer_id?: any;
@@ -190,6 +193,7 @@ export interface OrderItem {
   quantity: number;
   condition_pct: number;
   image_url: string;
+  thumb?: string;
   is_negotiated?: boolean | number;
   negotiated_price?: number;
   offer_id?: any;

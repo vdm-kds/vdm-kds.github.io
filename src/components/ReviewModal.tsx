@@ -11,9 +11,10 @@ interface ReviewModalProps {
   orderCode: string;
   shopName?: string;
   product: {
-    id: number;
+    id: any;
     name: string;
     image_url: string;
+    thumb?: string;
     condition_pct: number;
   };
   initialReview?: {
@@ -375,7 +376,7 @@ export function ReviewModal({
           {/* Product Block */}
           <div className="flex items-center gap-3.5 p-3.5 bg-[#F5F8EF] rounded-2xl border border-[#DAE7C7]">
             <img
-              src={product.image_url}
+              src={product.thumb || product.image_url}
               alt={product.name}
               className="w-16 h-16 rounded-xl object-cover border border-[#DAE7C7] flex-shrink-0"
             />

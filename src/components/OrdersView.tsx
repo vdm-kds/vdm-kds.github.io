@@ -380,7 +380,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                     {order.items?.slice(0, 2).map((item, idx) => (
                       <div key={idx} className="flex items-center gap-3 text-xs">
                         <ProductImage
-                          src={item.image_url}
+                          src={item.thumb || item.image_url}
                           alt={item.product_name}
                           productName={item.product_name}
                           conditionPct={item.condition_pct}
@@ -618,7 +618,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                     <div key={idx} className="py-3 flex items-center justify-between gap-3 text-xs">
                       <div className="flex items-center gap-3 min-w-0">
                         <ProductImage
-                          src={item.image_url}
+                          src={item.thumb || item.image_url}
                           alt={item.product_name}
                           productName={item.product_name}
                           conditionPct={item.condition_pct}

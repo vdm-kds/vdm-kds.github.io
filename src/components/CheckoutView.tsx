@@ -924,7 +924,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                         {group.items.map((item, idx) => (
                           <div key={idx} className="flex items-center gap-3 py-1">
                             <ProductImage
-                              src={item.image_url}
+                              src={item.thumb || item.image_url}
                               alt={item.name}
                               category={item.category}
                               productName={item.name}

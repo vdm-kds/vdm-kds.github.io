@@ -154,7 +154,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       {group.items.map((item) => (
                         <div key={item.id} className="pt-3 first:pt-0 flex gap-3 relative group">
                           <ProductImage
-                            src={item.image_url}
+                            src={item.thumb || item.image_url}
                             alt={item.name}
                             category={item.category}
                             productName={item.name}

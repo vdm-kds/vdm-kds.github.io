@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { api } from '../services/api';
 import { slugify, createShopAvatarSvg } from '../services/db';
-import { compressImageFile } from '../utils/image';
+import { compressShopCoverImage, compressProductImage } from '../utils/image';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { Button } from './Button';
@@ -70,10 +70,9 @@ export const ShopSetupWizard: React.FC<ShopSetupWizardProps> = ({
     if (!file) return;
     try {
       setImageUploadLoading(true);
-      const compressed = await compressImageFile(file, 512, 0.85);
-      const res = await api.uploadFile(compressed, 'image');
-      setAvatarUrl(res.url);
-      showToast('Đã tải ảnh đại diện thành công', 'success');
+      const compressed = await compressProductImage(file, 512, 100 * 1024);
+      setAvatarUrl(compressed);
+      showToast('Đã nạp ảnh đại diện thành công', 'success');
     } catch (err: any) {
       showToast(err.message || 'Lỗi tải ảnh', 'error');
     } finally {
@@ -86,10 +85,9 @@ export const ShopSetupWizard: React.FC<ShopSetupWizardProps> = ({
     if (!file) return;
     try {
       setImageUploadLoading(true);
-      const compressed = await compressImageFile(file, 1280, 0.85);
-      const res = await api.uploadFile(compressed, 'image');
-      setCoverImageUrl(res.url);
-      showToast('Đã tải ảnh bìa thành công', 'success');
+      const compressed = await compressShopCoverImage(file);
+      setCoverImageUrl(compressed);
+      showToast('Đã tải và nén ảnh bìa 16:9 (≤ 250KB) thành công', 'success');
     } catch (err: any) {
       showToast(err.message || 'Lỗi tải ảnh', 'error');
     } finally {
