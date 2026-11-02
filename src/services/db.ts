@@ -498,7 +498,8 @@ function normalizeProductDoc(docData: DocumentData, id: string): Product {
     flaws: Array.isArray(docData.defects) ? docData.defects.map((d: any, idx: number) => ({
       id: idx + 1,
       description: typeof d === 'string' ? d : d.text || '',
-      image_url: typeof d === 'object' && d.image ? d.image : ''
+      image_url: typeof d === 'object' && d.image ? d.image : '',
+      photo_url: typeof d === 'object' && d.image ? d.image : ''
     })) : [],
     inspection_date: docData.inspection?.date || '2026-10-20',
     inspector_name: docData.inspection?.inspector || 'Trần Minh Tuấn (KTV Chuyên Sâu)',
@@ -2195,6 +2196,13 @@ export class DCCTDatabaseService {
         } catch {}
       }
 
+      const pid = String(data.productId ?? data.product_id ?? '');
+      const seedProd = (SEED_MEDIA_DEFAULTS.products as any)[pid];
+      const rawImg = data.productImage || data.product_image;
+      const effectiveImg = (rawImg && isValidImageSrc(rawImg) && !rawImg.startsWith('data:image/svg+xml'))
+        ? rawImg
+        : (seedProd?.thumb || (seedProd?.images && seedProd.images[0]) || (rawImg && isValidImageSrc(rawImg) ? rawImg : ''));
+
       offers.push({
         id: d.id as any,
         shop_id: data.shopId as any,
@@ -2204,6 +2212,7 @@ export class DCCTDatabaseService {
         buyer_phone: data.buyerPhone || '',
         product_id: data.productId as any,
         product_name: data.productName,
+        product_image: effectiveImg,
         original_price: Number(data.originalPrice || 0),
         offered_price: Number(data.offeredPrice || data.price || 0),
         counter_price: data.counterPrice != null ? Number(data.counterPrice) : undefined,
@@ -2253,6 +2262,13 @@ export class DCCTDatabaseService {
         } catch {}
       }
 
+      const pid = String(data.productId ?? data.product_id ?? '');
+      const seedProd = (SEED_MEDIA_DEFAULTS.products as any)[pid];
+      const rawImg = data.productImage || data.product_image;
+      const effectiveImg = (rawImg && isValidImageSrc(rawImg) && !rawImg.startsWith('data:image/svg+xml'))
+        ? rawImg
+        : (seedProd?.thumb || (seedProd?.images && seedProd.images[0]) || (rawImg && isValidImageSrc(rawImg) ? rawImg : ''));
+
       offers.push({
         id: d.id as any,
         shop_id: data.shopId as any,
@@ -2262,6 +2278,7 @@ export class DCCTDatabaseService {
         buyer_phone: data.buyerPhone || '',
         product_id: data.productId as any,
         product_name: data.productName,
+        product_image: effectiveImg,
         original_price: Number(data.originalPrice || 0),
         offered_price: Number(data.offeredPrice || data.price || 0),
         counter_price: data.counterPrice != null ? Number(data.counterPrice) : undefined,
@@ -2319,9 +2336,13 @@ export class DCCTDatabaseService {
     const offerId = `off_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     const expiresAt = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
 
+    const seedProd = (SEED_MEDIA_DEFAULTS.products as any)[pid];
+    const pImg = prod.thumb || (Array.isArray(prod.images) ? prod.images[0] : null) || seedProd?.thumb || (seedProd?.images && seedProd.images[0]) || prod.imageUrl || '';
+
     const offerDoc = {
       productId: pid,
       productName: prod.name,
+      productImage: pImg,
       shopId: prod.shopId || 'do-cu-con-thuong',
       sellerUid: prod.ownerUid || 'seller_admin',
       buyerUid: cur.uid,
@@ -2362,6 +2383,7 @@ export class DCCTDatabaseService {
         buyer_phone: cur.phone || '',
         product_id: pid as any,
         product_name: prod.name,
+        product_image: pImg,
         original_price: Number(prod.price || 0),
         offered_price: offeredPrice,
         price: offeredPrice,
@@ -2392,6 +2414,12 @@ export class DCCTDatabaseService {
         }
 
         if (data.status === 'pending' || data.status === 'accepted' || data.status === 'countered') {
+          const rawImg = data.productImage || data.product_image;
+          const seedProd = (SEED_MEDIA_DEFAULTS.products as any)[String(data.productId)];
+          const effectiveImg = (rawImg && isValidImageSrc(rawImg) && !rawImg.startsWith('data:image/svg+xml'))
+            ? rawImg
+            : (seedProd?.thumb || (seedProd?.images && seedProd.images[0]) || (rawImg && isValidImageSrc(rawImg) ? rawImg : ''));
+
           activeOffer = {
             id: d.id as any,
             shop_id: data.shopId as any,
@@ -2400,6 +2428,7 @@ export class DCCTDatabaseService {
             buyer_name: data.buyerName,
             product_id: data.productId as any,
             product_name: data.productName,
+            product_image: effectiveImg,
             original_price: data.originalPrice,
             offered_price: data.offeredPrice,
             counter_price: data.counterPrice,
@@ -4727,6 +4756,13 @@ export class DCCTDatabaseService {
       const list: Offer[] = [];
       snap.forEach((d) => {
         const data = d.data();
+        const pid = String(data.productId ?? data.product_id ?? '');
+        const seedProd = (SEED_MEDIA_DEFAULTS.products as any)[pid];
+        const rawImg = data.productImage || data.product_image;
+        const effectiveImg = (rawImg && isValidImageSrc(rawImg) && !rawImg.startsWith('data:image/svg+xml'))
+          ? rawImg
+          : (seedProd?.thumb || (seedProd?.images && seedProd.images[0]) || (rawImg && isValidImageSrc(rawImg) ? rawImg : ''));
+
         list.push({
           id: d.id as any,
           shop_id: data.shopId as any,
@@ -4736,6 +4772,7 @@ export class DCCTDatabaseService {
           buyer_phone: data.buyerPhone || '',
           product_id: data.productId as any,
           product_name: data.productName,
+          product_image: effectiveImg,
           original_price: data.originalPrice,
           offered_price: data.offeredPrice,
           counter_price: data.counterPrice,
@@ -4900,6 +4937,13 @@ export class DCCTDatabaseService {
         }
 
         if (status === 'pending' || status === 'accepted' || status === 'countered') {
+          const pid = String(data.productId ?? data.product_id ?? '');
+          const seedProd = (SEED_MEDIA_DEFAULTS.products as any)[pid];
+          const rawImg = data.productImage || data.product_image;
+          const effectiveImg = (rawImg && isValidImageSrc(rawImg) && !rawImg.startsWith('data:image/svg+xml'))
+            ? rawImg
+            : (seedProd?.thumb || (seedProd?.images && seedProd.images[0]) || (rawImg && isValidImageSrc(rawImg) ? rawImg : ''));
+
           matched = {
             id: d.id as any,
             shop_id: data.shopId as any,
@@ -4909,6 +4953,7 @@ export class DCCTDatabaseService {
             buyer_phone: data.buyerPhone || '',
             product_id: data.productId as any,
             product_name: data.productName,
+            product_image: effectiveImg,
             original_price: Number(data.originalPrice || 0),
             offered_price: Number(data.offeredPrice || data.price || 0),
             counter_price: data.counterPrice != null ? Number(data.counterPrice) : undefined,

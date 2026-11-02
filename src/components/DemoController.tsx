@@ -22,7 +22,7 @@ export function DemoController({
   onPresentationModeChange,
   onOpenFirstTimeLogin
 }: DemoControllerProps) {
-  const { user, logout, switchAccount } = useAuth();
+  const { user, logout, switchAccount, switchToGuest } = useAuth();
   const { showToast } = useToast();
 
   const [isOpen, setIsOpen] = useState(false);
@@ -53,6 +53,11 @@ export function DemoController({
   useEffect(() => {
     setStoredAccounts(getStoredAccounts());
   }, [isOpen, user]);
+
+  // When in guest mode, hide DemoController completely (act like a real guest)
+  if (typeof window !== 'undefined' && sessionStorage.getItem('dcct_active') === 'guest') {
+    return null;
+  }
 
   // Only owners (is_owner === true) can view or use DemoController (Section 3)
   if (!user || !user.is_owner) {
@@ -182,12 +187,8 @@ export function DemoController({
   };
 
   const handleSwitchGuest = () => {
-    setActiveAccountKey(null);
-    window.dispatchEvent(new CustomEvent('close-all-overlays'));
-    window.dispatchEvent(new CustomEvent('close-buyer-chat'));
-    logout();
+    switchToGuest();
     setIsOpen(false);
-    showToast('Đang xem giao diện dưới vai Khách vãng lai', 'info');
     if (onRoleSwitched) onRoleSwitched('guest');
   };
 

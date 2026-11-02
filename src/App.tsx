@@ -58,6 +58,7 @@ function MainShopApp() {
 
   // Products State & Filters
   const [products, setProducts] = useState<Product[]>([]);
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string>('Tất cả');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -423,6 +424,20 @@ function MainShopApp() {
     };
   }, []);
 
+  // Fetch entire marketplace products (for hero stats and carousel, unaffected by category/search filters)
+  const fetchAllMarketProducts = async () => {
+    try {
+      const data = await api.getProducts({});
+      setAllProducts(data.products || []);
+    } catch {
+      // quiet catch
+    }
+  };
+
+  useEffect(() => {
+    fetchAllMarketProducts();
+  }, []);
+
   // Load products with basic and advanced filters
   const fetchProducts = async () => {
     setLoadingProducts(true);
@@ -437,6 +452,9 @@ function MainShopApp() {
         in_stock: inStockOnly ? true : undefined
       });
       setProducts(data.products);
+      if (selectedCategory === 'Tất cả' && !searchQuery.trim() && !minPrice && !maxPrice && minCondition <= 50 && !inStockOnly) {
+        setAllProducts(data.products);
+      }
     } catch (err: any) {
       showToast(err.message || 'Lỗi tải danh sách sản phẩm', 'error');
     } finally {
@@ -899,6 +917,7 @@ function MainShopApp() {
           <BuyerHomeView
             user={user}
             products={products}
+            allProducts={allProducts}
             loadingProducts={loadingProducts}
             cartCount={cartItems.length}
             selectedCategory={selectedCategory}
@@ -938,8 +957,8 @@ function MainShopApp() {
             {/* If guest: Show Mint Studio Hero Landing Screen with Cylindrical Cards */}
             {!isPreview && (
               <HeroLanding
-                products={products}
-                totalProductsCount={products.length}
+                products={allProducts.length > 0 ? allProducts : products}
+                totalProductsCount={allProducts.length > 0 ? allProducts.length : products.length}
                 onSelectProduct={handleOpenProductDetail}
                 onAddToCart={prod => handleAddToCart(prod, 1)}
                 onNavigate={handleNavigate}
@@ -1342,9 +1361,11 @@ function MainShopApp() {
           if (role === 'buyer') setCurrentView('home');
           if (role === 'seller') setCurrentView('seller');
           fetchProducts();
+          fetchAllMarketProducts();
         }}
         onDataReset={() => {
           fetchProducts();
+          fetchAllMarketProducts();
           setCurrentView('home');
         }}
       />

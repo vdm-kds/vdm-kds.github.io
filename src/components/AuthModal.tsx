@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Lock, Phone, User, Store, ArrowRight, ShieldCheck, Eye, EyeOff, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
+import { getStoredAccounts, StoredAccount } from '../firebase';
 import { Button } from './Button';
 
 interface AuthModalProps {
@@ -23,11 +24,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onClose,
   onSuccess
 }) => {
-  const { login, register } = useAuth();
+  const { login, register, switchAccount } = useAuth();
   const [activeRole, setActiveRole] = useState<'buyer' | 'seller'>(role);
   const [isRegister, setIsRegister] = useState(initialIsRegister);
   const [loading, setLoading] = useState(false);
   const [presentationMode, setPresentationMode] = useState(false);
+  const [storedAccounts, setStoredAccounts] = useState<StoredAccount[]>([]);
 
   // Password visibility toggles
   const [showPassword, setShowPassword] = useState(false);
@@ -57,6 +59,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       }
       setFieldErrors({});
       setGeneralError('');
+      setStoredAccounts(getStoredAccounts());
       // Check presentation mode
       api.getPresentationMode().then(res => setPresentationMode(!!res.presentation_mode)).catch(() => {});
     }
@@ -265,6 +268,72 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <div className="p-3 bg-red-50 border border-red-200 rounded-2xl text-xs text-red-700 flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
             <span>{generalError}</span>
+          </div>
+        )}
+
+        {/* Tài khoản đã lưu trên máy này */}
+        {!isRegister && storedAccounts.length > 0 && (
+          <div className="p-3.5 bg-[#F5F8EF] border border-[#DAE7C7] rounded-2xl space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-[#08482D] uppercase tracking-wider flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-[#08482D]" />
+                Tài khoản đã lưu trên máy này
+              </span>
+              <span className="text-[10px] text-[#5E5E61]">Bấm để vào lại ngay</span>
+            </div>
+            <div className="space-y-1.5">
+              {storedAccounts.map(acc => {
+                const displayName = acc.fullName || acc.shopName || acc.username;
+                const isBuyerAcc = acc.role === 'buyer';
+                return (
+                  <button
+                    key={`${acc.role}_${acc.username}`}
+                    type="button"
+                    onClick={async () => {
+                      setLoading(true);
+                      setGeneralError('');
+                      try {
+                        await switchAccount(acc.role, acc.username);
+                        onSuccess();
+                        onClose();
+                      } catch (err: any) {
+                        setGeneralError(err.message || 'Lỗi khôi phục phiên đăng nhập');
+                      } finally {
+                        setLoading(false);
+                      }
+                    }}
+                    disabled={loading}
+                    className="w-full flex items-center justify-between p-2.5 bg-white border border-[#DAE7C7] hover:border-[#08482D] rounded-xl text-left transition-all group shadow-2xs"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${
+                        isBuyerAcc ? 'bg-[#DAE7C7] text-[#08482D]' : 'bg-[#08482D] text-white'
+                      }`}>
+                        {isBuyerAcc ? <User className="w-4 h-4" /> : <Store className="w-4 h-4" />}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-xs text-[#101410] truncate group-hover:text-[#08482D]">
+                            {displayName}
+                          </span>
+                          <span className={`text-[9px] px-1.5 py-0.2 rounded font-semibold ${
+                            isBuyerAcc ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-900'
+                          }`}>
+                            {isBuyerAcc ? 'Người mua' : 'Người bán'}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-[#5E5E61] truncate font-mono">
+                          {acc.phone || acc.username}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-[11px] font-bold text-[#08482D] group-hover:translate-x-0.5 transition-transform flex items-center gap-0.5 shrink-0">
+                      Vào ngay <ArrowRight className="w-3.5 h-3.5" />
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
 

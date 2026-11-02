@@ -43,11 +43,13 @@ interface BuyerHomeViewProps {
   wishlistIds?: Set<number>;
   onToggleWishlist?: (productId: number) => void;
   onNavigateToShop?: (slug: string) => void;
+  allProducts?: Product[];
 }
 
 export const BuyerHomeView: React.FC<BuyerHomeViewProps> = ({
   user,
   products,
+  allProducts,
   loadingProducts,
   cartCount,
   selectedCategory,
@@ -114,9 +116,10 @@ export const BuyerHomeView: React.FC<BuyerHomeViewProps> = ({
 
   const activeTrackingOrder = shippingOrders.length > 0 ? shippingOrders[0] : null;
 
-  // Fresh arrivals: sort by newest and take top 8
-  const freshArrivals = [...products]
-    .sort((a, b) => b.id - a.id)
+  // Fresh arrivals: sort by newest and take top 10 from the entire marketplace
+  const marketProducts = (allProducts && allProducts.length > 0) ? allProducts : products;
+  const freshArrivals = [...marketProducts]
+    .sort((a, b) => Number(b.id) - Number(a.id))
     .slice(0, 10);
 
   const scrollFresh = (direction: 'left' | 'right') => {

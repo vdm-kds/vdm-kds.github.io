@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { Product, Address, AppNotification, Offer, Shop } from '../types';
 import { formatVND } from '../utils/format';
+import { ProductImage } from './ProductImage';
 
 interface AccountViewProps {
   onBackToHome: () => void;
@@ -858,9 +859,11 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart, onNavi
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex items-center gap-3">
-                            <img
+                            <ProductImage
                               src={item.product_image}
-                              alt={item.product_name}
+                              alt={item.product_name || 'Sản phẩm trả giá'}
+                              productName={item.product_name}
+                              eager={true}
                               className="w-14 h-14 rounded-xl object-cover bg-[#F5F8EF] border border-[#DAE7C7] shrink-0"
                             />
                             <div>

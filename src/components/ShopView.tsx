@@ -314,7 +314,7 @@ export const ShopView: React.FC<ShopViewProps> = ({
         <div className="bg-white rounded-3xl shadow-sm border border-stone-200 overflow-hidden">
           {/* Cover Banner (Color or Image) */}
           <div 
-            className="h-36 sm:h-52 w-full relative transition-colors overflow-hidden"
+            className="h-[140px] sm:h-52 w-full relative transition-colors overflow-hidden"
             style={{ 
               backgroundColor: shop.cover_color || '#08482D',
               backgroundImage: (shop.coverImage || shop.cover_image) ? `url(${shop.coverImage || shop.cover_image})` : undefined,
@@ -323,6 +323,7 @@ export const ShopView: React.FC<ShopViewProps> = ({
             }}
           >
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/30 to-black/10" />
+            <div className="absolute bottom-0 inset-x-0 h-[40%] bg-gradient-to-t from-black/45 to-transparent pointer-events-none" />
             <div className="absolute top-4 right-4 z-10">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white/90 text-stone-800 backdrop-blur-sm shadow-sm">
                 <ShieldCheck className="w-3.5 h-3.5 text-[#08482D]" /> Đã xác thực
@@ -333,16 +334,16 @@ export const ShopView: React.FC<ShopViewProps> = ({
           {/* Shop Card Content */}
           <div className="p-5 sm:p-6 relative">
             <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
-              {/* Left: Avatar & Title */}
-              <div className="flex items-start sm:items-center gap-4 -mt-16 sm:-mt-20">
+              {/* Left: Avatar & Title (Mobile: Avatar overlaps bottom edge, Name & slug completely on white card) */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 -mt-10 sm:-mt-20 w-full sm:w-auto">
                 <img
                   src={shop.avatar}
                   alt={shop.name}
-                  className="w-20 h-20 sm:w-28 sm:h-28 rounded-full border-4 border-white object-cover shadow-md bg-stone-100 flex-shrink-0"
+                  className="w-20 h-20 sm:w-28 sm:h-28 rounded-full border-4 border-white object-cover shadow-md bg-stone-100 shrink-0 z-10"
                 />
-                <div className="mt-8 sm:mt-12">
+                <div className="mt-1 sm:mt-12 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h1 className="text-xl sm:text-2xl font-black text-stone-900">{shop.name}</h1>
+                    <h1 className="text-xl sm:text-2xl font-black text-stone-900 leading-tight">{shop.name}</h1>
                     <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-[#DAE7C7] text-[#08482D]">
                       Chính chủ
                     </span>

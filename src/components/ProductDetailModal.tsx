@@ -625,24 +625,54 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
                 {flawsList.length > 0 ? (
                   <div className="space-y-2">
-                    {flawsList.map((flaw, idx) => (
-                      <div key={idx} className="flex items-start gap-3 p-2 bg-white/70 rounded-xl border border-amber-200 text-xs">
-                        {flaw.photo_url && (
-                          <img
-                            src={flaw.photo_url}
-                            alt={`flaw-${idx}`}
-                            className="w-12 h-12 rounded-lg object-cover bg-amber-50 border border-amber-300 shrink-0 cursor-pointer"
-                            onClick={() => setIsLightboxOpen(true)}
-                          />
-                        )}
-                        <div className="min-w-0 flex-1">
-                          <p className="font-semibold text-amber-950">
-                            {flaw.location ? `[${flaw.location}] ` : ''}{flaw.description}
-                          </p>
-                          <span className="text-[10px] text-amber-800/80">Ảnh chụp phóng đại tại trung tâm kiểm định</span>
+                    {flawsList.map((flaw, idx) => {
+                      const flawImg = flaw.photo_url || (flaw as any).image_url || (flaw as any).image || (imageList.length > 1 ? imageList[1] : undefined);
+                      return (
+                        <div key={idx} className="flex items-center gap-3 p-2 bg-white/70 rounded-xl border border-amber-200 text-xs">
+                          {flawImg && (
+                            <img
+                              src={flawImg}
+                              alt={`Khuyết điểm: ${flaw.description}`}
+                              loading="eager"
+                              decoding="async"
+                              className="w-24 h-24 rounded-xl object-cover bg-amber-50 border border-amber-300 shrink-0 cursor-pointer shadow-2xs hover:opacity-90 transition-opacity"
+                              onClick={() => {
+                                if (imageList.length > 1 && flawImg === imageList[1]) {
+                                  setSelectedImageIndex(1);
+                                }
+                                setIsLightboxOpen(true);
+                              }}
+                            />
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-amber-950">
+                              {flaw.location ? `[${flaw.location}] ` : ''}{flaw.description}
+                            </p>
+                            <span className="text-[10px] text-amber-800/80">Ảnh chụp phóng đại tại trung tâm kiểm định</span>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
+                  </div>
+                ) : fullProduct.condition_detail && imageList.length > 1 ? (
+                  <div className="flex items-center gap-3 p-2 bg-white/70 rounded-xl border border-amber-200 text-xs">
+                    <img
+                      src={imageList[1]}
+                      alt="Ảnh cận tình trạng"
+                      loading="eager"
+                      decoding="async"
+                      className="w-24 h-24 rounded-xl object-cover bg-amber-50 border border-amber-300 shrink-0 cursor-pointer shadow-2xs hover:opacity-90 transition-opacity"
+                      onClick={() => {
+                        setSelectedImageIndex(1);
+                        setIsLightboxOpen(true);
+                      }}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-amber-950">
+                        {fullProduct.condition_detail}
+                      </p>
+                      <span className="text-[10px] text-amber-800/80">Ảnh chụp phóng đại tại trung tâm kiểm định</span>
+                    </div>
                   </div>
                 ) : (
                   <p className="text-xs text-amber-900 italic">

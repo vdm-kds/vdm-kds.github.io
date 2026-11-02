@@ -129,7 +129,10 @@ export function getLastActiveAccountKey(): string | null {
 
 export function setActiveAccountKey(key: string | null): void {
   try {
-    if (key) {
+    if (key === 'guest') {
+      sessionStorage.setItem(STORAGE_KEY_ACTIVE, 'guest');
+      // Do not touch STORAGE_KEY_LAST_ACTIVE when switching to guest
+    } else if (key) {
       sessionStorage.setItem(STORAGE_KEY_ACTIVE, key);
       localStorage.setItem(STORAGE_KEY_LAST_ACTIVE, key);
     } else {
@@ -251,6 +254,11 @@ export async function syncAndValidateAccounts(): Promise<{ validAccounts: Stored
 
   // 5. Kiểm tra tài khoản trong "dcct_active"; nếu trống thì kiểm tra "dcct_last_active"
   let activeKey = getActiveAccountKey();
+  if (activeKey === 'guest') {
+    // Tab đang ở chế độ khách vãng lai, giữ nguyên chế độ khách và không đè lên
+    return { validAccounts, activeAccount: null };
+  }
+
   if (!activeKey) {
     const lastActiveKey = getLastActiveAccountKey();
     if (lastActiveKey) {
@@ -276,7 +284,7 @@ export async function syncAndValidateAccounts(): Promise<{ validAccounts: Stored
   }
 
   // Nếu tài khoản trong "dcct_active" không có currentUser thì coi như khách vãng lai
-  if (!activeAccount) {
+  if (!activeAccount && activeKey !== 'guest') {
     setActiveAccountKey(null);
   }
 

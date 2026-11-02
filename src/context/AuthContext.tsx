@@ -39,6 +39,7 @@ interface AuthContextType {
     shop_name?: string;
   }) => Promise<void>;
   logout: () => void;
+  switchToGuest: () => void;
   refreshUser: () => Promise<void>;
   refreshCartCount: () => Promise<void>;
   quickLogin: (role: 'buyer' | 'seller') => Promise<void>;
@@ -245,6 +246,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     showToast('Đã đăng xuất', 'info');
   };
 
+  const switchToGuest = () => {
+    window.dispatchEvent(new CustomEvent('close-all-overlays'));
+    window.dispatchEvent(new CustomEvent('close-buyer-chat'));
+    sessionStorage.setItem('dcct_active', 'guest');
+    clearCurrentSession();
+    if (mountedRef.current) {
+      setAuthState({
+        status: 'guest',
+        user: null,
+        address: null
+      });
+      setCartCount(0);
+    }
+    showToast('Đang xem giao diện dưới vai Khách vãng lai', 'info');
+  };
+
   const switchAccount = async (role: 'buyer' | 'seller', username: string) => {
     try {
       window.dispatchEvent(new CustomEvent('close-all-overlays'));
@@ -324,6 +341,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         register,
         logout,
+        switchToGuest,
         refreshUser,
         refreshCartCount,
         quickLogin,
