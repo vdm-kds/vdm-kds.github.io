@@ -17,6 +17,8 @@ interface ProductCardProps {
   onToggleWishlist?: (productId: number) => void;
   disabledBuy?: boolean;
   onDisabledBuyClick?: () => void;
+  eager?: boolean;
+  priority?: boolean;
 }
 
 export const ProductCard: React.FC<ProductCardProps> = ({
@@ -29,7 +31,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   isWishlisted = false,
   onToggleWishlist,
   disabledBuy = false,
-  onDisabledBuyClick
+  onDisabledBuyClick,
+  eager = false,
+  priority = false
 }) => {
   const [imgError, setImgError] = useState(false);
   const [justAdded, setJustAdded] = useState(false);
@@ -73,6 +77,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           productName={product.name}
           category={product.category}
           conditionPct={product.condition_pct}
+          eager={eager || priority}
           className="w-full h-full"
           imgClassName="transition-transform duration-500 group-hover:scale-105"
         />

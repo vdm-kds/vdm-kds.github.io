@@ -115,6 +115,7 @@ export const OfferModal: React.FC<OfferModalProps> = ({ product, onClose, onSucc
             productName={product.name}
             category={product.category}
             conditionPct={product.condition_pct}
+            eager={true}
             className="w-14 h-14 rounded-xl object-cover bg-white border border-[#E2E8D8] shrink-0"
           />
           <div className="min-w-0 flex-1">

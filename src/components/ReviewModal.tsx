@@ -381,6 +381,7 @@ export function ReviewModal({
               alt={product.name}
               productName={product.name}
               conditionPct={product.condition_pct}
+              eager={true}
               className="w-16 h-16 rounded-xl object-cover border border-[#DAE7C7] flex-shrink-0"
             />
             <div className="min-w-0">

@@ -399,6 +399,8 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 category={fullProduct.category}
                 conditionPct={fullProduct.condition_pct}
                 variantIndex={selectedImageIndex % 3}
+                eager={true}
+                priority={true}
                 className="w-full h-full cursor-pointer"
                 imgClassName="transition-transform duration-300 group-hover:scale-105"
                 onClick={() => setIsLightboxOpen(true)}
@@ -501,6 +503,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                         productName={fullProduct.name}
                         category={fullProduct.category}
                         variantIndex={idx % 3}
+                        eager={true}
                         className="w-full h-full"
                         imgClassName="w-full h-full object-cover" 
                       />
@@ -1345,6 +1348,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                           productName={p.name}
                           category={p.category}
                           conditionPct={p.condition_pct}
+                          eager={true}
                           className="w-full aspect-square rounded-lg object-cover mb-1"
                         />
                         <p className="text-[11px] font-bold text-stone-900 truncate group-hover:text-[#08482D]">{p.name}</p>
@@ -1400,6 +1404,9 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             <img
               src={currentDisplayImage}
               alt={fullProduct.name}
+              loading="eager"
+              decoding="async"
+              {...({ fetchPriority: 'high' as const })}
               style={{ transform: `scale(${zoomLevel})` }}
               className="max-h-[80vh] max-w-[90vw] object-contain transition-transform duration-200"
             />
@@ -1433,7 +1440,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                     selectedImageIndex === idx ? 'border-white' : 'border-transparent opacity-60'
                   }`}
                 >
-                  <img src={img} alt="" className="w-full h-full object-cover" />
+                  <img src={img} alt="" loading="eager" decoding="async" className="w-full h-full object-cover" />
                 </button>
               ))}
             </div>

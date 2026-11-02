@@ -384,6 +384,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                           alt={item.product_name}
                           productName={item.product_name}
                           conditionPct={item.condition_pct}
+                          eager={true}
                           className="w-10 h-10 rounded-lg object-cover bg-[#DAE7C7] shrink-0"
                         />
                         <div className="flex-1 min-w-0">
@@ -622,6 +623,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                           alt={item.product_name}
                           productName={item.product_name}
                           conditionPct={item.condition_pct}
+                          eager={true}
                           className="w-12 h-12 rounded-xl object-cover bg-[#DAE7C7] border border-[#E2E8D8] shrink-0"
                         />
                         <div className="min-w-0">

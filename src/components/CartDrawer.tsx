@@ -159,6 +159,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                             category={item.category}
                             productName={item.name}
                             conditionPct={item.condition_pct}
+                            eager={true}
                             className="w-16 h-16 rounded-xl object-cover bg-[#DAE7C7] shrink-0 border border-[#E2E8D8]"
                           />
 

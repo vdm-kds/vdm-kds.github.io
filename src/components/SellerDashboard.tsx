@@ -1662,6 +1662,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                             alt={it.product_name}
                             productName={it.product_name}
                             conditionPct={it.condition_pct}
+                            eager={true}
                             className="w-10 h-10 rounded-lg object-cover bg-stone-100 shrink-0"
                           />
                           <div className="min-w-0">
@@ -1784,7 +1785,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#F2ECE3]">
-                    {products.map(prod => (
+                    {products.map((prod, idx) => (
                       <tr key={prod.id} className="hover:bg-[#FAF7F2]">
                         <td className="py-3 px-4">
                           <ProductImage
@@ -1793,6 +1794,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                             productName={prod.name}
                             category={prod.category}
                             conditionPct={prod.condition_pct}
+                            eager={idx < 4}
                             className="w-12 h-12 rounded-lg object-cover bg-[#F4EFEA]"
                           />
                         </td>
@@ -1997,6 +1999,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                           src={offer.product_image || (offer as any).thumb || (offer as any).image_url}
                           alt={offer.product_name || 'Sản phẩm trả giá'}
                           productName={offer.product_name}
+                          eager={true}
                           className="w-16 h-16 rounded-2xl object-cover bg-[#F5F8EF] border border-[#DAE7C7] shrink-0"
                         />
                         <div className="min-w-0">
@@ -2205,6 +2208,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                                 src={msg.context_card.image || msg.context_card.image_url}
                                 alt={msg.context_card.title}
                                 productName={msg.context_card.title}
+                                eager={true}
                                 className="w-10 h-10 rounded-lg object-cover bg-[#DAE7C7] border border-stone-200 shrink-0"
                               />
                             ) : (

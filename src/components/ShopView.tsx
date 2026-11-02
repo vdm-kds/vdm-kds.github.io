@@ -556,10 +556,11 @@ export const ShopView: React.FC<ShopViewProps> = ({
                 </div>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                  {products.slice(0, 4).map(prod => (
+                  {products.slice(0, 4).map((prod, idx) => (
                     <ProductCard
                       key={prod.id}
                       product={prod}
+                      eager={idx < 4}
                       onSelect={handleProductClick}
                       onClick={() => handleProductClick(prod)}
                       onAddToCart={onAddToCart}
@@ -665,10 +666,11 @@ export const ShopView: React.FC<ShopViewProps> = ({
               </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                {filteredProducts.map(prod => (
+                {filteredProducts.map((prod, idx) => (
                   <ProductCard
                     key={prod.id}
                     product={prod}
+                    eager={idx < 4}
                     onSelect={handleProductClick}
                     onClick={() => handleProductClick(prod)}
                     onAddToCart={onAddToCart}

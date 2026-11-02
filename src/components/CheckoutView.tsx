@@ -929,6 +929,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                               category={item.category}
                               productName={item.name}
                               conditionPct={item.condition_pct}
+                              eager={true}
                               className="w-10 h-10 rounded-xl object-cover bg-[#DAE7C7] border border-[#E2E8D8] shrink-0"
                             />
                             <div className="flex-1 min-w-0">

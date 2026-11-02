@@ -347,6 +347,8 @@ export const BuyerHomeView: React.FC<BuyerHomeViewProps> = ({
                   productName={prod.name}
                   category={prod.category}
                   conditionPct={prod.condition_pct}
+                  eager={true}
+                  priority={true}
                   className="w-full h-full"
                   imgClassName="transition-transform duration-300 group-hover:scale-105"
                 />
@@ -573,10 +575,11 @@ export const BuyerHomeView: React.FC<BuyerHomeViewProps> = ({
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {products.map(product => (
+            {products.map((product, index) => (
               <ProductCard
                 key={product.id}
                 product={product}
+                eager={index < 4}
                 onSelect={onSelectProduct}
                 onAddToCart={onAddToCart}
                 isWishlisted={wishlistIds.has(product.id)}
