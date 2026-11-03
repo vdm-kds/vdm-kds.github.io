@@ -776,10 +776,25 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
               <button
                 type="button"
                 onClick={() => {
+                  const items = selectedOrder.items || [];
+                  const firstItem = items[0];
+                  const firstItemName = firstItem?.product_name || (firstItem as any)?.name || 'Đơn hàng';
+                  const otherCount = items.length - 1;
+                  const orderTitle = otherCount > 0 ? `${firstItemName} +${otherCount} món khác` : firstItemName;
+
                   window.dispatchEvent(new CustomEvent('open-buyer-chat', {
                     detail: {
                       shopId: selectedOrder.shop_id || 1,
-                      order: selectedOrder
+                      order: selectedOrder,
+                      context: {
+                        kind: 'order',
+                        type: 'order',
+                        refId: selectedOrder.code || String(selectedOrder.id),
+                        order_code: selectedOrder.code || String(selectedOrder.id),
+                        title: orderTitle,
+                        price: selectedOrder.total,
+                        status: selectedOrder.status
+                      }
                     }
                   }));
                 }}

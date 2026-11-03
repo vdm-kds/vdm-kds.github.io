@@ -218,6 +218,10 @@ function MainShopApp() {
 
   useEffect(() => {
     fetchWishlist();
+    if (user && user.role === 'buyer' && typeof window !== 'undefined' && window.location.pathname.startsWith('/seller')) {
+      window.history.replaceState({}, '', '/');
+      setCurrentView('home');
+    }
   }, [user]);
 
   // Synchronize route from browser pathname on initial mount & popstate
@@ -312,6 +316,7 @@ function MainShopApp() {
         } else {
           showToast('Trang này dành cho người bán', 'error');
           setCurrentView('home');
+          window.history.replaceState({}, '', '/');
         }
         return;
       }

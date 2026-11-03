@@ -109,6 +109,14 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
 
   // Per-shop discount coupons: shop_id -> code
   const [couponsByShop, setCouponsByShop] = useState<Record<number, string>>({});
+  const [appliedCouponsDetails, setAppliedCouponsDetails] = useState<Record<any, {
+    code: string;
+    type: string;
+    value: number;
+    maxDiscount?: number;
+    minOrder?: number;
+    shopId?: string | number;
+  }>>({});
   const [couponInputs, setCouponInputs] = useState<Record<number, string>>({});
   const [couponErrors, setCouponErrors] = useState<Record<number, string>>({});
   const [validatingShops, setValidatingShops] = useState<Record<number, boolean>>({});
@@ -179,8 +187,43 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
 
   // Single source of truth: calculateCheckout
   const checkoutCalc: CheckoutCalculation = useMemo(() => {
-    return api.calculateCheckout(currentItems, couponsByShop);
-  }, [currentItems, couponsByShop]);
+    return api.calculateCheckout(currentItems, couponsByShop, appliedCouponsDetails);
+  }, [currentItems, couponsByShop, appliedCouponsDetails]);
+
+  // Auto-remove coupon if subtotal falls below minOrder
+  useEffect(() => {
+    if (Object.keys(appliedCouponsDetails).length === 0) return;
+
+    const shopSubtotals = new Map<string, number>();
+    for (const it of currentItems) {
+      if (it.stock !== undefined && it.stock <= 0) continue;
+      const sId = String(it.shop_id || it.product?.shop_id || it.product?.shop_slug || '1');
+      const p = it.effective_price ?? it.negotiated_price ?? it.price ?? it.product?.price ?? 0;
+      shopSubtotals.set(sId, (shopSubtotals.get(sId) || 0) + p * (it.quantity || 1));
+    }
+
+    for (const [sIdStr, coupon] of Object.entries(appliedCouponsDetails)) {
+      if (!coupon) continue;
+      const currentSub = shopSubtotals.get(String(sIdStr)) || 0;
+      const minOrder = coupon.minOrder || 0;
+      if (minOrder > 0 && currentSub < minOrder) {
+        setCouponsByShop(prev => {
+          const next = { ...prev };
+          delete (next as any)[sIdStr];
+          delete (next as any)[Number(sIdStr)];
+          return next;
+        });
+        setAppliedCouponsDetails(prev => {
+          const next = { ...prev };
+          delete next[sIdStr];
+          delete (next as any)[Number(sIdStr)];
+          return next;
+        });
+        setCouponInputs(prev => ({ ...prev, [sIdStr]: '' }));
+        showToast(`Đơn của shop chưa đủ tối thiểu ${formatVND(minOrder)} để áp dụng mã ${coupon.code}. Mã đã được gỡ.`, 'info');
+      }
+    }
+  }, [currentItems, appliedCouponsDetails]);
 
   // Fetch shop coupons for suggestion
   useEffect(() => {
@@ -210,7 +253,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
       return;
     }
 
-    const shopBreakdown = checkoutCalc.shops.find(s => s.shop_id === shopId);
+    const shopBreakdown = checkoutCalc.shops.find(s => s.shop_id === shopId || String(s.shop_id) === String(shopId));
     const shopSubtotal = shopBreakdown?.subtotal || 0;
     const shopShipping = shopBreakdown?.shipping_fee || 0;
 
@@ -221,6 +264,17 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
       const res = await api.validateCoupon(code, shopSubtotal, shopShipping, shopId);
       setCouponsByShop(prev => ({ ...prev, [shopId]: res.coupon.code }));
       setCouponInputs(prev => ({ ...prev, [shopId]: res.coupon.code }));
+      setAppliedCouponsDetails(prev => ({
+        ...prev,
+        [shopId]: {
+          code: res.coupon.code,
+          type: res.coupon.type,
+          value: res.coupon.value,
+          maxDiscount: res.coupon.max_discount,
+          minOrder: res.coupon.min_order_amount,
+          shopId
+        }
+      }));
       showToast(`Đã áp dụng mã ${res.coupon.code} cho ${shopBreakdown?.shop_name || 'shop'} (-${formatVND(res.discount_amount)})`, 'success');
     } catch (err: any) {
       setCouponErrors(prev => ({ ...prev, [shopId]: err.message || 'Mã không hợp lệ cho shop này' }));
@@ -233,6 +287,13 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
     setCouponsByShop(prev => {
       const updated = { ...prev };
       delete updated[shopId];
+      delete (updated as any)[String(shopId)];
+      return updated;
+    });
+    setAppliedCouponsDetails(prev => {
+      const updated = { ...prev };
+      delete updated[shopId];
+      delete (updated as any)[String(shopId)];
       return updated;
     });
     setCouponInputs(prev => ({ ...prev, [shopId]: '' }));

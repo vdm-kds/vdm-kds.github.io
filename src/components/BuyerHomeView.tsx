@@ -116,9 +116,10 @@ export const BuyerHomeView: React.FC<BuyerHomeViewProps> = ({
 
   const activeTrackingOrder = shippingOrders.length > 0 ? shippingOrders[0] : null;
 
-  // Fresh arrivals: sort by newest and take top 10 from the entire marketplace
+  // Fresh arrivals: sort by newest and take top 10 from in-stock marketplace items
   const marketProducts = (allProducts && allProducts.length > 0) ? allProducts : products;
   const freshArrivals = [...marketProducts]
+    .filter(p => p.stock > 0)
     .sort((a, b) => Number(b.id) - Number(a.id))
     .slice(0, 10);
 
@@ -578,7 +579,7 @@ export const BuyerHomeView: React.FC<BuyerHomeViewProps> = ({
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {products.map((product, index) => (
+            {[...products].sort((a, b) => (a.stock <= 0 ? 1 : 0) - (b.stock <= 0 ? 1 : 0)).map((product, index) => (
               <ProductCard
                 key={product.id}
                 product={product}

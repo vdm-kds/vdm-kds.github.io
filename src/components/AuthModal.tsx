@@ -168,6 +168,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         await login(identifier, password, activeRole);
       }
 
+      if (activeRole === 'buyer' && typeof window !== 'undefined' && window.location.pathname.startsWith('/seller')) {
+        window.history.pushState(null, '', '/');
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      }
+
       onSuccess();
       onClose();
     } catch (err: any) {
@@ -294,6 +299,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       setGeneralError('');
                       try {
                         await switchAccount(acc.role, acc.username);
+                        if (acc.role === 'buyer' && typeof window !== 'undefined' && window.location.pathname.startsWith('/seller')) {
+                          window.history.pushState(null, '', '/');
+                          window.dispatchEvent(new PopStateEvent('popstate'));
+                        }
                         onSuccess();
                         onClose();
                       } catch (err: any) {

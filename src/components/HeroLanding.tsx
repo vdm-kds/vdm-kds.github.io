@@ -97,9 +97,9 @@ export const HeroLanding: React.FC<HeroLandingProps> = ({
     }
   };
 
-  // Map store products to CarouselProduct format
+  // Map store products to CarouselProduct format (exclude sold-out items)
   const carouselProducts: CarouselProduct[] = useMemo(() => {
-    return (products || []).map(p => ({
+    return (products || []).filter(p => p.stock > 0).map(p => ({
       id: p.id,
       name: p.name,
       category: p.category,

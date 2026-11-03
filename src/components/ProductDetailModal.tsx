@@ -541,8 +541,16 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 <span className="bg-[#DAE7C7]/50 text-[#08482D] px-2.5 py-0.5 rounded-md">
                   {fullProduct.category}
                 </span>
-                <span className="text-[#08482D] font-mono font-bold">
-                  {fullProduct.stock > 0 ? `Còn ${fullProduct.stock} món trong kho` : 'Hết hàng'}
+                <span className="font-mono font-bold">
+                  {fullProduct.stock > 0 ? (
+                    <span className="text-[#08482D]">
+                      {fullProduct.stock === 1 ? 'Chỉ có 1 món' : `Còn ${fullProduct.stock} món`}
+                    </span>
+                  ) : (
+                    <span className="bg-[#F6DDDB] text-[#B33F33] px-2.5 py-0.5 rounded-full text-xs font-bold tracking-wider">
+                      ĐÃ BÁN
+                    </span>
+                  )}
                 </span>
               </div>
 
@@ -1097,13 +1105,47 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             <div className="pt-4 border-t border-[#E2E8D8] space-y-3">
               {isSoldOut ? (
                 /* Out of stock notice (Requirement A7) */
-                <div className="p-4 rounded-2xl bg-[#F6DDDB]/70 border border-[#F6DDDB] text-center space-y-1">
-                  <div className="font-bold text-sm text-[#B33F33] uppercase tracking-wider">
-                    Đã có chủ mới
+                <div className="space-y-3">
+                  <div className="p-4 rounded-2xl bg-[#F6DDDB]/70 border border-[#F6DDDB] text-center space-y-1">
+                    <div className="font-bold text-sm text-[#B33F33] uppercase tracking-wider">
+                      Đã có chủ mới
+                    </div>
+                    <p className="text-xs text-[#5E5E61]">
+                      Món đồ vintage độc bản này đã được người mua khác rước về. Hãy tham khảo các món tương tự của shop nhé!
+                    </p>
                   </div>
-                  <p className="text-xs text-[#5E5E61]">
-                    Món đồ vintage độc bản này đã được người mua khác rước về. Hãy tham khảo các món tương tự của shop nhé!
-                  </p>
+
+                  {/* Disabled gray action buttons with tooltip */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      disabled
+                      title="Món này đã có chủ mới"
+                      className="w-full py-2.5 px-3 rounded-xl bg-stone-100 border border-stone-200 text-stone-400 text-xs font-bold flex items-center justify-center gap-1.5 cursor-not-allowed opacity-60"
+                    >
+                      <ShoppingBag className="w-4 h-4 text-stone-400" />
+                      <span>Thêm vào giỏ</span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled
+                      title="Món này đã có chủ mới"
+                      className="w-full py-2.5 px-3 rounded-xl bg-stone-200 border border-stone-300 text-stone-400 text-xs font-bold flex items-center justify-center gap-1.5 cursor-not-allowed opacity-60"
+                    >
+                      <span>Mua ngay</span>
+                      <ArrowRight className="w-3.5 h-3.5 text-stone-400" />
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled
+                    title="Món này đã có chủ mới"
+                    className="w-full py-2 px-3 rounded-xl bg-stone-100 border border-stone-200 text-stone-400 text-xs font-semibold flex items-center justify-center gap-1.5 cursor-not-allowed opacity-60"
+                  >
+                    <Tag className="w-3.5 h-3.5 text-stone-400" />
+                    <span>Trả giá</span>
+                  </button>
                 </div>
               ) : (
                 <>

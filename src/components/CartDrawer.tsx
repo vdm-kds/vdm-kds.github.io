@@ -48,7 +48,9 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
       };
     }
     acc[sId].items.push(item);
-    acc[sId].subtotal += item.price * item.quantity;
+    if (item.stock > 0) {
+      acc[sId].subtotal += item.price * item.quantity;
+    }
     return acc;
   }, {});
 
@@ -59,7 +61,10 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
   const shopList = Object.values(shopGroups);
   const totalShipping = shopList.reduce((sum, g) => sum + g.shippingFee, 0);
-  const totalCart = subtotal + totalShipping;
+  const inStockItems = items.filter(i => i.stock > 0);
+  const calculatedSubtotal = inStockItems.reduce((sum, i) => sum + i.price * i.quantity, 0);
+  const hasOutOfStock = items.some(i => i.stock <= 0);
+  const totalCart = calculatedSubtotal + (inStockItems.length > 0 ? totalShipping : 0);
 
   const handleOpenShopChat = (shopId: number) => {
     window.dispatchEvent(new CustomEvent('open-buyer-chat', {
@@ -180,7 +185,13 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                             <div className="flex items-center gap-2 text-[11px] text-[#5E5E61] mt-0.5">
                               <span>Mới {item.condition_pct}%</span>
                               <span>•</span>
-                              <span>Còn {item.stock}</span>
+                              {item.stock <= 0 ? (
+                                <span className="text-[10px] font-bold text-[#B33F33] bg-[#F6DDDB] px-2 py-0.5 rounded-full uppercase tracking-wider">
+                                  Đã có chủ mới
+                                </span>
+                              ) : (
+                                <span>Còn {item.stock}</span>
+                              )}
                               {Boolean(item.is_negotiated) && (
                                 <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 text-[10px] font-semibold border border-amber-200">
                                   Giá deal
@@ -189,8 +200,15 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                             </div>
 
                             {item.stock <= 0 && (
-                              <div className="mt-2 p-1.5 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700">
-                                Món này vừa hết hàng
+                              <div className="mt-2 p-1.5 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700 flex items-center justify-between">
+                                <span>Món này đã có chủ mới</span>
+                                <button
+                                  type="button"
+                                  onClick={() => onRemoveItem(item.id)}
+                                  className="text-xs font-bold text-red-800 underline ml-2"
+                                >
+                                  Xóa món
+                                </button>
                               </div>
                             )}
 
@@ -260,8 +278,8 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
             <div className="p-4 sm:p-6 bg-white border-t border-[#E2E8D8] space-y-4">
               <div className="space-y-2 text-xs">
                 <div className="flex justify-between text-[#5E5E61]">
-                  <span>Tổng tiền hàng ({items.length} món từ {shopList.length} shop)</span>
-                  <span className="font-mono text-[#101410] font-medium">{formatVND(subtotal)}</span>
+                  <span>Tổng tiền hàng ({inStockItems.length} món từ {shopList.length} shop)</span>
+                  <span className="font-mono text-[#101410] font-medium">{formatVND(calculatedSubtotal)}</span>
                 </div>
                 <div className="flex justify-between text-[#5E5E61]">
                   <span>Tổng phí vận chuyển ({shopList.length} shop)</span>
@@ -279,12 +297,20 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 </div>
               </div>
 
+              {hasOutOfStock && (
+                <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 leading-snug">
+                  Trong giỏ có món <strong>Đã có chủ mới</strong>. Vui lòng xóa món hết hàng để tiếp tục đặt hàng.
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Button
                   variant="primary"
                   size="lg"
                   onClick={onProceedToCheckout}
-                  className="w-full text-xs font-bold"
+                  disabled={hasOutOfStock || inStockItems.length === 0}
+                  title={hasOutOfStock ? 'Vui lòng xóa các món đã có chủ mới' : undefined}
+                  className={`w-full text-xs font-bold ${hasOutOfStock || inStockItems.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <span>Tiến hành Đặt hàng</span>
                   <ArrowRight className="w-4 h-4 ml-1.5" />

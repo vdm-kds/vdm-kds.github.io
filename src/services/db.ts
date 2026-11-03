@@ -491,7 +491,7 @@ function normalizeProductDoc(docData: DocumentData, id: string): Product {
     original_price: Number(docData.originalPrice || docData.price || 0),
     condition_pct: Number(docData.conditionPct || 90),
     condition_detail: docData.conditionNote || '',
-    stock: Number(docData.stock || 1),
+    stock: Number(docData.stock ?? 0),
     image_url: primaryImg,
     images: images.length > 0 ? images : [primaryImg],
     thumb: thumb,
@@ -1027,6 +1027,13 @@ export class DCCTDatabaseService {
       list.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
     }
 
+    // Push sold out items (stock <= 0) to the bottom of all lists
+    list.sort((a, b) => {
+      const aSold = a.stock <= 0 ? 1 : 0;
+      const bSold = b.stock <= 0 ? 1 : 0;
+      return aSold - bSold;
+    });
+
     return { products: list };
   }
 
@@ -1228,7 +1235,9 @@ export class DCCTDatabaseService {
         if (prodSnap.exists() && prodSnap.data()?.isActive !== false) {
           const p = normalizeProductDoc(prodSnap.data()!, prodSnap.id);
           const effectivePrice = it.negotiatedPrice ? Number(it.negotiatedPrice) : p.price;
-          totalPrice += effectivePrice * it.qty;
+          if (p.stock > 0) {
+            totalPrice += effectivePrice * it.qty;
+          }
           items.push({
             id: it.productId as any,
             user_id: cur.uid as any,
@@ -1243,6 +1252,7 @@ export class DCCTDatabaseService {
             condition_pct: p.condition_pct,
             condition_detail: p.condition_detail,
             stock: p.stock,
+            is_sold_out: p.stock <= 0,
             image_url: p.image_url,
             shop_id: p.shop_id,
             shop_name: p.shop_name,
@@ -1250,7 +1260,7 @@ export class DCCTDatabaseService {
             created_at: new Date().toISOString(),
             product: p,
             effective_price: effectivePrice,
-            offer_id: it.offerId,
+            offer_id: it.offerId ? String(it.offerId) : undefined,
             is_negotiated: !!it.negotiatedPrice,
             negotiated_price: it.negotiatedPrice
           });
@@ -1261,7 +1271,7 @@ export class DCCTDatabaseService {
     const shippingFee = totalPrice >= 1000000 || totalPrice === 0 ? 0 : 30000;
     return {
       items,
-      item_count: items.reduce((sum, i) => sum + i.quantity, 0),
+      item_count: items.reduce((sum, i) => (i.stock > 0 ? sum + i.quantity : sum), 0),
       total_price: totalPrice,
       subtotal: totalPrice,
       shipping_fee: shippingFee,
@@ -1269,7 +1279,7 @@ export class DCCTDatabaseService {
     };
   }
 
-  async addToCart(productId: number | string, quantity: number = 1, offerId?: number, negotiatedPrice?: number): Promise<{ message: string }> {
+  async addToCart(productId: number | string, quantity: number = 1, offerId?: number | string, negotiatedPrice?: number): Promise<{ message: string }> {
     const cur = getCurrentUser();
     if (!cur || cur.role !== 'buyer') {
       throw new Error('Vui lòng đăng nhập tài khoản người mua để thêm vào giỏ hàng');
@@ -1281,9 +1291,10 @@ export class DCCTDatabaseService {
     let items = cartSnap.exists() && Array.isArray(cartSnap.data()?.items) ? cartSnap.data()!.items : [];
 
     const existingIdx = items.findIndex((i: any) => String(i.productId) === String(productId));
+    const strOfferId = offerId != null ? String(offerId) : null;
     if (existingIdx >= 0) {
       items[existingIdx].qty += quantity;
-      if (offerId) items[existingIdx].offerId = offerId;
+      if (strOfferId) items[existingIdx].offerId = strOfferId;
       if (negotiatedPrice) items[existingIdx].negotiatedPrice = negotiatedPrice;
     } else {
       const prodSnap = await getDoc(doc(db, 'products', String(productId)));
@@ -1293,7 +1304,7 @@ export class DCCTDatabaseService {
         shopId,
         qty: quantity,
         negotiatedPrice: negotiatedPrice || null,
-        offerId: offerId || null
+        offerId: strOfferId
       });
     }
 
@@ -1580,7 +1591,7 @@ export class DCCTDatabaseService {
   // --- ORDERS (BUYER & SELLER) & CHECKOUT TRANSACTION (Section 6) ---
 
   async createOrder(payload: {
-    items: Array<{ product_id: number | string; quantity: number; offer_id?: number }>;
+    items: Array<{ product_id: number | string; quantity: number; offer_id?: number | string; offerId?: number | string }>;
     recipient_name: string;
     phone: string;
     address: string;
@@ -1588,7 +1599,7 @@ export class DCCTDatabaseService {
     payment_method: 'card' | 'napas' | 'cod';
     card_info?: { number: string; expiry: string; cvv: string; card_type?: string };
     coupon_code?: string;
-    shop_coupons?: Record<number, string>;
+    shop_coupons?: Record<string | number, string>;
   }): Promise<{ orders: Order[]; message: string }> {
     const cur = getCurrentUser();
     if (!cur || cur.role !== 'buyer') {
@@ -1666,13 +1677,25 @@ export class DCCTDatabaseService {
         shopDataMap.set(shopId, sSnap.exists() ? sSnap.data() : { name: 'Đồ Cũ Còn Thương', ownerUid: 'seller_admin' });
       }
 
-      // D. Read coupon if provided
-      let couponData: any = null;
+      // D. Read all coupons if provided (ALL READS MUST PRECEDE WRITES)
+      const couponCodesToFetch = new Set<string>();
       if (payload.coupon_code) {
-        const cRef = doc(db, 'coupons', payload.coupon_code.toUpperCase().trim());
+        couponCodesToFetch.add(payload.coupon_code.toUpperCase().trim());
+      }
+      if (payload.shop_coupons) {
+        for (const c of Object.values(payload.shop_coupons)) {
+          if (c && typeof c === 'string' && c.trim()) {
+            couponCodesToFetch.add(c.toUpperCase().trim());
+          }
+        }
+      }
+
+      const couponsMap = new Map<string, any>();
+      for (const code of couponCodesToFetch) {
+        const cRef = doc(db, 'coupons', code);
         const cSnap = await txn.get(cRef);
         if (cSnap.exists()) {
-          couponData = cSnap.data();
+          couponsMap.set(code, cSnap.data());
         }
       }
 
@@ -1726,15 +1749,25 @@ export class DCCTDatabaseService {
         let discount = 0;
         let appliedCoupon: string | null = null;
 
-        if (couponData && (!couponData.shopId || couponData.shopId === shopId)) {
-          if (subtotal >= (couponData.minOrder || 0)) {
-            appliedCoupon = couponData.code;
-            if (couponData.type === 'freeship' || couponData.type === 'shipping') {
-              discount = Math.min(shippingFee, couponData.maxDiscount || 30000);
-            } else if (couponData.type === 'percent') {
-              discount = Math.min(Math.round((subtotal * couponData.value) / 100), couponData.maxDiscount || 999999999);
-            } else {
-              discount = couponData.value || 0;
+        const assignedCode = (payload.shop_coupons && (payload.shop_coupons[shopId as any] || (payload.shop_coupons as any)[Number(shopId)])) || payload.coupon_code;
+        const couponData = assignedCode ? couponsMap.get(String(assignedCode).toUpperCase().trim()) : null;
+
+        if (couponData && couponData.active !== false) {
+          const couponShop = couponData.shopId ? String(couponData.shopId) : null;
+          if (!couponShop || couponShop === String(shopId)) {
+            const minOrder = Number(couponData.minOrder ?? couponData.min_order_amount ?? 0);
+            if (subtotal >= minOrder) {
+              appliedCoupon = couponData.code || String(assignedCode).toUpperCase().trim();
+              const cType = String(couponData.type || '').toLowerCase();
+              const val = Number(couponData.value || 0);
+              const maxDisc = Number(couponData.maxDiscount ?? couponData.max_discount ?? Infinity);
+              if (cType === 'freeship' || cType === 'shipping') {
+                discount = Math.min(shippingFee, isFinite(maxDisc) ? maxDisc : 30000);
+              } else if (cType === 'percent') {
+                discount = Math.min(Math.round((subtotal * val) / 100), maxDisc);
+              } else {
+                discount = Math.min(val, subtotal);
+              }
             }
           }
         }
@@ -2524,7 +2557,8 @@ export class DCCTDatabaseService {
 
     if (action === 'accept') {
       await updateDoc(ref, { status: 'accepted' });
-      await this.addToCart(data.productId, 1, Number(offerId) as any, data.counterPrice);
+      const agreedPrice = data.counterPrice != null ? Number(data.counterPrice) : Number(data.offeredPrice || data.price || 0);
+      await this.addToCart(data.productId, 1, String(offerId), agreedPrice);
       return { message: 'Đã chấp nhận đề nghị của shop và thêm vào giỏ hàng' };
     } else {
       await updateDoc(ref, { status: 'rejected' });
@@ -3057,7 +3091,18 @@ export class DCCTDatabaseService {
 
   async startShopChat(
     shopId: number | string,
-    context?: { type: 'product' | 'order'; product_id?: number | string; order_code?: string; initial_message?: string }
+    context?: {
+      type?: 'product' | 'order' | string;
+      kind?: 'product' | 'order' | string;
+      refId?: string | number;
+      product_id?: number | string;
+      order_code?: string;
+      order_id?: number | string;
+      title?: string;
+      price?: number;
+      status?: string;
+      initial_message?: string;
+    }
   ): Promise<{ conversation: ChatConversation; created: boolean }> {
     const cur = getCurrentUser();
     if (!cur) throw new Error('Vui lòng đăng nhập');
@@ -3105,8 +3150,48 @@ export class DCCTDatabaseService {
       }
     }
 
-    // Check if context is a product and if this conversation already has a context card for this product
-    if (context && context.type === 'product' && context.product_id) {
+    // Check if context is an order and if this conversation already has a context card for this order
+    if (context && (context.kind === 'order' || context.type === 'order' || context.order_code)) {
+      const targetRefId = String(context.refId || context.order_code || context.order_id);
+      const msgsRef = collection(db, 'conversations', convId, 'messages');
+      const msgSnap = await getDocs(msgsRef);
+      const alreadyHasCard = msgSnap.docs.some(d => {
+        const c = d.data().context;
+        return c && (String(c.refId) === targetRefId || String(c.order_code) === targetRefId);
+      });
+
+      if (!alreadyHasCard) {
+        let orderTitle = context.title || 'Đơn hàng';
+        let orderPrice = Number(context.price || 0);
+        let orderStatus = context.status || 'pending';
+        if (!context.title) {
+          try {
+            const oSnap = await getDoc(doc(db, 'orders', targetRefId));
+            if (oSnap.exists()) {
+              const oData = oSnap.data();
+              const oItems = oData.items || [];
+              const firstItemName = oItems[0]?.name || oItems[0]?.product_name || oItems[0]?.productName || 'Đơn hàng';
+              orderTitle = oItems.length > 1 ? `${firstItemName} +${oItems.length - 1} món khác` : firstItemName;
+              orderPrice = Number(oData.total || 0);
+              orderStatus = oData.status || orderStatus;
+            }
+          } catch {}
+        }
+
+        await this.sendMessage({
+          conversation_id: convId,
+          text: `Tôi cần hỗ trợ về đơn hàng #${targetRefId}`,
+          context: {
+            kind: 'order',
+            refId: targetRefId,
+            order_code: targetRefId,
+            title: orderTitle,
+            price: orderPrice,
+            status: orderStatus
+          }
+        });
+      }
+    } else if (context && context.type === 'product' && context.product_id) {
       const targetPid = String(context.product_id);
       const msgsRef = collection(db, 'conversations', convId, 'messages');
       const msgSnap = await getDocs(msgsRef);

@@ -235,7 +235,21 @@ export const api = {
     db.uploadFile(dataUrl, type),
 
   // --- COUPONS ---
-  calculateCheckout: (cartOrItems: any, couponsByShop?: Record<any, string>): CheckoutCalculation => {
+  calculateCheckout: (
+    cartOrItems: any,
+    couponsByShop?: Record<any, string>,
+    appliedCouponDetails?: Record<string | number, {
+      code: string;
+      type: string;
+      value: number;
+      maxDiscount?: number;
+      max_discount?: number;
+      minOrder?: number;
+      min_order_amount?: number;
+      shopId?: string | number;
+      shop_id?: string | number;
+    }>
+  ): CheckoutCalculation => {
     const rawItems: CartItem[] = Array.isArray(cartOrItems) ? cartOrItems : (cartOrItems?.items || []);
     const shopMap = new Map<string, CartItem[]>();
     for (const it of rawItems) {
@@ -255,6 +269,8 @@ export const api = {
       const shopSlug = sItems[0]?.shop_slug || sItems[0]?.product?.shop_slug || sId;
 
       for (const i of sItems) {
+        // Exclude out of stock items
+        if (i.stock !== undefined && i.stock <= 0) continue;
         const p = i.effective_price ?? i.negotiated_price ?? i.price ?? i.product?.price ?? 0;
         subtotal += p * (i.quantity || 1);
       }
@@ -263,16 +279,25 @@ export const api = {
       const couponCode = couponsByShop ? (couponsByShop[sId] || (couponsByShop as any)[Number(sId)]) : undefined;
       let discountAmount = 0;
 
-      if (couponCode) {
-        const upper = String(couponCode).toUpperCase().trim();
-        if (upper === 'FREESHIP' || upper === 'FREESHIP30') {
-          discountAmount = Math.min(shippingFee, 30000);
-        } else if (upper === 'RETRO10' || upper === 'GIAM10') {
-          discountAmount = Math.min(Math.round(subtotal * 0.1), 100000);
-        } else if (upper === 'WELCOME50' || upper === 'GIAM50K') {
-          discountAmount = Math.min(50000, subtotal);
-        } else if (upper === 'SACH20') {
-          discountAmount = Math.min(Math.round(subtotal * 0.2), 50000);
+      // Look up coupon info from appliedCouponDetails or couponsByShop
+      const couponInfo = appliedCouponDetails?.[sId] ||
+        appliedCouponDetails?.[Number(sId)] ||
+        (couponCode && appliedCouponDetails ? Object.values(appliedCouponDetails).find(c => c?.code?.toUpperCase() === String(couponCode).toUpperCase()) : null) ||
+        (couponCode && typeof (couponsByShop as any)?.[sId] === 'object' ? (couponsByShop as any)[sId] : null);
+
+      if (couponCode && couponInfo) {
+        const minOrder = Number(couponInfo.minOrder ?? couponInfo.min_order_amount ?? 0);
+        if (subtotal >= minOrder) {
+          const cType = String(couponInfo.type || '').toLowerCase();
+          const val = Number(couponInfo.value || 0);
+          const maxDisc = Number(couponInfo.maxDiscount ?? couponInfo.max_discount ?? Infinity);
+          if (cType === 'percent') {
+            discountAmount = Math.min(Math.round((subtotal * val) / 100), maxDisc);
+          } else if (cType === 'fixed') {
+            discountAmount = Math.min(val, subtotal);
+          } else if (cType === 'freeship' || cType === 'shipping') {
+            discountAmount = Math.min(shippingFee, isFinite(maxDisc) ? maxDisc : shippingFee);
+          }
         }
       }
 
@@ -295,9 +320,9 @@ export const api = {
           id: couponCode,
           shop_id: sId,
           code: couponCode,
-          type: 'fixed',
+          type: (couponInfo?.type || 'fixed') as any,
           value: discountAmount,
-          min_order_amount: 0,
+          min_order_amount: couponInfo?.minOrder ?? couponInfo?.min_order_amount ?? 0,
           is_active: true,
           usage_count: 0
         } as any : null
@@ -473,9 +498,15 @@ export const api = {
   startShopChat: (
     shopId: number | string,
     context?: {
-      type: 'product' | 'order';
+      type?: 'product' | 'order' | string;
+      kind?: 'product' | 'order' | string;
+      refId?: string | number;
       product_id?: number | string;
       order_code?: string;
+      order_id?: number | string;
+      title?: string;
+      price?: number;
+      status?: string;
       initial_message?: string;
     }
   ) => db.startShopChat(shopId, context),
