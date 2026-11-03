@@ -43,6 +43,9 @@ export const api = {
   createProduct: (productData: Partial<Product>) =>
     db.createProduct(productData),
 
+  getSellerProducts: () =>
+    db.getSellerProducts(),
+
   updateProduct: (id: number | string, productData: Partial<Product>) =>
     db.updateProduct(id, productData),
 

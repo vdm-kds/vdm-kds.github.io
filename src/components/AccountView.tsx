@@ -203,16 +203,16 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart, onNavi
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newPassword !== confirmPassword) {
-      showToast('Mật khẩu mới và xác nhận mật khẩu không khớp', 'error');
+      showToast('Mật khẩu xác nhận không khớp', 'error');
       return;
     }
-    if (newPassword.length < 6) {
-      showToast('Mật khẩu mới phải có tối thiểu 6 ký tự', 'error');
+    if (newPassword.length < 8) {
+      showToast('Mật khẩu mới phải có tối thiểu 8 ký tự', 'error');
       return;
     }
     setSavingPassword(true);
     try {
-      await api.changePassword({ old_password: oldPassword, new_password: newPassword });
+      await api.changePassword({ old_password: oldPassword, new_password: newPassword, confirm_password: confirmPassword });
       showToast('Đổi mật khẩu thành công!', 'success');
       setOldPassword('');
       setNewPassword('');
@@ -635,7 +635,7 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart, onNavi
 
                 <div>
                   <label className="block text-xs font-bold text-[#101410] uppercase tracking-wider mb-1.5">
-                    Mật khẩu mới * (Tối thiểu 6 ký tự)
+                    Mật khẩu mới * (Tối thiểu 8 ký tự)
                   </label>
                   <input
                     type="password"
@@ -851,6 +851,36 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart, onNavi
                     const isPending = item.status === 'pending';
                     const isRejected = item.status === 'rejected';
                     const isExpired = item.status === 'expired';
+                    const isUsed = item.status === 'used';
+                    const isCancelled = item.status === 'cancelled';
+
+                    // Compute clean label
+                    let statusLabel = 'Đang chờ phản hồi';
+                    let badgeClass = 'bg-amber-100 text-amber-900';
+
+                    if (isUsed) {
+                      const finalPrice = item.final_price || item.counter_price || item.offered_price || 0;
+                      statusLabel = `Đã mua với giá ${formatVND(finalPrice)}${item.order_code ? ` · Đơn #${item.order_code}` : ''}`;
+                      badgeClass = 'bg-[#EBF5EE] text-[#08482D] border border-[#DAE7C7]';
+                    } else if (isAccepted) {
+                      statusLabel = `Shop đã chấp nhận giá ${formatVND(item.offered_price)}`;
+                      badgeClass = 'bg-emerald-100 text-emerald-800';
+                    } else if (isCountered) {
+                      statusLabel = `Shop đề nghị ${formatVND(item.counter_price || item.offered_price)}`;
+                      badgeClass = 'bg-blue-100 text-blue-800';
+                    } else if (isPending) {
+                      statusLabel = 'Chờ shop phản hồi';
+                      badgeClass = 'bg-amber-100 text-amber-900';
+                    } else if (isExpired) {
+                      statusLabel = 'Đã hết hạn';
+                      badgeClass = 'bg-stone-100 text-stone-600';
+                    } else if (isCancelled) {
+                      statusLabel = 'Đã hủy';
+                      badgeClass = 'bg-stone-200 text-stone-700';
+                    } else if (isRejected) {
+                      statusLabel = 'Đã từ chối';
+                      badgeClass = 'bg-red-100 text-red-800';
+                    }
 
                     return (
                       <div
@@ -869,24 +899,15 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart, onNavi
                             <div>
                               <h4 className="font-bold text-sm text-[#101410]">{item.product_name}</h4>
                               <div className="flex items-center gap-2 text-xs mt-0.5">
-                                <span className="text-[#5E5E61]">Giá gốc:</span>
+                                <span className="text-[#5E5E61]">Giá niêm yết:</span>
                                 <span className="line-through text-[#5E5E61] font-mono">{formatVND(item.original_price)}</span>
                               </div>
                             </div>
                           </div>
 
                           {/* Status Badge */}
-                          <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${
-                            isAccepted ? 'bg-emerald-100 text-emerald-800' :
-                            isCountered ? 'bg-blue-100 text-blue-800' :
-                            isPending ? 'bg-amber-100 text-amber-900' :
-                            isExpired ? 'bg-gray-100 text-gray-700' :
-                            'bg-red-100 text-red-800'
-                          }`}>
-                            {isAccepted ? 'Đã chấp nhận' :
-                             isCountered ? 'Shop trả giá lại' :
-                             isPending ? 'Đang chờ phản hồi' :
-                             isExpired ? 'Đã hết hạn' : 'Đã từ chối'}
+                          <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${badgeClass}`}>
+                            {statusLabel}
                           </span>
                         </div>
 
@@ -916,10 +937,12 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart, onNavi
                             </p>
                           )}
 
-                          <div className="flex items-center gap-1.5 text-[10px] text-[#5E5E61] pt-1">
-                            <Clock className="w-3.5 h-3.5 text-amber-700" />
-                            <span>Hiệu lực đến: {new Date(item.expires_at).toLocaleString('vi-VN')}</span>
-                          </div>
+                          {!['used', 'rejected', 'expired', 'cancelled'].includes(item.status) && item.expires_at && (
+                            <div className="flex items-center gap-1.5 text-[10px] text-[#5E5E61] pt-1">
+                              <Clock className="w-3.5 h-3.5 text-amber-700" />
+                              <span>Hiệu lực đến: {new Date(item.expires_at).toLocaleString('vi-VN')}</span>
+                            </div>
+                          )}
                         </div>
 
                         {/* Actions */}
@@ -927,10 +950,10 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart, onNavi
                           <div className="pt-1 flex justify-end">
                             <button
                               onClick={() => handleBuyNegotiated(item)}
-                              className="px-4 py-2 bg-[#08482D] hover:bg-[#073d26] text-white rounded-xl text-xs font-bold transition-colors shadow-xs flex items-center gap-1.5"
+                              className="px-4 py-2 bg-[#08482D] hover:bg-[#073d26] text-white rounded-xl text-xs font-bold transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer"
                             >
                               <ShoppingCart className="w-4 h-4" />
-                              Mua với giá {formatVND(item.offered_price)}
+                              Mua ngay với giá này ({formatVND(item.offered_price)})
                             </button>
                           </div>
                         )}
@@ -939,15 +962,28 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart, onNavi
                           <div className="pt-1 flex justify-end gap-2">
                             <button
                               onClick={() => handleRejectCounter(item.id)}
-                              className="px-3.5 py-1.5 rounded-xl border border-red-300 text-red-700 text-xs font-semibold hover:bg-red-50 transition-colors"
+                              className="px-3.5 py-1.5 rounded-xl border border-red-300 text-red-700 text-xs font-semibold hover:bg-red-50 transition-colors cursor-pointer"
                             >
                               Từ chối
                             </button>
                             <button
                               onClick={() => handleAcceptCounter(item.id)}
-                              className="px-4 py-1.5 bg-[#08482D] text-white rounded-xl text-xs font-bold hover:bg-[#073d26] transition-colors shadow-xs"
+                              className="px-4 py-1.5 bg-[#08482D] text-white rounded-xl text-xs font-bold hover:bg-[#073d26] transition-colors shadow-xs cursor-pointer"
                             >
-                              Đồng ý giá {formatVND(item.counter_price)}
+                              Đồng ý giá này ({formatVND(item.counter_price)})
+                            </button>
+                          </div>
+                        )}
+
+                        {isUsed && (
+                          <div className="pt-1 flex justify-end">
+                            <button
+                              onClick={() => {
+                                window.location.href = '/account?tab=orders';
+                              }}
+                              className="px-3.5 py-1.5 rounded-xl border border-[#DAE7C7] text-[#08482D] bg-[#F5F8EF] hover:bg-[#ebf3e2] text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <span>Xem danh sách đơn hàng</span>
                             </button>
                           </div>
                         )}

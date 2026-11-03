@@ -271,6 +271,98 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
     }
   };
 
+  const [newImageUrlInput, setNewImageUrlInput] = useState('');
+
+  const handleRemoveProductImage = (index: number) => {
+    const rawList = (prodForm.imagesText ? prodForm.imagesText.split('\n') : (prodForm.image_url ? [prodForm.image_url] : []))
+      .map(s => s.trim())
+      .filter(Boolean);
+    const next = rawList.filter((_, i) => i !== index);
+    setProdForm(prev => ({
+      ...prev,
+      image_url: next[0] || '',
+      imagesText: next.join('\n')
+    }));
+  };
+
+  const handleMoveProductImage = (index: number, direction: 'left' | 'right') => {
+    const rawList = (prodForm.imagesText ? prodForm.imagesText.split('\n') : (prodForm.image_url ? [prodForm.image_url] : []))
+      .map(s => s.trim())
+      .filter(Boolean);
+    const targetIndex = direction === 'left' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= rawList.length) return;
+    const temp = rawList[index];
+    rawList[index] = rawList[targetIndex];
+    rawList[targetIndex] = temp;
+    setProdForm(prev => ({
+      ...prev,
+      image_url: rawList[0] || '',
+      imagesText: rawList.join('\n')
+    }));
+  };
+
+  const handleSetCoverProductImage = (index: number) => {
+    const rawList = (prodForm.imagesText ? prodForm.imagesText.split('\n') : (prodForm.image_url ? [prodForm.image_url] : []))
+      .map(s => s.trim())
+      .filter(Boolean);
+    if (index <= 0 || index >= rawList.length) return;
+    const [picked] = rawList.splice(index, 1);
+    rawList.unshift(picked);
+    setProdForm(prev => ({
+      ...prev,
+      image_url: rawList[0] || '',
+      imagesText: rawList.join('\n')
+    }));
+  };
+
+  const handleAddProductImageUrl = (url: string) => {
+    if (!url.trim()) return;
+    const rawList = (prodForm.imagesText ? prodForm.imagesText.split('\n') : (prodForm.image_url ? [prodForm.image_url] : []))
+      .map(s => s.trim())
+      .filter(Boolean);
+    if (rawList.length >= 5) {
+      showToast('Tối đa 5 ảnh cho mỗi sản phẩm', 'error');
+      return;
+    }
+    rawList.push(url.trim());
+    setProdForm(prev => ({
+      ...prev,
+      image_url: rawList[0] || '',
+      imagesText: rawList.join('\n')
+    }));
+    setNewImageUrlInput('');
+    showToast('Đã thêm ảnh', 'success');
+  };
+
+  const handleChangePasswordSeller = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (changePasswordModal.newPass !== changePasswordModal.confirmPass) {
+      showToast('Mật khẩu xác nhận không khớp', 'error');
+      return;
+    }
+    if (changePasswordModal.newPass.length < 8) {
+      showToast('Mật khẩu mới phải có tối thiểu 8 ký tự', 'error');
+      return;
+    }
+    if (changePasswordModal.newPass === changePasswordModal.oldPass) {
+      showToast('Mật khẩu mới không được trùng mật khẩu cũ', 'error');
+      return;
+    }
+    setChangePasswordModal(prev => ({ ...prev, loading: true }));
+    try {
+      await api.changePassword({
+        old_password: changePasswordModal.oldPass,
+        new_password: changePasswordModal.newPass,
+        confirm_password: changePasswordModal.confirmPass
+      });
+      showToast('Đổi mật khẩu người bán thành công!', 'success');
+      setChangePasswordModal({ open: false, oldPass: '', newPass: '', confirmPass: '', loading: false });
+    } catch (err: any) {
+      showToast(err.message || 'Lỗi đổi mật khẩu', 'error');
+      setChangePasswordModal(prev => ({ ...prev, loading: false }));
+    }
+  };
+
   const handleShopCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -456,7 +548,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
   const fetchProducts = async () => {
     setLoadingProducts(true);
     try {
-      const data = await api.getProducts();
+      const data = await api.getSellerProducts();
       setProducts(data.products);
     } catch (err: any) {
       showToast(err.message || 'Lỗi tải danh sách sản phẩm', 'error');
@@ -1988,8 +2080,10 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                 const isPending = offer.status === 'pending';
                 const isAccepted = offer.status === 'accepted';
                 const isCountered = offer.status === 'countered';
+                const isUsed = offer.status === 'used';
                 const isRejected = offer.status === 'rejected';
                 const isExpired = offer.status === 'expired';
+                const isCancelled = offer.status === 'cancelled';
 
                 return (
                   <div key={offer.id} className="bg-white rounded-3xl border border-[#E2E8D8] p-5 shadow-xs space-y-4">
@@ -2013,14 +2107,17 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                       </div>
 
                       <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full shrink-0 ${
+                        isUsed ? 'bg-purple-100 text-purple-900 font-bold' :
                         isAccepted ? 'bg-emerald-100 text-emerald-800' :
                         isCountered ? 'bg-blue-100 text-blue-800' :
                         isPending ? 'bg-amber-100 text-amber-900 font-bold' :
                         isExpired ? 'bg-gray-100 text-gray-700' : 'bg-red-100 text-red-800'
                       }`}>
-                        {isAccepted ? 'Đã chấp nhận' :
-                         isCountered ? 'Shop đã trả giá lại' :
+                        {isUsed ? (offer.order_code ? `Đã mua (Đơn #${offer.order_code})` : 'Đã mua thành công') :
+                         isAccepted ? 'Shop đã chấp nhận' :
+                         isCountered ? `Shop đã đề nghị ${formatVND(offer.counter_price || 0)}` :
                          isPending ? 'Chờ bạn phản hồi' :
+                         isCancelled ? 'Khách đã hủy' :
                          isExpired ? 'Đã hết hạn' : 'Đã từ chối'}
                       </span>
                     </div>
@@ -2055,10 +2152,12 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                         </p>
                       )}
 
-                      <div className="flex items-center gap-1.5 text-[10px] text-[#5E5E61] pt-1">
-                        <Clock className="w-3.5 h-3.5 text-amber-700" />
-                        <span>Hết hạn lúc: {new Date(offer.expires_at).toLocaleString('vi-VN')}</span>
-                      </div>
+                      {!isUsed && !isRejected && !isExpired && !isCancelled && offer.expires_at && (
+                        <div className="flex items-center gap-1.5 text-[10px] text-[#5E5E61] pt-1">
+                          <Clock className="w-3.5 h-3.5 text-amber-700" />
+                          <span>Hết hạn lúc: {new Date(offer.expires_at).toLocaleString('vi-VN')}</span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Action Buttons for Pending Offers */}
@@ -2378,7 +2477,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#E2E8D8] pb-3">
                       <div>
                         <span className="font-mono font-bold text-sm text-[#08482D]">
-                          Đơn hàng #{item.order_code}
+                          Đơn hàng #{item.order_code || item.order_id}
                         </span>
                         <span className="text-xs text-[#5E5E61] ml-2">
                           Khách: <strong>{item.buyer_name || 'Khách hàng'}</strong>{item.buyer_phone ? ` (${item.buyer_phone})` : ''}
@@ -2386,25 +2485,48 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                       </div>
 
                       <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
-                        item.status === 'refunded' ? 'bg-emerald-100 text-emerald-800' :
+                        item.status === 'refunded' ? 'bg-emerald-100 text-emerald-800 font-bold' :
                         item.status === 'rejected' ? 'bg-red-100 text-red-800' :
                         item.status === 'approved' ? 'bg-blue-100 text-blue-800' :
                         item.status === 'shipping_back' ? 'bg-purple-100 text-purple-800' :
-                        item.status === 'received' ? 'bg-amber-100 text-amber-900' :
+                        item.status === 'received' ? 'bg-amber-100 text-amber-900 font-bold' :
                         'bg-amber-100 text-amber-900 font-bold'
                       }`}>
                         {item.status === 'pending' ? 'Chờ shop xét duyệt' :
-                         item.status === 'approved' ? 'Đã duyệt - chờ gửi lại' :
+                         item.status === 'approved' ? 'Đã duyệt – chờ gửi lại' :
                          item.status === 'shipping_back' ? 'Đang chuyển trả hàng' :
                          item.status === 'received' ? 'Đã nhận kiện hàng về kho' :
                          item.status === 'refunded' ? 'Đã hoàn tiền thành công' : 'Đã từ chối'}
                       </span>
                     </div>
 
+                    {/* Product item details */}
+                    <div className="flex items-center gap-3 p-3 bg-white rounded-2xl border border-[#DAE7C7]/60">
+                      {item.product_image ? (
+                        <ProductImage
+                          src={item.product_image}
+                          alt={item.product_name || 'Sản phẩm'}
+                          productName={item.product_name}
+                          eager={true}
+                          className="w-12 h-12 rounded-xl object-cover bg-[#F5F8EF] border border-[#DAE7C7] shrink-0"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 rounded-xl bg-[#F5F8EF] border border-[#DAE7C7] flex items-center justify-center text-lg shrink-0">
+                          📦
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1 text-xs">
+                        <p className="font-bold text-[#101410] truncate">{item.product_name || 'Sản phẩm theo đơn'}</p>
+                        <p className="text-[11px] text-[#5E5E61] mt-0.5">
+                          Số tiền hoàn trả: <span className="font-mono font-bold text-[#08482D]">{formatVND(item.refund_amount)}</span>
+                        </p>
+                      </div>
+                    </div>
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
                       <div className="p-3 bg-[#F5F8EF] rounded-2xl border border-[#DAE7C7]/60 space-y-1.5">
                         <p className="text-[#101410]"><strong>Lý do yêu cầu:</strong> {item.reason}</p>
-                        <p className="text-[#5E5E61]"><strong>Mô tả chi tiết:</strong> {item.description}</p>
+                        <p className="text-[#5E5E61]"><strong>Mô tả chi tiết:</strong> {item.description || 'Không có mô tả thêm'}</p>
                         <p className="font-mono text-[#08482D] font-bold">
                           <strong>Số tiền hoàn trả:</strong> {formatVND(item.refund_amount)}
                         </p>
@@ -3128,45 +3250,134 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
               </div>
 
               <div>
-                <label className="font-semibold text-[#524B46] block mb-1">
-                  Ảnh sản phẩm (Tải từ máy tính hoặc dán URL)
-                </label>
-                <div className="space-y-2">
-                  <label className="flex items-center justify-center gap-2 p-3 border-2 border-dashed border-[#DAE7C7] rounded-xl bg-[#F5F8EF] hover:border-[#08482D] cursor-pointer transition-colors text-xs text-[#08482D] font-bold">
-                    <Upload className="w-4 h-4" />
-                    <span>{uploadingImages ? 'Đang nén ảnh...' : 'Tải ảnh từ máy (Tối đa 5 ảnh, nén cạnh 1280px)'}</span>
-                    <input
-                      type="file"
-                      multiple
-                      accept="image/*"
-                      onChange={handleProductImageUpload}
-                      disabled={uploadingImages}
-                      className="hidden"
-                    />
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="font-semibold text-[#524B46] text-xs">
+                    Hình ảnh sản phẩm ({
+                      (prodForm.imagesText ? prodForm.imagesText.split('\n') : (prodForm.image_url ? [prodForm.image_url] : []))
+                        .map(s => s.trim())
+                        .filter(Boolean).length
+                    }/5 ảnh) *
                   </label>
+                  <span className="text-[11px] text-stone-500">
+                    Ảnh đầu tiên là ảnh bìa đại diện
+                  </span>
+                </div>
 
-                  <div>
-                    <label className="text-[11px] text-[#5E5E61] block mb-0.5">URL ảnh chính (Đại diện)</label>
-                    <input
-                      type="text"
-                      value={prodForm.image_url}
-                      onChange={e => setProdForm({ ...prodForm, image_url: e.target.value })}
-                      placeholder="Dán URL ảnh hoặc dùng ảnh đã tải ở trên"
-                      className="w-full px-3 py-2 rounded-xl border border-[#D8CEBE] bg-[#FAF7F2] text-xs"
-                    />
-                  </div>
+                <div className="space-y-3">
+                  {/* Thumbnail Cards Grid */}
+                  {(() => {
+                    const currentImgs = (prodForm.imagesText ? prodForm.imagesText.split('\n') : (prodForm.image_url ? [prodForm.image_url] : []))
+                      .map(s => s.trim())
+                      .filter(Boolean);
 
-                  <div>
-                    <label className="text-[11px] text-[#5E5E61] block mb-0.5">
-                      Danh sách ảnh thực tế (Tối đa 5 ảnh, mỗi URL một dòng)
+                    return (
+                      <div>
+                        {currentImgs.length > 0 ? (
+                          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5 p-3 rounded-2xl bg-[#FAF7F2] border border-[#D8CEBE]">
+                            {currentImgs.map((imgUrl, idx) => (
+                              <div
+                                key={`${imgUrl}-${idx}`}
+                                className="relative aspect-square rounded-xl overflow-hidden border border-[#D8CEBE] bg-white group shadow-2xs"
+                              >
+                                <img
+                                  src={imgUrl}
+                                  alt={`Ảnh ${idx + 1}`}
+                                  className="w-full h-full object-cover"
+                                />
+
+                                {/* Badge Ảnh chính */}
+                                {idx === 0 ? (
+                                  <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded-md bg-[#08482D] text-white text-[9px] font-bold shadow-xs">
+                                    ★ Ảnh chính
+                                  </span>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSetCoverProductImage(idx)}
+                                    className="absolute top-1 left-1 px-1.5 py-0.5 rounded-md bg-black/60 hover:bg-[#08482D] text-white text-[9px] font-medium opacity-0 group-hover:opacity-100 transition-opacity"
+                                    title="Đặt làm ảnh chính"
+                                  >
+                                    Đặt bìa
+                                  </button>
+                                )}
+
+                                {/* Nút Xóa ảnh */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveProductImage(idx)}
+                                  className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-600 text-white flex items-center justify-center text-xs font-bold hover:bg-red-700 shadow-xs opacity-80 group-hover:opacity-100 transition-opacity cursor-pointer"
+                                  title="Xóa ảnh này"
+                                >
+                                  ×
+                                </button>
+
+                                {/* Nút Điều chỉnh thứ tự ← / → */}
+                                <div className="absolute bottom-1 left-1 right-1 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity px-0.5">
+                                  {idx > 0 ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleMoveProductImage(idx, 'left')}
+                                      className="w-5 h-5 rounded-md bg-black/70 hover:bg-[#08482D] text-white flex items-center justify-center text-[10px] shadow-xs"
+                                      title="Chuyển sang trái"
+                                    >
+                                      ←
+                                    </button>
+                                  ) : <span />}
+
+                                  {idx < currentImgs.length - 1 ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleMoveProductImage(idx, 'right')}
+                                      className="w-5 h-5 rounded-md bg-black/70 hover:bg-[#08482D] text-white flex items-center justify-center text-[10px] shadow-xs"
+                                      title="Chuyển sang phải"
+                                    >
+                                      →
+                                    </button>
+                                  ) : <span />}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="p-4 text-center rounded-xl border border-dashed border-[#D8CEBE] bg-[#FAF7F2] text-xs text-[#5E5E61]">
+                            Chưa có hình ảnh nào. Hãy tải từ máy hoặc dán link bên dưới.
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Upload + Add by Link Bar */}
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <label className="flex-1 flex items-center justify-center gap-2 p-2.5 border-2 border-dashed border-[#DAE7C7] rounded-xl bg-[#F5F8EF] hover:border-[#08482D] cursor-pointer transition-colors text-xs text-[#08482D] font-bold">
+                      <Upload className="w-4 h-4" />
+                      <span>{uploadingImages ? 'Đang nén ảnh...' : 'Tải thêm ảnh từ máy (Tối đa 5 ảnh)'}</span>
+                      <input
+                        type="file"
+                        multiple
+                        accept="image/*"
+                        onChange={handleProductImageUpload}
+                        disabled={uploadingImages}
+                        className="hidden"
+                      />
                     </label>
-                    <textarea
-                      rows={2}
-                      value={prodForm.imagesText}
-                      onChange={e => setProdForm({ ...prodForm, imagesText: e.target.value })}
-                      placeholder="Các URL ảnh hoặc ảnh nén đã tải..."
-                      className="w-full px-3 py-2 rounded-xl border border-[#D8CEBE] bg-[#FAF7F2] font-mono text-[10px]"
-                    />
+
+                    <div className="flex items-center gap-1.5 flex-1">
+                      <input
+                        type="text"
+                        value={newImageUrlInput}
+                        onChange={e => setNewImageUrlInput(e.target.value)}
+                        placeholder="Dán link ảnh https://..."
+                        className="flex-1 px-3 py-2 rounded-xl border border-[#D8CEBE] bg-[#FAF7F2] text-xs"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleAddProductImageUrl(newImageUrlInput)}
+                        className="px-3 py-2 rounded-xl bg-[#08482D] text-white text-xs font-bold hover:bg-[#063A24] cursor-pointer shrink-0"
+                      >
+                        Thêm link
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -3881,6 +4092,84 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                   disabled={savingShop}
                 >
                   {savingShop ? 'Đang lưu...' : 'Lưu thay đổi hồ sơ shop'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Change Password Modal for Seller */}
+      {changePasswordModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="relative w-full max-w-md bg-white rounded-3xl border border-[#DAE7C7] shadow-2xl p-6 text-stone-800">
+            <div className="flex items-center justify-between pb-3 border-b border-[#E2E8D8] mb-4">
+              <div className="flex items-center gap-2 text-[#08482D]">
+                <KeyRound className="w-5 h-5 text-[#08482D]" />
+                <h3 className="font-bold text-base text-[#101410]">Đổi mật khẩu tài khoản shop</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setChangePasswordModal(prev => ({ ...prev, open: false }))}
+                className="p-1 rounded-lg text-stone-400 hover:text-stone-700"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleChangePasswordSeller} className="space-y-4 text-xs">
+              <div>
+                <label className="font-semibold text-[#101410] block mb-1">Mật khẩu hiện tại *</label>
+                <input
+                  type="password"
+                  required
+                  value={changePasswordModal.oldPass}
+                  onChange={e => setChangePasswordModal(prev => ({ ...prev, oldPass: e.target.value }))}
+                  placeholder="Nhập mật khẩu hiện tại"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#DAE7C7] bg-[#F5F8EF] focus:outline-none focus:border-[#08482D]"
+                />
+              </div>
+
+              <div>
+                <label className="font-semibold text-[#101410] block mb-1">Mật khẩu mới * (Tối thiểu 8 ký tự)</label>
+                <input
+                  type="password"
+                  required
+                  value={changePasswordModal.newPass}
+                  onChange={e => setChangePasswordModal(prev => ({ ...prev, newPass: e.target.value }))}
+                  placeholder="Nhập mật khẩu mới (tối thiểu 8 ký tự)"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#DAE7C7] bg-[#F5F8EF] focus:outline-none focus:border-[#08482D]"
+                />
+              </div>
+
+              <div>
+                <label className="font-semibold text-[#101410] block mb-1">Xác nhận mật khẩu mới *</label>
+                <input
+                  type="password"
+                  required
+                  value={changePasswordModal.confirmPass}
+                  onChange={e => setChangePasswordModal(prev => ({ ...prev, confirmPass: e.target.value }))}
+                  placeholder="Nhập lại mật khẩu mới"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#DAE7C7] bg-[#F5F8EF] focus:outline-none focus:border-[#08482D]"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2.5 pt-3 border-t border-[#E2E8D8]">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  type="button"
+                  onClick={() => setChangePasswordModal(prev => ({ ...prev, open: false }))}
+                >
+                  Hủy
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  type="submit"
+                  disabled={changePasswordModal.loading}
+                >
+                  {changePasswordModal.loading ? 'Đang cập nhật...' : 'Xác nhận đổi mật khẩu'}
                 </Button>
               </div>
             </form>

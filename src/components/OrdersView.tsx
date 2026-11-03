@@ -83,17 +83,22 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
     else setIsRefreshing(true);
 
     try {
-      const data = await api.getOrders(activeTab);
-      setOrders(data.orders);
+      const statusParam = activeTab === 'returns' ? 'all' : activeTab;
+      const data = await api.getOrders(statusParam);
+      let list = data.orders;
+      if (activeTab === 'returns') {
+        list = list.filter(o => Boolean(o.return_request || o.return_status || (o as any).returnStatus || o.status === 'returned'));
+      }
+      setOrders(list);
 
       if (selectedOrder) {
-        const refreshedCurrent = data.orders.find(o => o.id === selectedOrder.id || o.code === selectedOrder.code);
+        const refreshedCurrent = list.find(o => o.id === selectedOrder.id || o.code === selectedOrder.code);
         if (refreshedCurrent) {
           const detailRes = await api.getOrder(refreshedCurrent.id);
           setSelectedOrder(detailRes.order);
         }
       } else if (selectedOrderCode) {
-        const found = data.orders.find(o => o.code === selectedOrderCode || String(o.id) === String(selectedOrderCode));
+        const found = list.find(o => o.code === selectedOrderCode || String(o.id) === String(selectedOrderCode));
         if (found) {
           const detailRes = await api.getOrder(found.id);
           setSelectedOrder(detailRes.order);
@@ -125,7 +130,9 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
   useEffect(() => {
     const unsub = api.subscribeBuyerOrders((allOrders) => {
       let filtered = allOrders;
-      if (activeTab && activeTab !== 'all') {
+      if (activeTab === 'returns') {
+        filtered = allOrders.filter(o => Boolean(o.return_request || o.return_status || (o as any).returnStatus || o.status === 'returned'));
+      } else if (activeTab && activeTab !== 'all') {
         filtered = allOrders.filter(o => o.status === activeTab);
       }
       setOrders(filtered);
@@ -193,6 +200,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
 
   const tabs: Array<{ id: string; label: string }> = [
     { id: 'all', label: 'Tất cả' },
+    { id: 'returns', label: 'Trả hàng/Hoàn tiền' },
     { id: 'pending', label: 'Chờ duyệt' },
     { id: 'confirmed', label: 'Chờ lấy hàng' },
     { id: 'shipping', label: 'Đang giao' },
@@ -723,41 +731,133 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
             </div>
 
             {/* Return Request Timeline Card (if existing) */}
-            {selectedOrder.return_request && (
-              <div className="bg-[#FFFFFF] border border-amber-300 rounded-2xl p-5 shadow-vintage-sm space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <RotateCcw className="w-4 h-4 text-amber-700" />
-                    <h4 className="text-sm font-bold text-[#101410]">Yêu cầu trả hàng & hoàn tiền</h4>
-                  </div>
-                  <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${
-                    selectedOrder.return_request.status === 'refunded' ? 'bg-emerald-100 text-emerald-800' :
-                    selectedOrder.return_request.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                    selectedOrder.return_request.status === 'approved' ? 'bg-blue-100 text-blue-800' :
-                    'bg-amber-100 text-amber-900'
-                  }`}>
-                    {selectedOrder.return_request.status === 'pending' ? 'Chờ shop duyệt' :
-                     selectedOrder.return_request.status === 'approved' ? 'Shop đã đồng ý nhận lại' :
-                     selectedOrder.return_request.status === 'shipping_back' ? 'Đang chuyển trả hàng' :
-                     selectedOrder.return_request.status === 'received' ? 'Shop đã nhận kiện hoàn' :
-                     selectedOrder.return_request.status === 'refunded' ? 'Đã hoàn tiền thành công' : 'Đã từ chối'}
-                  </span>
-                </div>
+            {(() => {
+              const retReq = selectedOrder.return_request;
+              const retStatus = retReq?.status || selectedOrder.return_status || (selectedOrder as any).returnStatus;
+              if (!retReq && !retStatus) return null;
 
-                <div className="p-3 bg-[#FBF1D9]/60 rounded-xl text-xs space-y-1.5 border border-amber-200/60">
-                  <p className="text-[#101410]"><strong>Lý do:</strong> {selectedOrder.return_request.reason}</p>
-                  <p className="text-[#5E5E61]"><strong>Mô tả:</strong> {selectedOrder.return_request.description}</p>
-                  <p className="text-[#08482D] font-mono font-bold">
-                    <strong>Số tiền hoàn:</strong> {formatVND(selectedOrder.return_request.refund_amount || selectedOrder.total)}
-                  </p>
-                  {selectedOrder.return_request.seller_note && (
-                    <p className="text-blue-800 italic pt-1 border-t border-amber-200">
-                      <strong>Phản hồi từ shop:</strong> {selectedOrder.return_request.seller_note}
+              const isRejected = retStatus === 'rejected';
+              const refundVal = retReq?.refund_amount || selectedOrder.total;
+
+              const returnStages = [
+                { key: 'pending', label: 'Gửi yêu cầu' },
+                { key: 'approved', label: 'Shop duyệt' },
+                { key: 'shipping_back', label: 'Đang gửi trả' },
+                { key: 'received', label: 'Shop nhận hàng' },
+                { key: 'refunded', label: `Đã hoàn tiền ${formatVND(refundVal)}` }
+              ];
+
+              const getReturnStepIndex = (st?: string) => {
+                switch (st) {
+                  case 'pending': return 0;
+                  case 'approved': return 1;
+                  case 'shipping_back': return 2;
+                  case 'received': return 3;
+                  case 'refunded': return 4;
+                  default: return 0;
+                }
+              };
+
+              const currentStepIdx = getReturnStepIndex(retStatus);
+
+              if (isRejected) {
+                return (
+                  <div className="bg-red-50 border border-red-300 rounded-2xl p-5 shadow-xs space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-red-800 font-bold text-sm">
+                        <XCircle className="w-5 h-5 text-red-600 shrink-0" />
+                        <span>Yêu cầu trả hàng & hoàn tiền bị từ chối</span>
+                      </div>
+                      <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-red-100 text-red-800">
+                        Đã từ chối
+                      </span>
+                    </div>
+                    <p className="text-xs text-red-700">
+                      <strong>Phản hồi từ shop:</strong> {retReq?.seller_note || 'Shop đã từ chối yêu cầu trả hàng này do không đáp ứng đủ điều kiện bảo chứng.'}
                     </p>
-                  )}
+                    {retReq?.reason && (
+                      <p className="text-[11px] text-[#5E5E61]">
+                        Lý do bạn yêu cầu: {retReq.reason} {retReq.description ? `(${retReq.description})` : ''}
+                      </p>
+                    )}
+                  </div>
+                );
+              }
+
+              return (
+                <div className="bg-[#FFFFFF] border border-amber-300 rounded-2xl p-5 shadow-vintage-sm space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <RotateCcw className="w-4 h-4 text-amber-700" />
+                      <h4 className="text-sm font-bold text-[#101410]">Tiến trình trả hàng / hoàn tiền</h4>
+                    </div>
+                    <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${
+                      retStatus === 'refunded' ? 'bg-emerald-100 text-emerald-800 font-bold' :
+                      retStatus === 'approved' ? 'bg-blue-100 text-blue-800' :
+                      retStatus === 'shipping_back' ? 'bg-purple-100 text-purple-800' :
+                      retStatus === 'received' ? 'bg-amber-100 text-amber-900 font-bold' :
+                      'bg-amber-100 text-amber-900'
+                    }`}>
+                      {retStatus === 'pending' ? 'Chờ shop duyệt' :
+                       retStatus === 'approved' ? 'Đã duyệt – chờ gửi trả' :
+                       retStatus === 'shipping_back' ? 'Đang gửi trả' :
+                       retStatus === 'received' ? 'Shop đã nhận hàng' :
+                       'Đã hoàn tiền thành công'}
+                    </span>
+                  </div>
+
+                  {/* 5-Step Horizontal Return Stepper */}
+                  <div className="pt-2 pb-1 overflow-x-auto">
+                    <div className="flex items-center justify-between relative min-w-[320px]">
+                      <div className="absolute top-3.5 left-4 right-4 h-0.5 bg-[#E2E8D8] -z-0" />
+                      <div
+                        className="absolute top-3.5 left-4 h-0.5 bg-[#08482D] transition-all duration-500 -z-0"
+                        style={{ width: `${Math.min(100, Math.max(0, (currentStepIdx / (returnStages.length - 1)) * 100))}%` }}
+                      />
+
+                      {returnStages.map((stg, idx) => {
+                        const isPast = idx < currentStepIdx;
+                        const isCurrent = idx === currentStepIdx;
+
+                        return (
+                          <div key={stg.key} className="flex flex-col items-center relative z-10">
+                            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all shadow-xs ${
+                              isCurrent
+                                ? 'bg-[#08482D] text-white ring-4 ring-[#08482D]/20 scale-105'
+                                : isPast
+                                ? 'bg-[#08482D] text-white'
+                                : 'bg-[#FFFFFF] border border-[#E2E8D8] text-[#5E5E61]'
+                            }`}>
+                              {isPast && !isCurrent ? '✓' : idx + 1}
+                            </div>
+                            <span className={`text-[10px] mt-2 text-center max-w-[70px] leading-tight font-medium ${
+                              isCurrent ? 'font-bold text-[#08482D]' : isPast ? 'text-[#101410]' : 'text-[#5E5E61]'
+                            }`}>
+                              {stg.label}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-[#FBF1D9]/60 rounded-xl text-xs space-y-1.5 border border-amber-200/60">
+                    <p className="text-[#101410]"><strong>Lý do:</strong> {retReq?.reason || 'Yêu cầu hoàn trả'}</p>
+                    {retReq?.description && (
+                      <p className="text-[#5E5E61]"><strong>Mô tả:</strong> {retReq.description}</p>
+                    )}
+                    <p className="text-[#08482D] font-mono font-bold">
+                      <strong>Số tiền hoàn:</strong> {formatVND(refundVal)}
+                    </p>
+                    {retReq?.seller_note && (
+                      <p className="text-blue-800 italic pt-1 border-t border-amber-200">
+                        <strong>Ghi chú từ shop:</strong> {retReq.seller_note}
+                      </p>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* Actions for buyer */}
             <div className="flex flex-wrap items-center gap-2.5 pt-2">
@@ -814,8 +914,11 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                 Xem hóa đơn
               </button>
 
-              {/* Return button if within 3 days & delivered/completed & no existing request */}
-              {(selectedOrder.status === 'delivered' || selectedOrder.status === 'completed') && !selectedOrder.return_request && (
+              {/* Return button: ONLY if delivered/completed AND NO existing return request */}
+              {(selectedOrder.status === 'delivered' || selectedOrder.status === 'completed') &&
+               !selectedOrder.return_request &&
+               !selectedOrder.return_status &&
+               !(selectedOrder as any).returnStatus && (
                 <button
                   type="button"
                   onClick={() => setShowReturnModal(true)}

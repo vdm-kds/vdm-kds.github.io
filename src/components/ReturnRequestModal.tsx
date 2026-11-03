@@ -27,17 +27,75 @@ export const ReturnRequestModal: React.FC<ReturnRequestModalProps> = ({
   const [selectedProductId, setSelectedProductId] = useState<number>(order.items?.[0]?.product_id || 0);
   const [reason, setReason] = useState<string>(REASONS[0]);
   const [description, setDescription] = useState<string>('');
-  const [imageUrls, setImageUrls] = useState<string[]>([
-    'https://images.unsplash.com/photo-1584905066893-7d5c142ba4e1?w=500&auto=format&fit=crop&q=80'
-  ]);
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [newUrlInput, setNewUrlInput] = useState('');
+  const [showUrlInput, setShowUrlInput] = useState(false);
+  const [compressing, setCompressing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const remainingSlots = 3 - imageUrls.length;
+    if (remainingSlots <= 0) {
+      setError('Tối đa 3 hình ảnh bằng chứng');
+      return;
+    }
+
+    setCompressing(true);
+    setError(null);
+    const filesToProcess = Array.from(files).slice(0, remainingSlots);
+
+    Promise.all(
+      filesToProcess.map(file => {
+        return new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (readerEvent) => {
+            const img = new Image();
+            img.onload = () => {
+              const canvas = document.createElement('canvas');
+              let width = img.width;
+              let height = img.height;
+              const maxDim = 800;
+              if (width > maxDim || height > maxDim) {
+                if (width > height) {
+                  height = Math.round((height * maxDim) / width);
+                  width = maxDim;
+                } else {
+                  width = Math.round((width * maxDim) / height);
+                  height = maxDim;
+                }
+              }
+              canvas.width = width;
+              canvas.height = height;
+              const ctx = canvas.getContext('2d');
+              ctx?.drawImage(img, 0, 0, width, height);
+              resolve(canvas.toDataURL('image/jpeg', 0.8));
+            };
+            img.src = readerEvent.target?.result as string;
+          };
+          reader.readAsDataURL(file);
+        });
+      })
+    ).then((compressed) => {
+      setImageUrls(prev => [...prev, ...compressed].slice(0, 3));
+      setCompressing(false);
+    }).catch(() => {
+      setCompressing(false);
+      setError('Lỗi khi tải ảnh từ thiết bị');
+    });
+  };
+
   const handleAddImage = () => {
+    if (imageUrls.length >= 3) {
+      setError('Tối đa 3 hình ảnh bằng chứng');
+      return;
+    }
     if (newUrlInput.trim() && !imageUrls.includes(newUrlInput.trim())) {
-      setImageUrls([...imageUrls, newUrlInput.trim()]);
+      setImageUrls([...imageUrls, newUrlInput.trim()].slice(0, 3));
       setNewUrlInput('');
     }
   };
@@ -167,40 +225,76 @@ export const ReturnRequestModal: React.FC<ReturnRequestModalProps> = ({
 
               <div>
                 <label className="block text-xs font-semibold text-[#5E5E61] uppercase tracking-wider mb-1.5">
-                  Hình ảnh bằng chứng thực tế
+                  Hình ảnh bằng chứng thực tế (Tối đa 3 ảnh)
                 </label>
-                <div className="flex gap-2 mb-2">
-                  <input
-                    type="url"
-                    value={newUrlInput}
-                    onChange={(e) => setNewUrlInput(e.target.value)}
-                    placeholder="Dán link ảnh bằng chứng..."
-                    className="flex-1 px-3 py-1.5 text-xs bg-[#F5F8EF] border border-[#DAE7C7] rounded-xl focus:outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddImage}
-                    className="px-3 py-1.5 text-xs font-medium bg-[#08482D] text-white rounded-xl hover:bg-[#073d26] transition-colors"
-                  >
-                    Thêm ảnh
-                  </button>
+
+                {/* Primary: File picker button */}
+                <div className="space-y-2 mb-2">
+                  <label className={`flex items-center justify-center gap-2 p-3 border-2 border-dashed border-[#DAE7C7] rounded-xl bg-[#F5F8EF] hover:border-[#08482D] cursor-pointer transition-colors text-xs text-[#08482D] font-bold ${
+                    imageUrls.length >= 3 ? 'opacity-50 pointer-events-none' : ''
+                  }`}>
+                    <ImageIcon className="w-4 h-4" />
+                    <span>{compressing ? 'Đang nén ảnh...' : `Chọn ảnh từ thiết bị (${imageUrls.length}/3)`}</span>
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/*"
+                      onChange={handleFileUpload}
+                      disabled={compressing || imageUrls.length >= 3}
+                      className="hidden"
+                    />
+                  </label>
+
+                  {/* Secondary: Paste URL toggle */}
+                  <div className="flex items-center justify-between text-[11px] text-[#5E5E61]">
+                    <button
+                      type="button"
+                      onClick={() => setShowUrlInput(!showUrlInput)}
+                      className="text-[#08482D] hover:underline font-medium"
+                    >
+                      {showUrlInput ? 'Ẩn ô dán link URL' : '+ Hoặc dán link ảnh từ web'}
+                    </button>
+                    <span>{imageUrls.length}/3 ảnh</span>
+                  </div>
+
+                  {showUrlInput && (
+                    <div className="flex gap-2">
+                      <input
+                        type="url"
+                        value={newUrlInput}
+                        onChange={(e) => setNewUrlInput(e.target.value)}
+                        placeholder="https://..."
+                        className="flex-1 px-3 py-1.5 text-xs bg-[#F5F8EF] border border-[#DAE7C7] rounded-xl focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddImage}
+                        disabled={imageUrls.length >= 3}
+                        className="px-3 py-1.5 text-xs font-medium bg-[#08482D] text-white rounded-xl hover:bg-[#073d26] transition-colors disabled:opacity-50"
+                      >
+                        Thêm link
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Thumbnails */}
-                <div className="flex flex-wrap gap-2">
-                  {imageUrls.map((url, i) => (
-                    <div key={i} className="relative w-16 h-16 rounded-xl border border-[#DAE7C7] overflow-hidden group">
-                      <img src={url} alt={`proof-${i}`} className="w-full h-full object-cover" />
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveImage(i)}
-                        className="absolute inset-0 bg-black/50 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
+                {imageUrls.length > 0 && (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {imageUrls.map((url, i) => (
+                      <div key={i} className="relative w-16 h-16 rounded-xl border border-[#DAE7C7] overflow-hidden group">
+                        <img src={url} alt={`proof-${i}`} className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveImage(i)}
+                          className="absolute inset-0 bg-black/50 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="p-3 bg-[#DAE7C7]/30 border border-[#DAE7C7] rounded-xl text-[11px] text-[#08482D]">

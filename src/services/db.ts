@@ -23,7 +23,10 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
-  deleteUser
+  deleteUser,
+  reauthenticateWithCredential,
+  EmailAuthProvider,
+  updatePassword
 } from 'firebase/auth';
 import {
   firebaseConfig,
@@ -609,6 +612,28 @@ function normalizeOrderDoc(docData: DocumentData, code: string): Order {
       note: lg.note,
       created_at: lg.at
     })) : [],
+    return_status: docData.returnStatus || (docData.returnRequest ? docData.returnRequest.status : undefined),
+    return_request: docData.returnRequest ? {
+      id: docData.returnRequest.id || `ret_${code}`,
+      shop_id: docData.shopId,
+      shop_name: docData.shopName,
+      order_id: code,
+      order_code: code,
+      buyer_id: docData.buyerUid,
+      buyer_name: docData.receiver || docData.buyerName || 'Khách hàng',
+      buyer_phone: docData.phone || docData.buyerPhone || '',
+      product_id: docData.items?.[0]?.productId || 1,
+      product_name: docData.items?.[0]?.name,
+      product_image: docData.items?.[0]?.thumb,
+      reason: docData.returnRequest.reason || '',
+      description: docData.returnRequest.detail || docData.returnRequest.description || '',
+      images: docData.returnRequest.images || [],
+      status: docData.returnRequest.status || 'pending',
+      seller_note: docData.returnRequest.sellerNote || '',
+      refund_amount: Number(docData.returnRequest.refundAmount || docData.total || 0),
+      refund_method: 'Hoàn tiền về tài khoản',
+      created_at: docData.returnRequest.createdAt || (docData.createdAt?.toDate ? docData.createdAt.toDate().toISOString() : new Date().toISOString())
+    } : null,
     items_count: Array.isArray(docData.items) ? docData.items.length : 0,
     created_at: docData.createdAt?.toDate ? docData.createdAt.toDate().toISOString() : new Date().toISOString(),
     updated_at: docData.updatedAt?.toDate ? docData.updatedAt.toDate().toISOString() : new Date().toISOString()
@@ -956,8 +981,63 @@ export class DCCTDatabaseService {
     return res.user;
   }
 
-  async changePassword(data: { old_password?: string; new_password?: string }): Promise<{ message: string }> {
-    throw new Error('Để đổi mật khẩu, vui lòng liên hệ quản trị viên hoặc sử dụng tính năng gửi email đặt lại');
+  async changePassword(data: { old_password?: string; new_password?: string; confirm_password?: string }): Promise<{ message: string }> {
+    const cur = getCurrentUser();
+    if (!cur) throw new Error('Vui lòng đăng nhập để đổi mật khẩu');
+
+    const oldPass = (data.old_password || '').trim();
+    const newPass = (data.new_password || '').trim();
+    const confirmPass = data.confirm_password !== undefined ? data.confirm_password.trim() : newPass;
+
+    if (!oldPass) {
+      throw new Error('Vui lòng nhập mật khẩu hiện tại');
+    }
+    if (!newPass) {
+      throw new Error('Vui lòng nhập mật khẩu mới');
+    }
+    if (newPass.length < 8) {
+      throw new Error('Mật khẩu mới phải có tối thiểu 8 ký tự');
+    }
+    if (confirmPass && newPass !== confirmPass) {
+      throw new Error('Mật khẩu xác nhận không khớp');
+    }
+    if (oldPass === newPass) {
+      throw new Error('Mật khẩu mới không được trùng mật khẩu cũ');
+    }
+
+    const auth = getActiveAuth();
+    const user = auth.currentUser;
+    if (!user) {
+      throw new Error('Phiên đăng nhập không hợp lệ, vui lòng đăng nhập lại');
+    }
+
+    // Determine user's auth email
+    let email = user.email;
+    if (!email) {
+      email = cur.role === 'buyer'
+        ? toBuyerEmail(cur.phone || cur.username)
+        : toSellerEmail(cur.username);
+    }
+
+    try {
+      const credential = EmailAuthProvider.credential(email, oldPass);
+      await reauthenticateWithCredential(user, credential);
+    } catch (err: any) {
+      console.error('Re-auth error:', err);
+      throw new Error('Mật khẩu hiện tại không chính xác');
+    }
+
+    try {
+      await updatePassword(user, newPass);
+    } catch (err: any) {
+      console.error('Update password error:', err);
+      if (err.code === 'auth/weak-password' || err.message?.includes('weak-password')) {
+        throw new Error('Mật khẩu mới quá yếu, vui lòng chọn mật khẩu tối thiểu 8 ký tự');
+      }
+      throw new Error(err.message || 'Không thể cập nhật mật khẩu mới lúc này');
+    }
+
+    return { message: 'Đổi mật khẩu thành công!' };
   }
 
   // --- PRODUCTS ---
@@ -1141,6 +1221,34 @@ export class DCCTDatabaseService {
     return { product: normalizeProductDoc(productDoc, docId) };
   }
 
+  async getSellerProducts(): Promise<{ products: Product[] }> {
+    const cur = getCurrentUser();
+    if (!cur || cur.role !== 'seller') {
+      return { products: [] };
+    }
+
+    const db = getActiveFirestore();
+    const snap = await getDocs(collection(db, 'products'));
+    const list: Product[] = [];
+    const myUid = cur.uid;
+    const myShopId = cur.shop_id ? String(cur.shop_id) : '';
+
+    snap.forEach((d) => {
+      const data = d.data();
+      if (data.isActive !== false) {
+        const prodShopId = data.shopId ? String(data.shopId) : '';
+        const prodOwnerUid = data.ownerUid ? String(data.ownerUid) : '';
+        const isMine = (myShopId && prodShopId === myShopId) || (myUid && prodOwnerUid === myUid);
+        if (isMine) {
+          list.push(normalizeProductDoc(data, d.id));
+        }
+      }
+    });
+
+    list.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+    return { products: list };
+  }
+
   async updateProduct(id: number | string, data: Partial<Product>): Promise<{ product: Product }> {
     const cur = getCurrentUser();
     if (!cur || cur.role !== 'seller') {
@@ -1154,15 +1262,41 @@ export class DCCTDatabaseService {
       throw new Error('Sản phẩm không tồn tại');
     }
 
+    const pData = snap.data();
+    const myUid = cur.uid;
+    const myShopId = cur.shop_id ? String(cur.shop_id) : '';
+    const isOwner = (pData.ownerUid && String(pData.ownerUid) === myUid) ||
+                    (myShopId && String(pData.shopId) === myShopId);
+    if (!isOwner) {
+      throw new Error('Bạn không có quyền sửa sản phẩm này');
+    }
+
     const updatePayload: any = {
       updatedAt: serverTimestamp()
     };
     if (data.name !== undefined) updatePayload.name = data.name;
+    if (data.category !== undefined) updatePayload.category = data.category;
     if (data.price !== undefined) updatePayload.price = Number(data.price);
     if (data.original_price !== undefined) updatePayload.originalPrice = Number(data.original_price);
     if (data.condition_pct !== undefined) updatePayload.conditionPct = Number(data.condition_pct);
     if (data.condition_detail !== undefined) updatePayload.conditionNote = data.condition_detail;
+    if (data.description !== undefined) updatePayload.description = data.description;
     if (data.stock !== undefined) updatePayload.stock = Number(data.stock);
+
+    if (data.images && Array.isArray(data.images) && data.images.length > 0) {
+      updatePayload.images = data.images;
+    } else if (data.image_url) {
+      updatePayload.images = [data.image_url];
+    }
+    if (data.image_url) updatePayload.imageUrl = data.image_url;
+
+    if (data.flaws) {
+      updatePayload.defects = data.flaws.map((f: any) => ({
+        text: f.description || f.note || '',
+        location: f.location || '',
+        image: f.image_url || f.photo_url || ''
+      }));
+    }
 
     assertDocSize(updatePayload);
     await updateDoc(ref, updatePayload);
@@ -1177,7 +1311,22 @@ export class DCCTDatabaseService {
       throw new Error('Chỉ người bán mới được xóa sản phẩm');
     }
     const db = getActiveFirestore();
-    await updateDoc(doc(db, 'products', String(id)), {
+    const ref = doc(db, 'products', String(id));
+    const snap = await getDoc(ref);
+    if (!snap.exists()) {
+      throw new Error('Sản phẩm không tồn tại');
+    }
+
+    const pData = snap.data();
+    const myUid = cur.uid;
+    const myShopId = cur.shop_id ? String(cur.shop_id) : '';
+    const isOwner = (pData.ownerUid && String(pData.ownerUid) === myUid) ||
+                    (myShopId && String(pData.shopId) === myShopId);
+    if (!isOwner) {
+      throw new Error('Bạn không có quyền sửa sản phẩm này');
+    }
+
+    await updateDoc(ref, {
       isActive: false,
       updatedAt: serverTimestamp()
     });
@@ -1523,11 +1672,30 @@ export class DCCTDatabaseService {
     const userSnap = await getDoc(doc(db, 'users', cur.uid));
     const following = userSnap.data()?.followingShops || [];
 
+    // Query active products count per shop
+    const prodCounts: Record<string, number> = {};
+    try {
+      const prodSnap = await getDocs(collection(db, 'products'));
+      prodSnap.forEach((d) => {
+        const data = d.data();
+        if (data.isActive !== false) {
+          const sId = String(data.shopId || '');
+          if (sId) {
+            prodCounts[sId] = (prodCounts[sId] || 0) + 1;
+          }
+        }
+      });
+    } catch {}
+
     const shops: Shop[] = [];
     for (const sId of following) {
       try {
         const sSnap = await getDoc(doc(db, 'shops', sId));
-        if (sSnap.exists()) shops.push(normalizeShopDoc(sSnap.data(), sSnap.id));
+        if (sSnap.exists()) {
+          const shop = normalizeShopDoc(sSnap.data(), sSnap.id);
+          shop.product_count = prodCounts[sSnap.id] || prodCounts[shop.slug] || 0;
+          shops.push(shop);
+        }
       } catch {}
     }
     return { shops };
@@ -2941,27 +3109,69 @@ export class DCCTDatabaseService {
     if (!cur) throw new Error('Chưa đăng nhập');
 
     const db = getActiveFirestore();
-    const orderSnap = await getDoc(doc(db, 'orders', String(payload.order_id)));
-    if (!orderSnap.exists()) throw new Error('Đơn không tồn tại');
+    let orderDocKey = String(payload.order_id);
+    let orderSnap = await getDoc(doc(db, 'orders', orderDocKey));
+
+    if (!orderSnap.exists()) {
+      // Try finding by code
+      const q = query(collection(db, 'orders'), where('code', '==', orderDocKey));
+      const qSnap = await getDocs(q);
+      if (!qSnap.empty) {
+        orderSnap = qSnap.docs[0];
+        orderDocKey = orderSnap.id;
+      } else {
+        throw new Error('Đơn hàng không tồn tại');
+      }
+    }
+
     const oData = orderSnap.data();
+    if (!oData) {
+      throw new Error('Không tìm thấy dữ liệu đơn hàng');
+    }
+    const orderCode = oData.code || orderDocKey;
+    const retId = `ret_${orderCode}`;
+
+    // Prevent duplicate return requests
+    const existingRet = await getDoc(doc(db, 'returns', retId));
+    if (existingRet.exists()) {
+      throw new Error('Đơn này đã có yêu cầu trả hàng, vui lòng theo dõi tiến trình');
+    }
 
     const compressedImages: string[] = [];
     for (const img of (payload.images || []).slice(0, 3)) {
-      const c = await compressImage(img, 800, 120 * 1024);
-      compressedImages.push(c);
+      if (img.startsWith('data:image/svg+xml')) {
+        compressedImages.push(img);
+      } else {
+        const c = await compressImage(img, 800, 120 * 1024);
+        compressedImages.push(c);
+      }
     }
 
-    const retId = `ret_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const normalizedItems = Array.isArray(oData.items) ? oData.items.map((it: any) => ({
+      productId: it.productId ?? it.product_id,
+      name: it.name || it.product_name || 'Sản phẩm',
+      thumb: it.thumb || it.image_url || it.imageUrl || '',
+      qty: Number(it.qty || it.quantity || 1),
+      price: Number(it.price || 0)
+    })) : [];
+
+    const refundAmount = Number(oData.total || 0);
+
     const retDoc = {
-      orderId: String(payload.order_id),
+      orderId: orderCode,
+      orderCode: orderCode,
       buyerUid: cur.uid,
-      sellerUid: oData.sellerUid,
-      shopId: oData.shopId,
-      items: oData.items || [],
+      buyerName: oData.receiver || oData.buyerName || cur.full_name || 'Khách hàng',
+      buyerPhone: oData.phone || oData.buyerPhone || cur.phone || '',
+      shopId: oData.shopId || 'do-cu-con-thuong',
+      sellerUid: oData.sellerUid || '',
+      items: normalizedItems,
+      refundAmount,
       reason: payload.reason,
       detail: payload.detail || payload.description || '',
       images: compressedImages,
       status: 'pending',
+      sellerNote: null,
       logs: [{
         status: 'pending',
         actor: cur.full_name,
@@ -2973,6 +3183,47 @@ export class DCCTDatabaseService {
 
     assertDocSize(retDoc);
     await setDoc(doc(db, 'returns', retId), retDoc);
+
+    // Update order document with returnStatus & returnRequest & log
+    const orderLogs = oData.logs || [];
+    orderLogs.push({
+      status: oData.status,
+      actorRole: 'buyer',
+      actorName: cur.full_name,
+      note: `Khách gửi yêu cầu trả hàng: ${payload.reason}`,
+      at: new Date().toISOString()
+    });
+
+    await updateDoc(doc(db, 'orders', orderDocKey), {
+      returnStatus: 'pending',
+      returnRequest: {
+        id: retId,
+        status: 'pending',
+        reason: payload.reason,
+        detail: payload.detail || payload.description || '',
+        refundAmount,
+        images: compressedImages,
+        createdAt: new Date().toISOString()
+      },
+      logs: orderLogs,
+      updatedAt: serverTimestamp()
+    });
+
+    // Notify seller
+    if (oData.sellerUid) {
+      try {
+        await setDoc(doc(db, 'notifications', `notif_ret_${orderCode}_${Date.now()}`), {
+          toUid: oData.sellerUid,
+          fromUid: cur.uid,
+          type: 'order_status',
+          title: `Yêu cầu trả hàng: #${orderCode}`,
+          body: `Khách ${cur.full_name} đã gửi yêu cầu trả hàng/hoàn tiền (${refundAmount.toLocaleString('vi-VN')}đ).`,
+          link: `/seller`,
+          isRead: false,
+          createdAt: serverTimestamp()
+        });
+      } catch {}
+    }
 
     return { message: 'Đã gửi yêu cầu trả hàng' };
   }
@@ -2990,20 +3241,28 @@ export class DCCTDatabaseService {
     const list: ReturnRequest[] = [];
     snap.forEach((d) => {
       const data = d.data();
+      const firstItem = data.items?.[0];
       list.push({
         id: d.id as any,
         shop_id: data.shopId as any,
         order_id: data.orderId,
+        order_code: data.orderCode || data.orderId,
         buyer_id: data.buyerUid,
-        product_id: data.items?.[0]?.productId || 1,
+        buyer_name: data.buyerName || 'Khách hàng',
+        buyer_phone: data.buyerPhone || '',
+        product_id: firstItem?.productId || 1,
+        product_name: firstItem?.name || '',
+        product_image: firstItem?.thumb || '',
         reason: data.reason,
-        description: data.detail,
-        images: data.images,
+        description: data.detail || '',
+        images: data.images || [],
         status: data.status,
-        refund_amount: 0,
-        refund_method: 'Ngân hàng',
-        created_at: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString()
-      });
+        seller_note: data.sellerNote || '',
+        refund_amount: Number(data.refundAmount || 0),
+        refund_method: 'Ngân hàng / Ví điện tử',
+        created_at: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString(),
+        items: data.items || []
+      } as any);
     });
     return { returns: list };
   }
@@ -3012,37 +3271,198 @@ export class DCCTDatabaseService {
     const cur = getCurrentUser();
     if (!cur || cur.role !== 'seller') return { returns: [], return_requests: [] };
     const db = getActiveFirestore();
-    const q = query(collection(db, 'returns'), where('sellerUid', '==', cur.uid));
-    const snap = await getDocs(q);
+    const snap = await getDocs(collection(db, 'returns'));
     const list: ReturnRequest[] = [];
+    const myUid = cur.uid;
+    const myShopId = cur.shop_id ? String(cur.shop_id) : '';
+
     snap.forEach((d) => {
       const data = d.data();
-      list.push({
-        id: d.id as any,
-        shop_id: data.shopId as any,
-        order_id: data.orderId,
-        buyer_id: data.buyerUid,
-        product_id: data.items?.[0]?.productId || 1,
-        reason: data.reason,
-        description: data.detail,
-        images: data.images,
-        status: data.status,
-        refund_amount: 0,
-        refund_method: 'Ngân hàng',
-        created_at: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString()
-      });
+      const isMine = (data.sellerUid && String(data.sellerUid) === myUid) ||
+                     (myShopId && String(data.shopId) === myShopId);
+      if (isMine) {
+        const firstItem = data.items?.[0];
+        list.push({
+          id: d.id as any,
+          shop_id: data.shopId as any,
+          order_id: data.orderId,
+          order_code: data.orderCode || data.orderId,
+          buyer_id: data.buyerUid,
+          buyer_name: data.buyerName || 'Khách hàng',
+          buyer_phone: data.buyerPhone || '',
+          product_id: firstItem?.productId || 1,
+          product_name: firstItem?.name || '',
+          product_image: firstItem?.thumb || '',
+          reason: data.reason,
+          description: data.detail || '',
+          images: data.images || [],
+          status: data.status,
+          seller_note: data.sellerNote || '',
+          refund_amount: Number(data.refundAmount || 0),
+          refund_method: 'Ngân hàng / Ví điện tử',
+          created_at: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString(),
+          items: data.items || []
+        } as any);
+      }
     });
+
+    list.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
     return { returns: list, return_requests: list };
   }
 
   async updateReturnStatus(id: number | string, payload: { status: string; seller_note?: string }): Promise<{ message: string }> {
+    const cur = getCurrentUser();
+    if (!cur || cur.role !== 'seller') {
+      throw new Error('Chỉ người bán mới được cập nhật yêu cầu trả hàng');
+    }
+
     const db = getActiveFirestore();
-    await updateDoc(doc(db, 'returns', String(id)), {
-      status: payload.status,
-      sellerNote: payload.seller_note || null,
-      updatedAt: serverTimestamp()
-    });
-    return { message: 'Đã cập nhật trạng thái khiếu nại' };
+    const retRef = doc(db, 'returns', String(id));
+    const retSnap = await getDoc(retRef);
+    if (!retSnap.exists()) {
+      throw new Error('Yêu cầu trả hàng không tồn tại');
+    }
+
+    const rData = retSnap.data();
+    const orderDocKey = String(rData.orderId || rData.orderCode);
+    const orderRef = doc(db, 'orders', orderDocKey);
+    const orderSnap = await getDoc(orderRef);
+    const oData = orderSnap.exists() ? orderSnap.data() : null;
+
+    const buyerUid = rData.buyerUid || oData?.buyerUid;
+    const orderCode = rData.orderCode || rData.orderId;
+    const refundAmount = Number(rData.refundAmount || oData?.total || 0);
+
+    const stepLabels: Record<string, string> = {
+      approved: 'Shop đã duyệt yêu cầu trả hàng',
+      shipping_back: 'Đang chuyển trả hàng về kho shop',
+      received: 'Shop đã nhận kiện hàng về kho',
+      refunded: `Shop đã hoàn tiền ${refundAmount.toLocaleString('vi-VN')}đ và nhận lại hàng về kho`,
+      rejected: `Shop đã từ chối yêu cầu: ${payload.seller_note || 'Không đủ điều kiện'}`
+    };
+
+    const statusNote = stepLabels[payload.status] || `Cập nhật trạng thái trả hàng: ${payload.status}`;
+
+    if (payload.status === 'refunded') {
+      // Step: "Hoàn tiền & khôi phục tồn kho" - runTransaction to update stock & order status atomically
+      await runTransaction(db, async (txn) => {
+        const tOrderSnap = await txn.get(orderRef);
+        if (!tOrderSnap.exists()) throw new Error('Đơn hàng không tồn tại');
+        const tOData = tOrderSnap.data();
+
+        // 1. Restore stock and reduce sold for each item in the order
+        const itemsToRestore = rData.items && rData.items.length > 0 ? rData.items : (tOData.items || []);
+        for (const it of itemsToRestore) {
+          const pid = String(it.productId ?? it.product_id ?? '');
+          if (pid) {
+            const pRef = doc(db, 'products', pid);
+            const pSnap = await txn.get(pRef);
+            if (pSnap.exists()) {
+              const currentStock = Number(pSnap.data().stock ?? 0);
+              const currentSold = Number(pSnap.data().sold ?? 0);
+              const qty = Number(it.qty || it.quantity || 1);
+              txn.update(pRef, {
+                stock: currentStock + qty,
+                sold: Math.max(0, currentSold - qty),
+                updatedAt: serverTimestamp()
+              });
+            }
+          }
+        }
+
+        // 2. Update order status to 'returned', paymentStatus to 'refunded', returnStatus to 'refunded'
+        const logs = tOData.logs || [];
+        logs.push({
+          status: 'returned',
+          actorRole: 'seller',
+          actorName: cur.shop_name || cur.full_name,
+          note: statusNote,
+          at: new Date().toISOString()
+        });
+
+        txn.update(orderRef, {
+          status: 'returned',
+          paymentStatus: 'refunded',
+          returnStatus: 'refunded',
+          'returnRequest.status': 'refunded',
+          'returnRequest.sellerNote': payload.seller_note || null,
+          logs,
+          updatedAt: serverTimestamp()
+        });
+
+        // 3. Update return doc to 'refunded'
+        txn.update(retRef, {
+          status: 'refunded',
+          sellerNote: payload.seller_note || null,
+          updatedAt: serverTimestamp()
+        });
+      });
+
+      // Send completion notification to buyer
+      if (buyerUid) {
+        try {
+          await setDoc(doc(db, 'notifications', `notif_ret_done_${orderCode}_${Date.now()}`), {
+            toUid: buyerUid,
+            fromUid: cur.uid,
+            type: 'order_status',
+            title: `Hoàn tất trả hàng #${orderCode}`,
+            body: `Yêu cầu trả hàng đơn #${orderCode} đã hoàn tất. Bạn đã được hoàn ${refundAmount.toLocaleString('vi-VN')}đ.`,
+            link: `/orders/${orderCode}`,
+            isRead: false,
+            createdAt: serverTimestamp()
+          });
+        } catch {}
+      }
+
+      return { message: 'Đã hoàn tiền và khôi phục tồn kho thành công' };
+    } else {
+      // Normal return stage update: approved, shipping_back, received, rejected
+      await updateDoc(retRef, {
+        status: payload.status,
+        sellerNote: payload.seller_note || null,
+        updatedAt: serverTimestamp()
+      });
+
+      if (orderSnap.exists()) {
+        const logs = oData?.logs || [];
+        logs.push({
+          status: oData?.status || 'shipping',
+          actorRole: 'seller',
+          actorName: cur.shop_name || cur.full_name,
+          note: statusNote,
+          at: new Date().toISOString()
+        });
+
+        await updateDoc(orderRef, {
+          returnStatus: payload.status,
+          'returnRequest.status': payload.status,
+          'returnRequest.sellerNote': payload.seller_note || null,
+          logs,
+          updatedAt: serverTimestamp()
+        });
+      }
+
+      if (buyerUid) {
+        try {
+          const notifMsg = payload.status === 'rejected'
+            ? `Shop đã từ chối yêu cầu trả hàng đơn #${orderCode}: ${payload.seller_note || ''}`
+            : `Đơn #${orderCode}: ${statusNote}`;
+
+          await setDoc(doc(db, 'notifications', `notif_ret_${payload.status}_${orderCode}_${Date.now()}`), {
+            toUid: buyerUid,
+            fromUid: cur.uid,
+            type: 'order_status',
+            title: `Cập nhật trả hàng #${orderCode}`,
+            body: notifMsg,
+            link: `/orders/${orderCode}`,
+            isRead: false,
+            createdAt: serverTimestamp()
+          });
+        } catch {}
+      }
+
+      return { message: 'Đã cập nhật trạng thái yêu cầu trả hàng' };
+    }
   }
 
   // --- CONVERSATIONS & CHAT ---
@@ -3893,7 +4313,7 @@ export class DCCTDatabaseService {
         stats: {
           total_revenue: 0,
           total_orders: 0,
-          status_counts: { pending: 0, confirmed: 0, shipping: 0, delivered: 0, completed: 0, cancelled: 0 },
+          status_counts: { pending: 0, confirmed: 0, shipping: 0, delivered: 0, completed: 0, cancelled: 0, returned: 0 },
           low_stock_count: 0,
           recent_orders: [],
           orders_pending: 0,
@@ -3941,12 +4361,20 @@ export class DCCTDatabaseService {
     let cancelled = 0;
 
     orders.forEach((o) => {
-      if (o.status === 'completed' || o.payment_status === 'paid') revenue += o.total;
+      const isRefundedOrReturned = o.status === 'returned' ||
+                                  (o as any).status === 'refunded' ||
+                                  o.payment_status === 'refunded' ||
+                                  (o as any).return_status === 'refunded' ||
+                                  (o as any).returnStatus === 'refunded';
+
+      if ((o.status === 'completed' || o.payment_status === 'paid') && !isRefundedOrReturned) {
+        revenue += o.total;
+      }
       if (o.status === 'pending') pending++;
       else if (o.status === 'confirmed') confirmed++;
       else if (o.status === 'shipping') shipping++;
-      else if (o.status === 'completed') completed++;
-      else if (o.status === 'cancelled') cancelled++;
+      else if (o.status === 'completed' && !isRefundedOrReturned) completed++;
+      else if (o.status === 'cancelled' || isRefundedOrReturned) cancelled++;
     });
 
     let ratingAvg = 0;
@@ -3973,7 +4401,8 @@ export class DCCTDatabaseService {
         shipping,
         delivered: 0,
         completed,
-        cancelled
+        cancelled,
+        returned: 0
       },
       low_stock_count: lowStockCount,
       recent_orders: orders.slice(0, 5),

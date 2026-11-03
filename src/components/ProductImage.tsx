@@ -54,7 +54,7 @@ export const ProductImage: React.FC<ProductImageProps> = ({
     setRetryCount(0);
   }, [src]);
 
-  // Check if image is already cached/complete, and set up 8s safety timer
+  // Check if image is already cached/complete, and only retry eager images after 8s timeout
   useEffect(() => {
     if (!effectiveSrc || hasError) return;
 
@@ -64,21 +64,22 @@ export const ProductImage: React.FC<ProductImageProps> = ({
       return;
     }
 
-    // Safety timer 8 seconds
+    // Safety timer 8 seconds only applies to eager/priority images to retry once with ?r=1
+    // Lazy images off-screen should never time out to SVG illustrations!
+    if (!isEager) return;
+
     const timer = setTimeout(() => {
       if (!isLoaded && !hasError) {
         if (imgRef.current && imgRef.current.complete && imgRef.current.naturalWidth > 0) {
           setIsLoaded(true);
         } else if (retryCount === 0 && !effectiveSrc.startsWith('data:') && !effectiveSrc.startsWith('blob:')) {
           setRetryCount(1);
-        } else {
-          setHasError(true);
         }
       }
     }, 8000);
 
     return () => clearTimeout(timer);
-  }, [effectiveSrc, isLoaded, hasError, retryCount, src]);
+  }, [effectiveSrc, isLoaded, hasError, retryCount, src, isEager]);
 
   // If no source or error triggered or not a valid image source -> fallback to vintage SVG
   const isFallbackNeeded = !src || hasError || !isValidImageSrc(src);
@@ -121,7 +122,10 @@ export const ProductImage: React.FC<ProductImageProps> = ({
         decoding="async"
         {...(isEager ? { fetchPriority: 'high' as const } : {})}
         referrerPolicy="no-referrer"
-        onLoad={() => setIsLoaded(true)}
+        onLoad={() => {
+          setIsLoaded(true);
+          setHasError(false);
+        }}
         onError={() => {
           if (retryCount === 0 && !effectiveSrc.startsWith('data:') && !effectiveSrc.startsWith('blob:')) {
             setRetryCount(1);

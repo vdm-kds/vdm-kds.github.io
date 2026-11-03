@@ -177,7 +177,7 @@ export interface CartItem {
   created_at?: string;
 }
 
-export type OrderStatus = 'pending' | 'confirmed' | 'shipping' | 'delivered' | 'completed' | 'cancelled';
+export type OrderStatus = 'pending' | 'confirmed' | 'shipping' | 'delivered' | 'completed' | 'cancelled' | 'returned';
 export type PaymentMethod = 'card' | 'napas' | 'cod';
 export type PaymentStatus = 'unpaid' | 'paid' | 'refunded' | 'pending';
 
@@ -288,9 +288,10 @@ export interface Order {
   shipment_events?: ShipmentEvent[];
   status_logs?: OrderStatusLog[];
   return_request?: ReturnRequest | null;
+  return_status?: string;
 }
 
-export type OfferStatus = 'pending' | 'accepted' | 'rejected' | 'countered' | 'expired';
+export type OfferStatus = 'pending' | 'accepted' | 'rejected' | 'countered' | 'expired' | 'used' | 'cancelled';
 
 export interface Offer {
   id: any;
@@ -308,11 +309,14 @@ export interface Offer {
   product_category?: string;
   original_price: number;
   offered_price: number;
+  final_price?: number;
   price?: number;
   counter_price?: number;
   message?: string;
   seller_note?: string;
   status: OfferStatus;
+  order_id?: any;
+  order_code?: string;
   expires_at: string;
   created_at: string;
   updated_at?: string;
