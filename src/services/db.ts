@@ -3104,7 +3104,7 @@ export class DCCTDatabaseService {
     detail?: string;
     description?: string;
     images?: string[];
-  }): Promise<{ message: string }> {
+  }): Promise<{ message: string; return_request: ReturnRequest }> {
     const cur = getCurrentUser();
     if (!cur) throw new Error('Chưa đăng nhập');
 
@@ -3225,10 +3225,32 @@ export class DCCTDatabaseService {
       } catch {}
     }
 
-    return { message: 'Đã gửi yêu cầu trả hàng' };
+    const returnRequestObj: ReturnRequest = {
+      id: retId as any,
+      shop_id: oData.shopId || 'do-cu-con-thuong',
+      order_id: orderCode,
+      order_code: orderCode,
+      buyer_id: cur.uid,
+      buyer_name: oData.receiver || oData.buyerName || cur.full_name || 'Khách hàng',
+      buyer_phone: oData.phone || oData.buyerPhone || cur.phone || '',
+      product_id: normalizedItems[0]?.productId || 1,
+      product_name: normalizedItems[0]?.name || 'Sản phẩm theo đơn',
+      product_image: normalizedItems[0]?.thumb || '',
+      reason: payload.reason,
+      description: payload.detail || payload.description || '',
+      images: compressedImages,
+      status: 'pending',
+      seller_note: null,
+      refund_amount: refundAmount,
+      refund_method: 'Ngân hàng / Ví điện tử',
+      created_at: new Date().toISOString(),
+      items: normalizedItems
+    } as any;
+
+    return { message: 'Đã gửi yêu cầu trả hàng', return_request: returnRequestObj };
   }
 
-  async requestReturn(payload: any): Promise<{ message: string }> {
+  async requestReturn(payload: any): Promise<{ message: string; return_request?: ReturnRequest }> {
     return this.createReturn(payload);
   }
 
@@ -3276,35 +3298,62 @@ export class DCCTDatabaseService {
     const myUid = cur.uid;
     const myShopId = cur.shop_id ? String(cur.shop_id) : '';
 
-    snap.forEach((d) => {
+    for (const d of snap.docs) {
       const data = d.data();
       const isMine = (data.sellerUid && String(data.sellerUid) === myUid) ||
                      (myShopId && String(data.shopId) === myShopId);
       if (isMine) {
-        const firstItem = data.items?.[0];
+        let buyerName = data.buyerName;
+        let buyerPhone = data.buyerPhone;
+        let items = data.items;
+        let refundAmount = Number(data.refundAmount || 0);
+
+        if (!buyerName || !buyerPhone || !items || !Array.isArray(items) || items.length === 0 || !refundAmount) {
+          try {
+            const orderDocKey = String(data.orderCode || data.orderId || d.id.replace(/^ret_/, ''));
+            const oSnap = await getDoc(doc(db, 'orders', orderDocKey));
+            if (oSnap.exists()) {
+              const oData = oSnap.data();
+              if (!buyerName) buyerName = oData.receiver || oData.buyerName || 'Khách hàng';
+              if (!buyerPhone) buyerPhone = oData.phone || oData.buyerPhone || '';
+              if (!items || !Array.isArray(items) || items.length === 0) {
+                items = Array.isArray(oData.items) ? oData.items.map((it: any) => ({
+                  productId: it.productId ?? it.product_id,
+                  name: it.name || it.product_name || 'Sản phẩm',
+                  thumb: it.thumb || it.image_url || it.imageUrl || '',
+                  qty: Number(it.qty || it.quantity || 1),
+                  price: Number(it.price || 0)
+                })) : [];
+              }
+              if (!refundAmount) refundAmount = Number(oData.total || 0);
+            }
+          } catch {}
+        }
+
+        const firstItem = Array.isArray(items) ? items[0] : undefined;
         list.push({
           id: d.id as any,
           shop_id: data.shopId as any,
           order_id: data.orderId,
-          order_code: data.orderCode || data.orderId,
+          order_code: data.orderCode || data.orderId || d.id.replace(/^ret_/, ''),
           buyer_id: data.buyerUid,
-          buyer_name: data.buyerName || 'Khách hàng',
-          buyer_phone: data.buyerPhone || '',
+          buyer_name: buyerName || 'Khách hàng',
+          buyer_phone: buyerPhone || '',
           product_id: firstItem?.productId || 1,
-          product_name: firstItem?.name || '',
+          product_name: firstItem?.name || 'Sản phẩm theo đơn',
           product_image: firstItem?.thumb || '',
           reason: data.reason,
-          description: data.detail || '',
+          description: data.detail || data.description || '',
           images: data.images || [],
           status: data.status,
           seller_note: data.sellerNote || '',
-          refund_amount: Number(data.refundAmount || 0),
+          refund_amount: refundAmount,
           refund_method: 'Ngân hàng / Ví điện tử',
           created_at: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString(),
-          items: data.items || []
+          items: items || []
         } as any);
       }
-    });
+    }
 
     list.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
     return { returns: list, return_requests: list };
@@ -4359,6 +4408,7 @@ export class DCCTDatabaseService {
     let shipping = 0;
     let completed = 0;
     let cancelled = 0;
+    let returned = 0;
 
     orders.forEach((o) => {
       const isRefundedOrReturned = o.status === 'returned' ||
@@ -4374,7 +4424,8 @@ export class DCCTDatabaseService {
       else if (o.status === 'confirmed') confirmed++;
       else if (o.status === 'shipping') shipping++;
       else if (o.status === 'completed' && !isRefundedOrReturned) completed++;
-      else if (o.status === 'cancelled' || isRefundedOrReturned) cancelled++;
+      else if (o.status === 'returned' || isRefundedOrReturned) returned++;
+      else if (o.status === 'cancelled') cancelled++;
     });
 
     let ratingAvg = 0;
@@ -4402,7 +4453,7 @@ export class DCCTDatabaseService {
         delivered: 0,
         completed,
         cancelled,
-        returned: 0
+        returned
       },
       low_stock_count: lowStockCount,
       recent_orders: orders.slice(0, 5),
@@ -4411,6 +4462,7 @@ export class DCCTDatabaseService {
       orders_shipping: shipping,
       orders_completed: completed,
       orders_cancelled: cancelled,
+      orders_returned: returned,
       total_products: shopProducts.length,
       rating_avg: ratingAvg,
       total_reviews: totalReviews
@@ -5311,26 +5363,68 @@ export class DCCTDatabaseService {
       return () => {};
     }
     const db = getActiveFirestore();
-    const q = query(collection(db, 'returns'), where('sellerUid', '==', cur.uid));
-    return onSnapshot(q, (snap) => {
+    const myUid = cur.uid;
+    const myShopId = cur.shop_id ? String(cur.shop_id) : '';
+
+    return onSnapshot(collection(db, 'returns'), async (snap) => {
       const list: ReturnRequest[] = [];
-      snap.forEach((d) => {
+      for (const d of snap.docs) {
         const data = d.data();
-        list.push({
-          id: d.id as any,
-          shop_id: data.shopId as any,
-          order_id: data.orderId,
-          buyer_id: data.buyerUid,
-          product_id: data.items?.[0]?.productId || 1,
-          reason: data.reason,
-          description: data.detail,
-          images: data.images,
-          status: data.status,
-          refund_amount: 0,
-          refund_method: 'Ngân hàng',
-          created_at: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString()
-        });
-      });
+        const isMine = (data.sellerUid && String(data.sellerUid) === myUid) ||
+                       (myShopId && String(data.shopId) === myShopId);
+        if (isMine) {
+          let buyerName = data.buyerName;
+          let buyerPhone = data.buyerPhone;
+          let items = data.items;
+          let refundAmount = Number(data.refundAmount || 0);
+
+          if (!buyerName || !buyerPhone || !items || !Array.isArray(items) || items.length === 0 || !refundAmount) {
+            try {
+              const orderDocKey = String(data.orderCode || data.orderId || d.id.replace(/^ret_/, ''));
+              const oSnap = await getDoc(doc(db, 'orders', orderDocKey));
+              if (oSnap.exists()) {
+                const oData = oSnap.data();
+                if (!buyerName) buyerName = oData.receiver || oData.buyerName || 'Khách hàng';
+                if (!buyerPhone) buyerPhone = oData.phone || oData.buyerPhone || '';
+                if (!items || !Array.isArray(items) || items.length === 0) {
+                  items = Array.isArray(oData.items) ? oData.items.map((it: any) => ({
+                    productId: it.productId ?? it.product_id,
+                    name: it.name || it.product_name || 'Sản phẩm',
+                    thumb: it.thumb || it.image_url || it.imageUrl || '',
+                    qty: Number(it.qty || it.quantity || 1),
+                    price: Number(it.price || 0)
+                  })) : [];
+                }
+                if (!refundAmount) refundAmount = Number(oData.total || 0);
+              }
+            } catch {}
+          }
+
+          const firstItem = Array.isArray(items) ? items[0] : undefined;
+          list.push({
+            id: d.id as any,
+            shop_id: data.shopId as any,
+            order_id: data.orderId,
+            order_code: data.orderCode || data.orderId || d.id.replace(/^ret_/, ''),
+            buyer_id: data.buyerUid,
+            buyer_name: buyerName || 'Khách hàng',
+            buyer_phone: buyerPhone || '',
+            product_id: firstItem?.productId || 1,
+            product_name: firstItem?.name || 'Sản phẩm theo đơn',
+            product_image: firstItem?.thumb || '',
+            reason: data.reason,
+            description: data.detail || data.description || '',
+            images: data.images || [],
+            status: data.status,
+            seller_note: data.sellerNote || '',
+            refund_amount: refundAmount,
+            refund_method: 'Ngân hàng / Ví điện tử',
+            created_at: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString(),
+            items: items || []
+          } as any);
+        }
+      }
+      list.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
       cb(list);
     }, (err) => {
       console.warn('subscribeReturns error:', err);

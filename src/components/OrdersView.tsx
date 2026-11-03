@@ -88,6 +88,8 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
       let list = data.orders;
       if (activeTab === 'returns') {
         list = list.filter(o => Boolean(o.return_request || o.return_status || (o as any).returnStatus || o.status === 'returned'));
+      } else if (activeTab === 'cancelled') {
+        list = list.filter(o => o.status === 'cancelled');
       }
       setOrders(list);
 
@@ -132,6 +134,8 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
       let filtered = allOrders;
       if (activeTab === 'returns') {
         filtered = allOrders.filter(o => Boolean(o.return_request || o.return_status || (o as any).returnStatus || o.status === 'returned'));
+      } else if (activeTab === 'cancelled') {
+        filtered = allOrders.filter(o => o.status === 'cancelled');
       } else if (activeTab && activeTab !== 'all') {
         filtered = allOrders.filter(o => o.status === activeTab);
       }
@@ -350,7 +354,8 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                         <span className="font-mono font-bold text-sm text-[#C2522D]">
                           #{order.code}
                         </span>
-                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                        <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${
+                          order.status === 'returned' ? 'bg-purple-100 text-purple-900 border border-purple-200 font-bold' :
                           order.status === 'shipping' ? 'bg-[#C2522D] text-white' :
                           order.status === 'delivered' ? 'bg-[#08482D] text-white' :
                           order.status === 'completed' ? 'bg-[#101410] text-white' :
@@ -361,7 +366,9 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                            order.status === 'confirmed' ? 'Đã duyệt' :
                            order.status === 'shipping' ? 'Đang giao' :
                            order.status === 'delivered' ? 'Đã giao' :
-                           order.status === 'completed' ? 'Hoàn tất' : 'Đã hủy'}
+                           order.status === 'completed' ? 'Hoàn tất' :
+                           order.status === 'returned' ? 'Đã trả hàng · Hoàn tiền' :
+                           order.status === 'cancelled' ? 'Đã hủy' : 'Đang xử lý'}
                         </span>
                       </div>
                       <span className="text-[11px] text-[#5E5E61] mt-0.5 block">
@@ -442,6 +449,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
           <div className="lg:col-span-7 space-y-6">
             {/* Friendly Status Hero Banner */}
             <div className={`p-6 rounded-3xl border shadow-vintage-sm ${
+              selectedOrder.status === 'returned' ? 'bg-purple-50 border-purple-200 text-purple-900' :
               selectedOrder.status === 'shipping' ? 'bg-[#C2522D]/10 border-[#C2522D]/30' :
               selectedOrder.status === 'delivered' ? 'bg-[#08482D]/10 border-[#08482D]/30' :
               selectedOrder.status === 'completed' ? 'bg-[#DAE7C7] border-[#E2E8D8]' :
@@ -454,14 +462,17 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                     Trạng thái đơn #{selectedOrder.code}
                   </span>
                   <h3 className="text-xl sm:text-2xl font-bold text-[#101410]">
-                    {selectedOrder.status === 'shipping' ? 'Kiện hàng đang lăn bánh trên đường tới bạn' :
+                    {selectedOrder.status === 'returned' ? 'Đã trả hàng · Hoàn tiền' :
+                     selectedOrder.status === 'shipping' ? 'Kiện hàng đang lăn bánh trên đường tới bạn' :
                      selectedOrder.status === 'delivered' ? 'Kiện hàng đã giao thành công!' :
                      selectedOrder.status === 'completed' ? 'Đơn hàng đã hoàn tất trọn vẹn' :
                      selectedOrder.status === 'confirmed' ? 'Tiệm đã xác nhận đơn & đang đóng gói' :
                      selectedOrder.status === 'cancelled' ? 'Đơn hàng đã được hủy' : 'Tiệm đang chuẩn bị đơn'}
                   </h3>
                   <p className="text-xs text-[#5E5E61] mt-1.5 leading-relaxed">
-                    {selectedOrder.status === 'shipping' ? (
+                    {selectedOrder.status === 'returned' ? (
+                      'Đơn hàng đã được hoàn tất thủ tục trả hàng về shop và hoàn tiền thành công.'
+                    ) : selectedOrder.status === 'shipping' ? (
                       `Được vận chuyển bởi ${selectedOrder.carrier || 'đơn vị đối tác'}. Bưu tá đang di chuyển theo lộ trình dự kiến.`
                     ) : selectedOrder.status === 'delivered' ? (
                       'Bạn hãy kiểm tra sản phẩm cẩn thận, sau đó bấm nút "Đã nhận được hàng" bên dưới để hoàn tất nhé!'
@@ -480,8 +491,8 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                 )}
               </div>
 
-              {/* 5-Step Stepper Progress Bar */}
-              {selectedOrder.status !== 'cancelled' && (
+              {/* 5-Step Stepper Progress Bar (Only for ongoing active orders) */}
+              {selectedOrder.status !== 'cancelled' && selectedOrder.status !== 'returned' && (
                 <div className="mt-6 pt-5 border-t border-[#E2E8D8]/60">
                   <div className="relative flex items-center justify-between">
                     {/* Connecting line */}

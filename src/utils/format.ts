@@ -36,6 +36,8 @@ export function getOrderStatusBadge(status: string): { label: string; bg: string
       return { label: 'Đã giao', bg: 'bg-[#EBF5EE]', text: 'text-[#337A47]' };
     case 'completed':
       return { label: 'Hoàn thành', bg: 'bg-[#EAF4EB]', text: 'text-[#2E7D32]' };
+    case 'returned':
+      return { label: 'Đã trả hàng · Hoàn tiền', bg: 'bg-purple-100', text: 'text-purple-900' };
     case 'cancelled':
       return { label: 'Đã hủy', bg: 'bg-[#FBEAEB]', text: 'text-[#C53929]' };
     default:

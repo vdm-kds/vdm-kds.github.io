@@ -415,6 +415,7 @@ export interface SellerStats {
   orders_shipping?: number;
   orders_completed?: number;
   orders_cancelled?: number;
+  orders_returned?: number;
   total_products?: number;
   rating_avg?: number;
   total_reviews?: number;

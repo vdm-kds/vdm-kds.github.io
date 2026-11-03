@@ -561,30 +561,18 @@ export const api = {
   getSellerReturns: () =>
     db.getSellerReturns(),
 
-  createReturn: async (payload: { order_id: number | string; product_id?: number | string; reason: string; description: string; images?: string[] }) => {
-    const res = await db.requestReturn({
+  createReturn: async (payload: { order_id: number | string; product_id?: number | string; reason: string; description?: string; detail?: string; images?: string[] }) => {
+    return db.createReturn({
       order_id: payload.order_id,
       reason: payload.reason,
-      description: payload.description,
-      images: payload.images,
-      refund_method: 'Chuyển khoản ngân hàng / Ví điện tử'
+      detail: payload.detail || payload.description || '',
+      description: payload.description || payload.detail || '',
+      images: payload.images
     });
-    return {
-      message: res.message,
-      return_request: {
-        id: `ret_${Date.now()}`,
-        shop_id: 1,
-        order_id: payload.order_id,
-        buyer_id: 1,
-        product_id: payload.product_id || 1,
-        reason: payload.reason,
-        description: payload.description,
-        status: 'pending',
-        refund_amount: 0,
-        refund_method: 'Ngân hàng',
-        created_at: new Date().toISOString()
-      } as ReturnRequest
-    };
+  },
+
+  requestReturn: async (payload: any) => {
+    return db.createReturn(payload);
   },
 
   updateReturnStatus: (id: number | string, payload: { status: string; seller_note?: string }) =>

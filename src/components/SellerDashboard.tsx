@@ -1346,7 +1346,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                 <h3 className="text-lg font-bold text-[#101410]">
                   Phân bố đơn hàng theo trạng thái
                 </h3>
-                <div className="grid grid-cols-2 sm:grid-cols-6 gap-3 text-center">
+                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 text-center">
                   <div className="p-3 rounded-xl bg-[#F5EEDC] border border-[#E8DEC8]">
                     <span className="text-xs font-bold text-[#8A6D3B] block">Chờ xác nhận</span>
                     <span className="font-mono text-xl font-bold text-[#8A6D3B]">
@@ -1375,6 +1375,12 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                     <span className="text-xs font-bold text-[#2E7D32] block">Hoàn thành</span>
                     <span className="font-mono text-xl font-bold text-[#2E7D32]">
                       {stats.status_counts.completed}
+                    </span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-purple-50 border border-purple-200">
+                    <span className="text-xs font-bold text-purple-900 block">Trả hàng</span>
+                    <span className="font-mono text-xl font-bold text-purple-900">
+                      {stats.status_counts.returned ?? 0}
                     </span>
                   </div>
                   <div className="p-3 rounded-xl bg-[#FBEAEB] border border-[#F5D0D2]">
@@ -1459,7 +1465,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
           {/* Status Filter Bar & Bulk Actions */}
           <div className="flex items-center justify-between flex-wrap gap-3 pb-3 border-b border-[#E6DFD5]">
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-              {['all', 'pending', 'confirmed', 'shipping', 'delivered', 'completed', 'cancelled'].map(st => (
+              {['all', 'pending', 'confirmed', 'shipping', 'delivered', 'completed', 'returned', 'cancelled'].map(st => (
                 <button
                   key={st}
                   onClick={() => {
@@ -2472,6 +2478,16 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                   ? JSON.parse(item.images || '[]')
                   : [];
 
+                const firstItem = (item as any).items?.[0];
+                const prodName = (item.product_name && item.product_name !== 'Sản phẩm theo đơn')
+                  ? item.product_name
+                  : (firstItem?.name || firstItem?.product_name || item.product_name || 'Sản phẩm theo đơn');
+                const prodImg = item.product_image || firstItem?.thumb || firstItem?.image_url || '';
+                const buyerName = (item.buyer_name && item.buyer_name !== 'Khách hàng')
+                  ? item.buyer_name
+                  : ((item as any).receiver || (item as any).buyerName || item.buyer_name || 'Khách hàng');
+                const refundAmount = Number(item.refund_amount || (item as any).total || 0);
+
                 return (
                   <div key={item.id} className="bg-white rounded-3xl border border-[#E2E8D8] p-5 shadow-xs space-y-4">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#E2E8D8] pb-3">
@@ -2480,7 +2496,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                           Đơn hàng #{item.order_code || item.order_id}
                         </span>
                         <span className="text-xs text-[#5E5E61] ml-2">
-                          Khách: <strong>{item.buyer_name || 'Khách hàng'}</strong>{item.buyer_phone ? ` (${item.buyer_phone})` : ''}
+                          Khách: <strong>{buyerName}</strong>{item.buyer_phone ? ` (${item.buyer_phone})` : ''}
                         </span>
                       </div>
 
@@ -2502,11 +2518,11 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
 
                     {/* Product item details */}
                     <div className="flex items-center gap-3 p-3 bg-white rounded-2xl border border-[#DAE7C7]/60">
-                      {item.product_image ? (
+                      {prodImg ? (
                         <ProductImage
-                          src={item.product_image}
-                          alt={item.product_name || 'Sản phẩm'}
-                          productName={item.product_name}
+                          src={prodImg}
+                          alt={prodName}
+                          productName={prodName}
                           eager={true}
                           className="w-12 h-12 rounded-xl object-cover bg-[#F5F8EF] border border-[#DAE7C7] shrink-0"
                         />
@@ -2516,9 +2532,9 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                         </div>
                       )}
                       <div className="min-w-0 flex-1 text-xs">
-                        <p className="font-bold text-[#101410] truncate">{item.product_name || 'Sản phẩm theo đơn'}</p>
+                        <p className="font-bold text-[#101410] truncate">{prodName}</p>
                         <p className="text-[11px] text-[#5E5E61] mt-0.5">
-                          Số tiền hoàn trả: <span className="font-mono font-bold text-[#08482D]">{formatVND(item.refund_amount)}</span>
+                          Số tiền hoàn trả: <span className="font-mono font-bold text-[#08482D]">{formatVND(refundAmount)}</span>
                         </p>
                       </div>
                     </div>
