@@ -4997,11 +4997,29 @@ export class DCCTDatabaseService {
 
     for (const colName of collectionsToClear) {
       const snap = await getDocs(collection(db, colName));
-      const batch = writeBatch(db);
-      snap.forEach((d) => {
-        batch.delete(d.ref);
+      for (let i = 0; i < snap.docs.length; i += 400) {
+        const batch = writeBatch(db);
+        snap.docs.slice(i, i + 400).forEach((d) => {
+          batch.delete(d.ref);
+        });
+        await batch.commit();
+      }
+    }
+
+    // Reset user-specific volatile state on EVERY document in `users`
+    // Requirement: đặt wishlist = [], followingShops = [], savedCoupons = []. KHÔNG xóa tài khoản, họ tên, số điện thoại, shopId và sổ địa chỉ.
+    const usersSnap = await getDocs(collection(db, 'users'));
+    for (let i = 0; i < usersSnap.docs.length; i += 400) {
+      const uBatch = writeBatch(db);
+      usersSnap.docs.slice(i, i + 400).forEach((uDoc) => {
+        uBatch.update(uDoc.ref, {
+          wishlist: [],
+          followingShops: [],
+          savedCoupons: [],
+          updatedAt: serverTimestamp()
+        });
       });
-      await batch.commit();
+      await uBatch.commit();
     }
 
     const sampleProductIds = [
@@ -5066,6 +5084,20 @@ export class DCCTDatabaseService {
     }
     await shopBatch.commit();
 
+    // Ensure all shops have 0 followers
+    const allShopsSnap = await getDocs(collection(db, 'shops'));
+    for (let i = 0; i < allShopsSnap.docs.length; i += 400) {
+      const sBatch = writeBatch(db);
+      allShopsSnap.docs.slice(i, i + 400).forEach((s) => {
+        sBatch.update(s.ref, {
+          followerUids: [],
+          followerCount: 0,
+          updatedAt: serverTimestamp()
+        });
+      });
+      await sBatch.commit();
+    }
+
     try {
       const adminSnap = await getDoc(doc(db, 'usernames', 'seller_admin'));
       const gocSnap = await getDoc(doc(db, 'usernames', 'seller_goc_sach_nhac'));
@@ -5076,6 +5108,10 @@ export class DCCTDatabaseService {
       if (retroSnap.exists() && retroSnap.data()?.uid) uBatch.update(doc(db, 'users', retroSnap.data().uid), { shopId: 'retro-tech' });
       await uBatch.commit();
     } catch {}
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('dcct_demo_reset'));
+    }
 
     return { message: 'Đã khôi phục dữ liệu demo về trạng thái ban đầu' };
   }
@@ -5577,6 +5613,103 @@ export class DCCTDatabaseService {
     }, (err) => {
       console.warn('subscribeMyOfferForProduct error:', err);
       cb(null);
+    });
+  }
+
+  subscribeCart(cb: (data: { items: CartItem[]; itemCount: number }) => void): Unsubscribe {
+    const cur = getCurrentUser();
+    const auth = getActiveAuth();
+    if (!cur || cur.role !== 'buyer' || !auth.currentUser || auth.currentUser.uid !== cur.uid) {
+      cb({ items: [], itemCount: 0 });
+      return () => {};
+    }
+    const db = getActiveFirestore();
+    const cartRef = doc(db, 'carts', cur.uid);
+    return onSnapshot(cartRef, async (snap) => {
+      if (!snap.exists()) {
+        cb({ items: [], itemCount: 0 });
+        return;
+      }
+      try {
+        const data = snap.data();
+        const rawItems = Array.isArray(data?.items) ? data.items : [];
+        if (rawItems.length === 0) {
+          cb({ items: [], itemCount: 0 });
+          return;
+        }
+
+        const items: CartItem[] = [];
+        let count = 0;
+        for (const it of rawItems) {
+          try {
+            const prodSnap = await getDoc(doc(db, 'products', String(it.productId)));
+            if (prodSnap.exists() && prodSnap.data()?.isActive !== false) {
+              const p = normalizeProductDoc(prodSnap.data()!, prodSnap.id);
+              const effectivePrice = it.negotiatedPrice ? Number(it.negotiatedPrice) : p.price;
+              if (p.stock > 0) {
+                count += (Number(it.qty) || 1);
+              }
+              items.push({
+                id: it.productId as any,
+                user_id: cur.uid as any,
+                product_id: it.productId as any,
+                product_name: p.name,
+                product_image: p.image_url,
+                quantity: it.qty,
+                name: p.name,
+                category: p.category,
+                price: effectivePrice,
+                original_price: p.original_price,
+                condition_pct: p.condition_pct,
+                condition_detail: p.condition_detail,
+                stock: p.stock,
+                is_sold_out: p.stock <= 0,
+                image_url: p.image_url,
+                shop_id: p.shop_id,
+                shop_name: p.shop_name,
+                shop_slug: p.shop_slug,
+                created_at: new Date().toISOString(),
+                product: p,
+                effective_price: effectivePrice,
+                offer_id: it.offerId ? String(it.offerId) : undefined,
+                is_negotiated: !!it.negotiatedPrice,
+                negotiated_price: it.negotiatedPrice
+              });
+            }
+          } catch {}
+        }
+        cb({ items, itemCount: count });
+      } catch (err) {
+        console.warn('subscribeCart err:', err);
+        cb({ items: [], itemCount: 0 });
+      }
+    }, (err) => {
+      console.warn('subscribeCart onSnapshot error:', err);
+    });
+  }
+
+  subscribeWishlist(cb: (productIds: (number | string)[]) => void): Unsubscribe {
+    const cur = getCurrentUser();
+    const auth = getActiveAuth();
+    if (!cur || !auth.currentUser || auth.currentUser.uid !== cur.uid) {
+      cb([]);
+      return () => {};
+    }
+    const db = getActiveFirestore();
+    const uRef = doc(db, 'users', cur.uid);
+    return onSnapshot(uRef, (snap) => {
+      if (!snap.exists()) {
+        cb([]);
+        return;
+      }
+      const raw = snap.data()?.wishlist || [];
+      const ids = raw.map((i: any) => {
+        const num = Number(i);
+        return isNaN(num) ? i : num;
+      });
+      cb(ids);
+    }, (err) => {
+      console.warn('subscribeWishlist error:', err);
     });
   }
 }

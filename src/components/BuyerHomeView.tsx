@@ -10,6 +10,7 @@ import { Button } from './Button';
 import { ProductCard } from './ProductCard';
 import { ProductImage } from './ProductImage';
 import { ProductFallbackImage } from './ProductFallbackImage';
+import { useAuth } from '../context/AuthContext';
 
 interface BuyerHomeViewProps {
   user: User;
@@ -80,6 +81,9 @@ export const BuyerHomeView: React.FC<BuyerHomeViewProps> = ({
   onToggleWishlist,
   onNavigateToShop
 }) => {
+  const { cartCount: authCartCount } = useAuth();
+  const [liveCartCount, setLiveCartCount] = useState<number | null>(null);
+
   // Active shipping order for quick tracker card
   const [shippingOrders, setShippingOrders] = useState<Order[]>([]);
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState<number>(0);
@@ -88,10 +92,15 @@ export const BuyerHomeView: React.FC<BuyerHomeViewProps> = ({
   // Fresh arrivals horizontal row scroll ref
   const freshScrollRef = useRef<HTMLDivElement>(null);
 
-  // Real-time onSnapshot subscription for shipping orders & notifications (Requirement 3)
+  // Real-time onSnapshot subscription for cart, shipping orders & notifications
   useEffect(() => {
     let isMounted = true;
     setLoadingOrders(true);
+
+    const unsubCart = api.subscribeCart((cartData) => {
+      if (!isMounted) return;
+      setLiveCartCount(cartData.itemCount);
+    });
 
     const unsubOrders = api.subscribeBuyerOrders((allOrders) => {
       if (!isMounted) return;
@@ -109,10 +118,13 @@ export const BuyerHomeView: React.FC<BuyerHomeViewProps> = ({
 
     return () => {
       isMounted = false;
+      unsubCart();
       unsubOrders();
       unsubNotifs();
     };
   }, []);
+
+  const displayCartCount = liveCartCount !== null ? liveCartCount : (authCartCount ?? cartCount);
 
   const activeTrackingOrder = shippingOrders.length > 0 ? shippingOrders[0] : null;
 
@@ -188,7 +200,7 @@ export const BuyerHomeView: React.FC<BuyerHomeViewProps> = ({
                     <ShoppingBag className="w-4 h-4" />
                   </div>
                   <span className="font-mono text-sm font-bold text-[#C2522D]">
-                    {cartCount}
+                    {displayCartCount}
                   </span>
                 </div>
                 <div className="mt-2">

@@ -37,7 +37,7 @@ type PendingAction =
   | { type: 'wishlist'; productId: number };
 
 function MainShopApp() {
-  const { status: authStatus, user, loading: authLoading, refreshCartCount, logout } = useAuth();
+  const { status: authStatus, user, loading: authLoading, refreshCartCount, logout, cartCount } = useAuth();
   const { showToast } = useToast();
 
   // Navigation State
@@ -223,6 +223,41 @@ function MainShopApp() {
       setCurrentView('home');
     }
   }, [user]);
+
+  // Real-time wishlist listener (updates instantly upon toggle or demo reset without page refresh)
+  useEffect(() => {
+    if (!user || user.role !== 'buyer') {
+      setWishlistIds(new Set());
+      return;
+    }
+    const unsub = api.subscribeWishlist((ids) => {
+      setWishlistIds(new Set(ids.map(Number)));
+    });
+    return () => unsub();
+  }, [user?.id, user?.role]);
+
+  // Real-time cart listener for active cart items
+  useEffect(() => {
+    if (!user || user.role !== 'buyer') {
+      setCartItems([]);
+      return;
+    }
+    const unsub = api.subscribeCart((res) => {
+      setCartItems(res.items);
+    });
+    return () => unsub();
+  }, [user?.id, user?.role]);
+
+  // Listen for demo reset events across the app
+  useEffect(() => {
+    const handleReset = () => {
+      fetchProducts();
+      fetchWishlist();
+      loadCartData();
+    };
+    window.addEventListener('dcct_demo_reset', handleReset);
+    return () => window.removeEventListener('dcct_demo_reset', handleReset);
+  }, []);
 
   // Synchronize route from browser pathname on initial mount & popstate
   useEffect(() => {
@@ -924,7 +959,7 @@ function MainShopApp() {
             products={products}
             allProducts={allProducts}
             loadingProducts={loadingProducts}
-            cartCount={cartItems.length}
+            cartCount={cartCount}
             selectedCategory={selectedCategory}
             searchQuery={searchQuery}
             sortOption={sortOption}

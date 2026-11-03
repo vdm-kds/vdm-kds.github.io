@@ -174,6 +174,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // Real-time cart synchronization via onSnapshot (carts/{uid})
+  useEffect(() => {
+    if (!authState.user || authState.user.role !== 'buyer') {
+      setCartCount(0);
+      return;
+    }
+    const unsub = api.subscribeCart((cartData) => {
+      if (mountedRef.current) {
+        setCartCount(cartData.itemCount);
+      }
+    });
+    return () => unsub();
+  }, [authState.user?.id, authState.user?.role]);
+
+  // Listen for demo reset events to auto-clear or refresh
+  useEffect(() => {
+    const handleReset = () => {
+      refreshUser();
+      refreshCartCount();
+    };
+    window.addEventListener('dcct_demo_reset', handleReset);
+    return () => window.removeEventListener('dcct_demo_reset', handleReset);
+  }, []);
+
   const login = async (username: string, password: string, role: 'buyer' | 'seller') => {
     try {
       const data = await api.login({ username, password, role });

@@ -622,6 +622,12 @@ export const api = {
   subscribeMyOfferForProduct: (productId: number | string, cb: (offer: Offer | null) => void) =>
     db.subscribeMyOfferForProduct(productId, cb),
 
+  subscribeCart: (cb: (data: { items: CartItem[]; itemCount: number }) => void) =>
+    db.subscribeCart(cb),
+
+  subscribeWishlist: (cb: (productIds: (number | string)[]) => void) =>
+    db.subscribeWishlist(cb),
+
   // --- SAMPLE MEDIA MANAGEMENT ---
   getSeedMedia: () =>
     db.getSeedMedia(),
