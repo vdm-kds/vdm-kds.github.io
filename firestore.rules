@@ -1,0 +1,165 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===== Hàm dùng chung =====
+    function signedIn() { return request.auth != null; }
+    function uid() { return request.auth.uid; }
+
+    // 4 tài khoản gốc của chủ web (kiểm tra bằng email nội bộ, không tốn lượt đọc)
+    function isOwnerAccount() {
+      return signedIn() && request.auth.token.email in [
+        'admin@seller.nhiptaman.store',
+        'goc_sach_nhac@seller.nhiptaman.store',
+        'retro_tech@seller.nhiptaman.store',
+        '0987654321@buyer.nhiptaman.store'
+      ];
+    }
+
+    // Chế độ thuyết trình: bật thì chỉ tài khoản gốc được thao tác
+    function presentationOn() {
+      return exists(/databases/$(database)/documents/config/settings)
+        && get(/databases/$(database)/documents/config/settings).data.get('presentationMode', false) == true;
+    }
+    function canWrite() { return signedIn() && (isOwnerAccount() || !presentationOn()); }
+
+    function onlyChanged(fields) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
+    }
+    function shopOwner(shopId) {
+      return get(/databases/$(database)/documents/shops/$(shopId)).data.ownerUid == uid();
+    }
+
+    // ===== Tài khoản gốc: toàn quyền (seed, reset, bảng điều khiển demo) =====
+    match /{document=**} {
+      allow read, write: if isOwnerAccount();
+    }
+
+    // ===== Cấu hình chung =====
+    match /config/{docId} {
+      allow read: if true;
+    }
+
+    // ===== Tên đăng nhập =====
+    match /usernames/{key} {
+      allow get: if true;
+      allow create: if signedIn() && request.resource.data.uid == uid();
+    }
+
+    // ===== Hồ sơ người dùng =====
+    match /users/{userId} {
+      allow read: if signedIn();
+      allow create, update: if signedIn() && uid() == userId;
+    }
+
+    // ===== Shop =====
+    match /shops/{shopId} {
+      allow read: if true;
+      allow create: if canWrite() && request.resource.data.ownerUid == uid();
+      allow update: if canWrite() && (
+        resource.data.ownerUid == uid()
+        || onlyChanged(['followerUids', 'followerCount', 'ratingAvg', 'ratingCount', 'updatedAt'])
+      );
+    }
+
+    // ===== Sản phẩm =====
+    match /products/{productId} {
+      allow read: if true;
+      allow create: if canWrite() && request.resource.data.ownerUid == uid();
+      allow update: if signedIn() && (
+        onlyChanged(['viewCount', 'viewDate'])
+        || (canWrite() && resource.data.ownerUid == uid())
+        || (canWrite()
+            && onlyChanged(['stock', 'sold', 'updatedAt', 'ratingAvg', 'ratingCount'])
+            && request.resource.data.stock >= 0)
+      );
+    }
+
+    // ===== Mã giảm giá =====
+    match /coupons/{code} {
+      allow read: if true;
+      allow create: if canWrite() && shopOwner(request.resource.data.shopId);
+      allow update: if canWrite() && (
+        onlyChanged(['usedCount', 'updatedAt'])
+        || shopOwner(resource.data.shopId)
+      );
+      allow delete: if canWrite() && shopOwner(resource.data.shopId);
+    }
+
+    // ===== Giỏ hàng =====
+    match /carts/{userId} {
+      allow read: if signedIn() && uid() == userId;
+      allow write: if canWrite() && uid() == userId;
+    }
+
+    // ===== Đơn hàng =====
+    match /orders/{code} {
+      allow get: if signedIn() && (resource == null
+        || resource.data.buyerUid == uid() || resource.data.sellerUid == uid());
+      allow list: if signedIn() && (resource.data.buyerUid == uid() || resource.data.sellerUid == uid());
+      allow create: if canWrite() && request.resource.data.buyerUid == uid();
+      allow update: if canWrite() && (resource.data.buyerUid == uid() || resource.data.sellerUid == uid());
+    }
+
+    // ===== Trả giá =====
+    match /offers/{offerId} {
+      allow get: if signedIn() && (resource == null
+        || resource.data.buyerUid == uid() || resource.data.sellerUid == uid());
+      allow list: if signedIn() && (resource.data.buyerUid == uid() || resource.data.sellerUid == uid());
+      allow create: if canWrite() && request.resource.data.buyerUid == uid();
+      allow update: if canWrite() && (resource.data.buyerUid == uid() || resource.data.sellerUid == uid());
+    }
+
+    // ===== Trả hàng / hoàn tiền =====
+    match /returns/{returnId} {
+      allow get: if signedIn() && (resource == null
+        || resource.data.buyerUid == uid() || resource.data.sellerUid == uid());
+      allow list: if signedIn() && (resource.data.buyerUid == uid() || resource.data.sellerUid == uid());
+      allow create: if canWrite() && request.resource.data.buyerUid == uid();
+      allow update: if canWrite() && (resource.data.buyerUid == uid() || resource.data.sellerUid == uid());
+    }
+
+    // ===== Thông báo =====
+    match /notifications/{notifId} {
+      allow get: if signedIn() && (resource == null || resource.data.toUid == uid());
+      allow list: if signedIn() && resource.data.toUid == uid();
+      allow create: if canWrite() && (request.resource.data.fromUid == uid() || request.resource.data.toUid == uid());
+      allow update: if signedIn() && (
+        resource.data.toUid == uid()
+        || (canWrite() && request.resource.data.fromUid == uid()
+            && request.resource.data.toUid == resource.data.toUid)
+      );
+      allow delete: if signedIn() && resource.data.toUid == uid();
+    }
+
+    // ===== Chat =====
+    match /conversations/{convId} {
+      function conv() { return get(/databases/$(database)/documents/conversations/$(convId)).data; }
+      function convAfter() { return getAfter(/databases/$(database)/documents/conversations/$(convId)).data; }
+
+      allow get: if signedIn() && (resource == null
+        || uid() == resource.data.buyerUid || uid() == resource.data.sellerUid);
+      allow list: if signedIn() && (resource.data.buyerUid == uid() || resource.data.sellerUid == uid());
+      allow create: if canWrite() && request.resource.data.buyerUid == uid();
+      allow update: if canWrite() && (uid() == resource.data.buyerUid || uid() == resource.data.sellerUid);
+
+      match /messages/{msgId} {
+        allow read: if signedIn() && (uid() == conv().buyerUid || uid() == conv().sellerUid);
+        allow create: if canWrite() && request.resource.data.senderUid == uid()
+          && (uid() == convAfter().buyerUid || uid() == convAfter().sellerUid);
+        allow update: if signedIn() && (uid() == conv().buyerUid || uid() == conv().sellerUid);
+      }
+    }
+
+    // ===== Đánh giá =====
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if canWrite() && request.resource.data.buyerUid == uid();
+      allow update: if canWrite() && (
+        resource.data.buyerUid == uid()
+        || resource.data.sellerUid == uid()
+        || onlyChanged(['helpfulUids', 'helpfulCount'])
+      );
+    }
+  }
+}
