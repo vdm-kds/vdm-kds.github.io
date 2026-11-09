@@ -233,9 +233,13 @@ export const api = {
   reportReview: (id: number | string, reason: string) =>
     db.reportReview(id, reason),
 
-  // --- UPLOAD ---
+  // --- UPLOAD & MEDIA ---
   uploadFile: (dataUrl: string, type: 'image' | 'video' = 'image') =>
     db.uploadFile(dataUrl, type),
+  uploadReviewVideo: (blob: Blob, duration: number, onProgress?: (pct: number) => void) =>
+    db.uploadReviewVideo(blob, duration, onProgress),
+  getReviewVideoBlobUrl: (mediaId: string) =>
+    db.getReviewVideoBlobUrl(mediaId),
 
   // --- COUPONS ---
   calculateCheckout: (

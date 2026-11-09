@@ -4,7 +4,7 @@ import {
   Plus, Edit2, Trash2, CheckCircle2, XCircle, Truck, Send, Clock, 
   MapPin, RefreshCw, X, ChevronRight, Eye, Printer, Download, Tag, Percent, CheckSquare, Square,
   MessageSquare, RotateCcw, Sparkles, ShieldAlert, Bell, KeyRound, LogOut, UserCheck, Star, Play, Flag, ChevronDown, Check, User,
-  Upload, ExternalLink
+  Upload, ExternalLink, Camera, Loader2
 } from 'lucide-react';
 import { Product, Order, SellerStats, Coupon, Offer, ChatConversation, ChatMessage, ReturnRequest, ProductFlaw, Shop } from '../types';
 import { api } from '../services/api';
@@ -14,7 +14,16 @@ import { SellerShippingKanban } from './SellerShippingKanban';
 import { ShippingLabelModal } from './ShippingLabelModal';
 import { Button } from './Button';
 import { ProductImage } from './ProductImage';
-import { compressImageFile, compressProductImage, compressShopCoverImage } from '../utils/image';
+import { 
+  compressImageFile, 
+  compressProductImage, 
+  compressShopCoverImage,
+  compressChatImage,
+  compressDefectImage,
+  createProductThumbnail,
+  validateProductTotalMediaSize
+} from '../utils/image';
+import { ReviewVideoPlayer } from './ReviewVideoPlayer';
 
 interface SellerDashboardProps {
   onViewPreview?: () => void;
@@ -173,6 +182,30 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
     submitting: false
   });
 
+  // Chart & KPI State
+  const [revenueRange, setRevenueRange] = useState<'7d' | '30d'>('7d');
+  const [chartTooltip, setChartTooltip] = useState<{ day: string; revenue: number; ordersCount: number; x: number; y: number } | null>(null);
+
+  // Seller Chat Attachments
+  const [sellerChatImages, setSellerChatImages] = useState<string[]>([]);
+  const [compressingSellerChatImage, setCompressingSellerChatImage] = useState(false);
+  const [activeSellerChatLightbox, setActiveSellerChatLightbox] = useState<string | null>(null);
+  const sellerChatFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Quick Photo Manager Modal
+  const [quickPhotoModal, setQuickPhotoModal] = useState<{ open: boolean; product: Product | null; images: string[]; saving: boolean }>({ open: false, product: null, images: [], saving: false });
+  const quickPhotoFileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingQuickPhotos, setUploadingQuickPhotos] = useState(false);
+
+  // Product Modal Enhancements
+  const [showAdvancedUrlInput, setShowAdvancedUrlInput] = useState(false);
+  const defectPhotoInputRef = useRef<HTMLInputElement>(null);
+  const mobileCameraInputRef = useRef<HTMLInputElement>(null);
+  const [isDraggingImages, setIsDraggingImages] = useState(false);
+
+  // Review Media Lightbox
+  const [sellerReviewLightbox, setSellerReviewLightbox] = useState<{ open: boolean; type: 'image' | 'video'; url?: string; mediaId?: string; videoThumb?: string } | null>(null);
+
   // Top Bar Dropdown & Profile & Password States
   const [sellerMenuOpen, setSellerMenuOpen] = useState(false);
   const [shopProfileModal, setShopProfileModal] = useState(false);
@@ -245,8 +278,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
     }
   };
 
-  const handleProductImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
+  const processProductImages = async (files: FileList | File[]) => {
     if (!files || files.length === 0) return;
     setUploadingImages(true);
     try {
@@ -263,11 +295,148 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
         image_url: prev.image_url || combined[0] || '',
         imagesText: combined.join('\n')
       }));
-      showToast(`Đã nén chuẩn WebP và nạp ${compressedUrls.length} ảnh (≤ 150KB/ảnh)`, 'success');
+      showToast(`Đã nạp ${compressedUrls.length} ảnh sản phẩm (chuẩn nén ≤ 150KB/ảnh)`, 'success');
     } catch (err: any) {
       showToast(err.message || 'Lỗi tải ảnh', 'error');
     } finally {
       setUploadingImages(false);
+    }
+  };
+
+  const handleProductImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      processProductImages(e.target.files);
+      e.target.value = '';
+    }
+  };
+
+  const handleMobileCameraUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      processProductImages(e.target.files);
+      e.target.value = '';
+    }
+  };
+
+  const handleDefectPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const dataUrl = await compressDefectImage(file);
+      const newLine = `Ảnh cận khuyết điểm | Chụp thực tế góc có vết trầy xước | ${dataUrl}`;
+      setProdForm(prev => ({
+        ...prev,
+        flawsText: prev.flawsText ? `${prev.flawsText.trim()}\n${newLine}` : newLine
+      }));
+      showToast('Đã nén và thêm ảnh cận khuyết điểm (≤ 80KB)', 'success');
+    } catch (err: any) {
+      showToast(err.message || 'Lỗi nén ảnh khuyết điểm', 'error');
+    } finally {
+      if (defectPhotoInputRef.current) defectPhotoInputRef.current.value = '';
+    }
+  };
+
+  const handlePickSellerChatImages = async (fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0) return;
+    const remainingSlots = 3 - sellerChatImages.length;
+    if (remainingSlots <= 0) return;
+
+    const files = Array.from(fileList).slice(0, remainingSlots);
+    setCompressingSellerChatImage(true);
+    try {
+      for (const file of files) {
+        const res = await compressChatImage(file);
+        setSellerChatImages(prev => [...prev, res.dataUrl].slice(0, 3));
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Lỗi xử lý ảnh đính kèm', 'error');
+    } finally {
+      setCompressingSellerChatImage(false);
+      if (sellerChatFileInputRef.current) sellerChatFileInputRef.current.value = '';
+    }
+  };
+
+  // Quick Photo Manager
+  const handleOpenQuickPhotoModal = (prod: Product) => {
+    let imgs: string[] = [];
+    if (Array.isArray(prod.images)) imgs = prod.images;
+    else if (typeof prod.images === 'string') {
+      try { imgs = JSON.parse(prod.images); } catch(e) { imgs = [prod.images]; }
+    }
+    if (imgs.length === 0 && prod.image_url) imgs = [prod.image_url];
+    setQuickPhotoModal({ open: true, product: prod, images: imgs, saving: false });
+  };
+
+  const handleQuickPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setUploadingQuickPhotos(true);
+    try {
+      const remaining = 5 - quickPhotoModal.images.length;
+      if (remaining <= 0) {
+        showToast('Tối đa 5 ảnh cho mỗi sản phẩm', 'error');
+        return;
+      }
+      const fileList = Array.from(files).slice(0, remaining);
+      const compressed: string[] = [];
+      for (const file of fileList) {
+        const url = await compressProductImage(file, 1024, 150 * 1024);
+        compressed.push(url);
+      }
+      setQuickPhotoModal(prev => ({
+        ...prev,
+        images: [...prev.images, ...compressed].slice(0, 5)
+      }));
+      showToast(`Đã thêm ${compressed.length} ảnh`, 'success');
+    } catch (err: any) {
+      showToast(err.message || 'Lỗi tải ảnh', 'error');
+    } finally {
+      setUploadingQuickPhotos(false);
+      if (quickPhotoFileInputRef.current) quickPhotoFileInputRef.current.value = '';
+    }
+  };
+
+  const handleSetQuickPhotoCover = (index: number) => {
+    if (index <= 0 || index >= quickPhotoModal.images.length) return;
+    setQuickPhotoModal(prev => {
+      const list = [...prev.images];
+      const [picked] = list.splice(index, 1);
+      list.unshift(picked);
+      return { ...prev, images: list };
+    });
+  };
+
+  const handleRemoveQuickPhoto = (index: number) => {
+    setQuickPhotoModal(prev => ({
+      ...prev,
+      images: prev.images.filter((_, i) => i !== index)
+    }));
+  };
+
+  const handleSaveQuickPhotos = async () => {
+    if (!quickPhotoModal.product) return;
+    setQuickPhotoModal(prev => ({ ...prev, saving: true }));
+    try {
+      const images = quickPhotoModal.images.slice(0, 5);
+      const cover = images[0] || '';
+      let thumb = quickPhotoModal.product.thumb || '';
+      if (cover) {
+        try {
+          thumb = await createProductThumbnail(cover);
+        } catch {
+          thumb = cover;
+        }
+      }
+      await api.updateProduct(quickPhotoModal.product.id, {
+        image_url: cover,
+        images,
+        thumb
+      });
+      showToast('Đã cập nhật ảnh sản phẩm thành công!', 'success');
+      setQuickPhotoModal({ open: false, product: null, images: [], saving: false });
+      fetchProducts();
+    } catch (err: any) {
+      showToast(err.message || 'Lỗi lưu ảnh sản phẩm', 'error');
+      setQuickPhotoModal(prev => ({ ...prev, saving: false }));
     }
   };
 
@@ -829,6 +998,29 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
         .split('\n')
         .map(s => s.trim())
         .filter(Boolean);
+
+      if (parsedImages.length === 0 && !prodForm.image_url) {
+        const addNow = window.confirm('Món này chưa có ảnh. Thêm ảnh ngay? (Bấm OK để thêm ảnh, hoặc Cancel để tiếp tục lưu mà không có ảnh)');
+        if (addNow) {
+          return;
+        }
+      }
+
+      const checkSize = validateProductTotalMediaSize(parsedImages);
+      if (!checkSize.valid) {
+        showToast(checkSize.message || 'Kích thước ảnh vượt quá giới hạn 800KB', 'error');
+        return;
+      }
+
+      const coverImg = prodForm.image_url || (parsedImages[0] || '');
+      let thumb: string | undefined = undefined;
+      if (coverImg) {
+        try {
+          thumb = await createProductThumbnail(coverImg);
+        } catch {
+          thumb = coverImg;
+        }
+      }
       
       const parsedFlaws = prodForm.flawsText
         .split('\n')
@@ -852,8 +1044,9 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
         condition_pct: prodForm.condition_pct,
         condition_detail: prodForm.condition_detail,
         stock: prodForm.stock,
-        image_url: prodForm.image_url || (parsedImages[0] || ''),
+        image_url: coverImg,
         images: parsedImages.length > 0 ? parsedImages : undefined,
+        thumb,
         flaws: parsedFlaws.length > 0 ? parsedFlaws : undefined,
         inspector_name: prodForm.inspector_name,
         inspection_date: prodForm.inspection_date
@@ -926,21 +1119,41 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
   // MARKETPLACE HANDLERS: CHAT
   const handleSendChatMessage = async (presetText?: string) => {
     const text = (presetText || chatInputText).trim();
-    if (!text || !activeConversation || sendingChatMsg) return;
+    const hasImages = sellerChatImages.length > 0;
+    if ((!text && !hasImages) || !activeConversation || sendingChatMsg) return;
 
-    const phoneRegex = /(?:\+?84|0)(?:\s*[\.\-]?\s*\d){9,10}\b/;
-    const urlRegex = /(?:https?:\/\/|www\.)[^\s]+|[a-zA-Z0-9-]+\.(?:com|vn|net|org|io|me|info|biz)\b/i;
+    if (text) {
+      const phoneRegex = /(?:\+?84|0)(?:\s*[\.\-]?\s*\d){9,10}\b/;
+      const urlRegex = /(?:https?:\/\/|www\.)[^\s]+|[a-zA-Z0-9-]+\.(?:com|vn|net|org|io|me|info|biz)\b/i;
 
-    if (phoneRegex.test(text) || urlRegex.test(text)) {
-      setChatWarning('Vì an toàn, vui lòng giao dịch trên Đồ Cũ Còn Thương. Hệ thống không cho phép chia sẻ số điện thoại hoặc liên kết ngoài.');
-      return;
+      if (phoneRegex.test(text) || urlRegex.test(text)) {
+        setChatWarning('Vì an toàn, vui lòng giao dịch trên Đồ Cũ Còn Thương. Hệ thống không cho phép chia sẻ số điện thoại hoặc liên kết ngoài.');
+        return;
+      }
     }
     setChatWarning(null);
 
     try {
       setSendingChatMsg(true);
-      await api.sendChatMessage(activeConversation.id, text);
-      setChatInputText('');
+
+      // Send attached images sequentially
+      if (hasImages) {
+        for (const imgUrl of sellerChatImages) {
+          await api.sendChatMessage({
+            conversation_id: activeConversation.id,
+            type: 'image',
+            text: '',
+            image: imgUrl
+          } as any);
+        }
+        setSellerChatImages([]);
+      }
+
+      if (text) {
+        await api.sendChatMessage(activeConversation.id, text);
+        setChatInputText('');
+      }
+
       const detail = await api.getChatDetail(activeConversation.id);
       setActiveConversation(detail.conversation);
       await fetchChat();
@@ -1028,6 +1241,73 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
     { status: 'Giao hàng thành công', note: 'Khách hàng đã nhận hàng và ký nhận đầy đủ' },
     { status: 'Giao hàng thất bại - hẹn giao lại', note: 'Khách hàng bận, hẹn giao lại vào ngày làm việc tiếp theo' }
   ];
+
+  const kpiStats = React.useMemo(() => {
+    const total = orders.length;
+    const cancelled = orders.filter(o => o.status === 'cancelled').length;
+    const returned = orders.filter(o => o.status === 'returned' || (o.status as any) === 'return_requested' || (o as any).return_status).length;
+    const paidOrders = orders.filter(o => o.payment_status === 'paid' && o.status !== 'cancelled' && o.status !== 'returned');
+    const paidRevenue = paidOrders.reduce((sum, o) => sum + (o.subtotal || o.total || 0), 0);
+    const aov = paidOrders.length > 0 ? Math.round(paidRevenue / paidOrders.length) : 0;
+    const cancelRate = total > 0 ? ((cancelled / total) * 100).toFixed(1) + '%' : '0.0%';
+    const returnRate = total > 0 ? ((returned / total) * 100).toFixed(1) + '%' : '0.0%';
+
+    return {
+      total,
+      cancelRate,
+      returnRate,
+      aov,
+      paidOrdersCount: paidOrders.length,
+      paidRevenue
+    };
+  }, [orders]);
+
+  const chartData = React.useMemo(() => {
+    const numDays = revenueRange === '7d' ? 7 : 30;
+    const days: { dateStr: string; label: string; revenue: number; ordersCount: number }[] = [];
+    const now = new Date();
+    for (let i = numDays - 1; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toISOString().split('T')[0];
+      const label = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+      days.push({ dateStr, label, revenue: 0, ordersCount: 0 });
+    }
+
+    const paid = orders.filter(o => o.payment_status === 'paid' && o.status !== 'cancelled' && o.status !== 'returned');
+    paid.forEach(ord => {
+      const ordDate = (ord.created_at || '').split('T')[0];
+      const item = days.find(d => d.dateStr === ordDate);
+      if (item) {
+        item.revenue += (ord.subtotal || ord.total || 0);
+        item.ordersCount += 1;
+      }
+    });
+
+    const maxRev = Math.max(...days.map(d => d.revenue), 100000);
+    return { days, maxRev };
+  }, [orders, revenueRange]);
+
+  const topSellingProducts = React.useMemo(() => {
+    const map = new Map<string, { id: any; name: string; image: string; quantity: number; revenue: number }>();
+    const paid = orders.filter(o => o.payment_status === 'paid' && o.status !== 'cancelled' && o.status !== 'returned');
+    paid.forEach(ord => {
+      (ord.items || []).forEach(item => {
+        const key = String(item.product_id || (item as any).id || item.product_name);
+        const ex = map.get(key) || {
+          id: item.product_id || (item as any).id,
+          name: item.product_name || (item as any).name || 'Sản phẩm',
+          image: (item as any).image_url || (item as any).image || (item as any).product_image || '',
+          quantity: 0,
+          revenue: 0,
+        };
+        ex.quantity += (item.quantity || 1);
+        ex.revenue += (item.price || 0) * (item.quantity || 1);
+        map.set(key, ex);
+      });
+    });
+    return Array.from(map.values()).sort((a, b) => b.quantity - a.quantity).slice(0, 5);
+  }, [orders]);
 
   return (
     <div className="min-h-screen bg-[#F5F8EF] text-[#101410] flex flex-col pb-16">
@@ -1388,6 +1668,251 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                     <span className="font-mono text-xl font-bold text-[#C53929]">
                       {stats.status_counts.cancelled}
                     </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 3 Huy hiệu KPI bổ sung */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 sm:gap-4">
+                <div className="p-4 rounded-2xl bg-white border border-[#E2E8D8] shadow-xs flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-semibold text-[#5E5E61] uppercase block">Tỉ lệ hủy đơn</span>
+                    <div className="font-mono text-xl sm:text-2xl font-bold text-red-600 mt-1">
+                      {kpiStats.cancelRate}
+                    </div>
+                    <span className="text-[11px] text-[#5E5E61] mt-0.5 block">
+                      {orders.filter(o => o.status === 'cancelled').length} đơn đã hủy
+                    </span>
+                  </div>
+                  <div className="w-10 h-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center font-bold">
+                    <XCircle className="w-5 h-5" />
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-white border border-[#E2E8D8] shadow-xs flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-semibold text-[#5E5E61] uppercase block">Tỉ lệ trả hàng</span>
+                    <div className="font-mono text-xl sm:text-2xl font-bold text-amber-600 mt-1">
+                      {kpiStats.returnRate}
+                    </div>
+                    <span className="text-[11px] text-[#5E5E61] mt-0.5 block">
+                      {orders.filter(o => o.status === 'returned' || (o.status as any) === 'return_requested' || (o as any).return_status).length} đơn khiếu nại trả
+                    </span>
+                  </div>
+                  <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+                    <RotateCcw className="w-5 h-5" />
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-white border border-[#E2E8D8] shadow-xs flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-semibold text-[#5E5E61] uppercase block">Giá trị đơn TB (AOV)</span>
+                    <div className="font-mono text-xl sm:text-2xl font-bold text-[#08482D] mt-1">
+                      {formatVND(kpiStats.aov)}
+                    </div>
+                    <span className="text-[11px] text-[#5E5E61] mt-0.5 block">
+                      Tính trên {kpiStats.paidOrdersCount} đơn thanh toán
+                    </span>
+                  </div>
+                  <div className="w-10 h-10 rounded-xl bg-[#F5F8EF] text-[#08482D] flex items-center justify-center font-bold">
+                    <TrendingUp className="w-5 h-5" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Biểu đồ doanh thu & Top món bán chạy */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Biểu đồ doanh thu SVG thuần */}
+                <div className="lg:col-span-2 p-6 rounded-3xl bg-white border border-[#E2E8D8] shadow-xs space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-base sm:text-lg font-bold text-[#101410] flex items-center gap-2">
+                        <TrendingUp className="w-5 h-5 text-[#08482D]" />
+                        Doanh thu theo ngày
+                      </h3>
+                      <p className="text-xs text-[#5E5E61]">Chỉ tính các đơn đã thanh toán thành công (không tính đơn hủy/trả hàng)</p>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 bg-[#F5F8EF] p-1 rounded-xl border border-[#DAE7C7] self-start sm:self-auto">
+                      <button
+                        type="button"
+                        onClick={() => setRevenueRange('7d')}
+                        className={`px-3 py-1 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
+                          revenueRange === '7d' ? 'bg-[#08482D] text-white shadow-2xs' : 'text-[#5E5E61] hover:text-[#101410]'
+                        }`}
+                      >
+                        7 ngày
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRevenueRange('30d')}
+                        className={`px-3 py-1 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
+                          revenueRange === '30d' ? 'bg-[#08482D] text-white shadow-2xs' : 'text-[#5E5E61] hover:text-[#101410]'
+                        }`}
+                      >
+                        30 ngày
+                      </button>
+                    </div>
+                  </div>
+
+                  {orders.length === 0 ? (
+                    <div className="py-16 text-center text-stone-400">
+                      <Package className="w-10 h-10 mx-auto mb-2 text-stone-300" />
+                      <p className="text-sm font-semibold text-stone-600">Chưa có dữ liệu đơn hàng trong khoảng thời gian này</p>
+                      <p className="text-xs text-stone-400 mt-1">Khi khách hàng đặt và thanh toán đơn, biểu đồ sẽ hiển thị tại đây.</p>
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <div className="w-full overflow-x-auto">
+                        <svg viewBox="0 0 640 220" className="w-full h-52 sm:h-64 select-none">
+                          <defs>
+                            <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#08482D" stopOpacity="0.25" />
+                              <stop offset="100%" stopColor="#08482D" stopOpacity="0.0" />
+                            </linearGradient>
+                          </defs>
+
+                          {/* Grid lines */}
+                          {[0, 0.5, 1].map((pct, i) => {
+                            const y = 20 + 145 * (1 - pct);
+                            return (
+                              <g key={i}>
+                                <line x1="50" y1={y} x2="620" y2={y} stroke="#E2E8D8" strokeDasharray="3 3" />
+                                <text x="44" y={y + 4} textAnchor="end" fontSize="10" fill="#786F66" fontFamily="monospace">
+                                  {formatVND(Math.round(chartData.maxRev * pct))}
+                                </text>
+                              </g>
+                            );
+                          })}
+
+                          {/* Gradient Area */}
+                          {chartData.days.length > 0 && (
+                            <polygon
+                              points={(() => {
+                                const pts = chartData.days.map((d, i) => {
+                                  const x = 50 + (chartData.days.length > 1 ? (i / (chartData.days.length - 1)) * 570 : 285);
+                                  const y = 20 + 145 - (d.revenue / chartData.maxRev) * 145;
+                                  return `${x.toFixed(1)},${y.toFixed(1)}`;
+                                });
+                                const firstX = 50;
+                                const lastX = 620;
+                                return `${firstX},165 ${pts.join(' ')} ${lastX},165`;
+                              })()}
+                              fill="url(#revenueGrad)"
+                            />
+                          )}
+
+                          {/* Polyline Path */}
+                          {chartData.days.length > 0 && (
+                            <polyline
+                              points={chartData.days.map((d, i) => {
+                                const x = 50 + (chartData.days.length > 1 ? (i / (chartData.days.length - 1)) * 570 : 285);
+                                const y = 20 + 145 - (d.revenue / chartData.maxRev) * 145;
+                                return `${x.toFixed(1)},${y.toFixed(1)}`;
+                              }).join(' ')}
+                              fill="none"
+                              stroke="#08482D"
+                              strokeWidth="2.5"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          )}
+
+                          {/* Circles and hover points */}
+                          {chartData.days.map((d, i) => {
+                            const x = 50 + (chartData.days.length > 1 ? (i / (chartData.days.length - 1)) * 570 : 285);
+                            const y = 20 + 145 - (d.revenue / chartData.maxRev) * 145;
+                            const isHovered = chartTooltip?.day === d.label;
+                            return (
+                              <g key={i}>
+                                <circle
+                                  cx={x}
+                                  cy={y}
+                                  r={isHovered ? 6 : 3.5}
+                                  fill={isHovered ? '#C2522D' : '#08482D'}
+                                  stroke="#FFFFFF"
+                                  strokeWidth="2"
+                                  className="cursor-pointer transition-all"
+                                  onMouseEnter={() => setChartTooltip({ day: d.label, revenue: d.revenue, ordersCount: d.ordersCount, x, y })}
+                                  onMouseLeave={() => setChartTooltip(null)}
+                                />
+                                {(revenueRange === '7d' || i % 4 === 0 || i === chartData.days.length - 1) && (
+                                  <text
+                                    x={x}
+                                    y="185"
+                                    textAnchor="middle"
+                                    fontSize="9"
+                                    fill="#786F66"
+                                    fontFamily="monospace"
+                                  >
+                                    {d.label}
+                                  </text>
+                                )}
+                              </g>
+                            );
+                          })}
+                        </svg>
+                      </div>
+
+                      {chartTooltip && (
+                        <div
+                          className="absolute z-20 pointer-events-none bg-stone-900/90 text-white rounded-xl px-3 py-1.5 text-xs shadow-xl transition-all -translate-x-1/2 -translate-y-full mb-2"
+                          style={{ left: `${(chartTooltip.x / 640) * 100}%`, top: `${(chartTooltip.y / 220) * 100}%` }}
+                        >
+                          <p className="font-bold text-[#DAE7C7]">{chartTooltip.day}</p>
+                          <p className="font-mono font-bold">{formatVND(chartTooltip.revenue)}</p>
+                          <p className="text-[10px] text-stone-300">{chartTooltip.ordersCount} đơn đã thanh toán</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Thẻ Top 5 Món bán chạy */}
+                <div className="p-6 rounded-3xl bg-white border border-[#E2E8D8] shadow-xs space-y-4 flex flex-col">
+                  <div>
+                    <h3 className="text-base sm:text-lg font-bold text-[#101410] flex items-center gap-2">
+                      <Sparkles className="w-5 h-5 text-amber-500" />
+                      Top món bán chạy
+                    </h3>
+                    <p className="text-xs text-[#5E5E61]">Xếp hạng theo số lượng bán thành công</p>
+                  </div>
+
+                  <div className="flex-1">
+                    {topSellingProducts.length === 0 ? (
+                      <div className="h-full min-h-[180px] flex flex-col items-center justify-center text-center text-stone-400">
+                        <Store className="w-8 h-8 text-stone-300 mb-2" />
+                        <p className="text-xs">Chưa có sản phẩm nào được bán ra.</p>
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-[#E2E8D8] space-y-2">
+                        {topSellingProducts.map((p, idx) => (
+                          <div key={idx} className="pt-2 flex items-center gap-3">
+                            <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+                              idx === 0 ? 'bg-amber-100 text-amber-800' :
+                              idx === 1 ? 'bg-stone-200 text-stone-700' :
+                              idx === 2 ? 'bg-orange-100 text-orange-800' :
+                              'bg-stone-100 text-stone-500'
+                            }`}>
+                              {idx + 1}
+                            </span>
+                            <ProductImage
+                              src={p.image}
+                              alt={p.name}
+                              productName={p.name}
+                              className="w-10 h-10 rounded-lg object-cover bg-stone-100 border border-stone-200 shrink-0"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className="font-bold text-xs text-stone-900 truncate">{p.name}</p>
+                              <div className="flex items-center justify-between text-[11px] text-stone-500 mt-0.5">
+                                <span>Đã bán: <strong className="text-[#08482D] font-mono">{p.quantity}</strong></span>
+                                <span className="font-mono text-[#C2522D] font-bold">{formatVND(p.revenue)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1919,17 +2444,25 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                             {prod.stock} món
                           </span>
                         </td>
-                        <td className="py-3 px-4 text-right space-x-2">
+                        <td className="py-3 px-4 text-right space-x-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenQuickPhotoModal(prod)}
+                            className="px-2.5 py-1 text-xs font-bold text-[#08482D] bg-[#DAE7C7]/60 hover:bg-[#DAE7C7] rounded-lg transition-colors inline-flex items-center gap-1 cursor-pointer"
+                            title="Quản lý nhanh hình ảnh món này"
+                          >
+                            📷 Ảnh
+                          </button>
                           <button
                             onClick={() => handleOpenProductModal('edit', prod)}
-                            className="p-1.5 text-stone-500 hover:text-[#47533E] rounded-lg hover:bg-stone-100"
+                            className="p-1.5 text-stone-500 hover:text-[#47533E] rounded-lg hover:bg-stone-100 cursor-pointer"
                             title="Sửa sản phẩm"
                           >
                             <Edit2 className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => handleDeleteProduct(prod.id, prod.name)}
-                            className="p-1.5 text-stone-500 hover:text-red-600 rounded-lg hover:bg-red-50"
+                            className="p-1.5 text-stone-500 hover:text-red-600 rounded-lg hover:bg-red-50 cursor-pointer"
                             title="Xóa sản phẩm"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -2363,13 +2896,36 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                             )}
                           </div>
                         )}
-                        <div className={`max-w-[80%] px-4 py-2.5 text-xs rounded-2xl shadow-xs break-words ${
-                          isSeller
-                            ? 'bg-[#08482D] text-white rounded-tr-xs'
-                            : 'bg-[#DAE7C7] text-[#101410] rounded-tl-xs'
-                        }`}>
-                          {msg.content || msg.message}
-                        </div>
+                        {/* Image bubble if present */}
+                        {((msg.type === 'image' || msg.image) && msg.image) && (
+                          <div
+                            onClick={() => setActiveSellerChatLightbox(msg.image!)}
+                            className="cursor-pointer group relative overflow-hidden rounded-2xl border border-stone-200/60 shadow-xs mb-1"
+                            title="Bấm để xem ảnh lớn"
+                          >
+                            <img
+                              src={msg.image}
+                              alt="Ảnh đính kèm"
+                              className="max-w-[220px] max-h-[220px] object-cover rounded-2xl group-hover:opacity-95 transition-all"
+                              loading="lazy"
+                            />
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+                              <span className="opacity-0 group-hover:opacity-100 text-[10px] bg-black/60 text-white px-2 py-0.5 rounded-full font-medium">
+                                Xem ảnh
+                              </span>
+                            </div>
+                          </div>
+                        )}
+
+                        {(msg.content || msg.message) && (
+                          <div className={`max-w-[80%] px-4 py-2.5 text-xs rounded-2xl shadow-xs break-words ${
+                            isSeller
+                              ? 'bg-[#08482D] text-white rounded-tr-xs'
+                              : 'bg-[#DAE7C7] text-[#101410] rounded-tl-xs'
+                          }`}>
+                            {msg.content || msg.message}
+                          </div>
+                        )}
                         <span className="text-[10px] text-[#5E5E61] mt-0.5 px-1 font-mono">
                           {new Date(msg.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
                         </span>
@@ -2388,7 +2944,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                     <button
                       key={idx}
                       onClick={() => handleSendChatMessage(preset)}
-                      className="px-3 py-1.5 rounded-full text-xs bg-white border border-[#DAE7C7] text-[#08482D] hover:bg-[#DAE7C7]/30 transition-colors shrink-0 flex items-center gap-1"
+                      className="px-3 py-1.5 rounded-full text-xs bg-white border border-[#DAE7C7] text-[#08482D] hover:bg-[#DAE7C7]/30 transition-colors shrink-0 flex items-center gap-1 cursor-pointer"
                     >
                       <Sparkles className="w-3 h-3 text-amber-500" />
                       {preset}
@@ -2404,8 +2960,45 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                   </div>
                 )}
 
+                {/* Pending images strip */}
+                {sellerChatImages.length > 0 && (
+                  <div className="px-3 py-2 bg-[#F5F8EF] border-t border-[#E2E8D8] flex items-center gap-2">
+                    {sellerChatImages.map((img, idx) => (
+                      <div key={idx} className="relative w-12 h-12 rounded-lg overflow-hidden border border-stone-300">
+                        <img src={img} alt="preview" className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setSellerChatImages(prev => prev.filter((_, i) => i !== idx))}
+                          className="absolute top-0.5 right-0.5 bg-black/70 hover:bg-black text-white rounded-full p-0.5 cursor-pointer"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                    <span className="text-[11px] text-stone-500">{sellerChatImages.length}/3 ảnh</span>
+                  </div>
+                )}
+
                 {/* Input box */}
                 <div className="p-3 bg-white border-t border-[#E2E8D8] flex items-center gap-2">
+                  <input
+                    type="file"
+                    ref={sellerChatFileInputRef}
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => handlePickSellerChatImages(e.target.files)}
+                  />
+                  <button
+                    type="button"
+                    disabled={sellerChatImages.length >= 3 || compressingSellerChatImage}
+                    onClick={() => sellerChatFileInputRef.current?.click()}
+                    className="p-2 text-stone-500 hover:text-[#08482D] hover:bg-stone-100 rounded-xl transition-colors shrink-0 disabled:opacity-40 cursor-pointer"
+                    title="Gửi ảnh tư vấn cho khách (tối đa 3 ảnh)"
+                  >
+                    {compressingSellerChatImage ? <Loader2 className="w-4 h-4 animate-spin text-[#08482D]" /> : <Camera className="w-4 h-4" />}
+                  </button>
+
                   <input
                     type="text"
                     value={chatInputText}
@@ -2426,9 +3019,9 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                     variant="primary"
                     size="sm"
                     onClick={() => handleSendChatMessage()}
-                    disabled={!chatInputText.trim() || sendingChatMsg}
+                    disabled={(!chatInputText.trim() && sellerChatImages.length === 0) || sendingChatMsg}
                   >
-                    <Send className="w-4 h-4" />
+                    {sendingChatMsg ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                   </Button>
                 </div>
               </>
@@ -2706,7 +3299,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
             {[
               { id: 'all', label: `Tất cả (${sellerReviews.length})` },
               { id: 'unreplied', label: `Chưa phản hồi (${sellerReviews.filter(r => !r.seller_reply).length})` },
-              { id: 'with_media', label: `Có ảnh/video (${sellerReviews.filter(r => (Array.isArray(r.images) ? r.images.length > 0 : !!r.images) || !!r.video_url).length})` },
+              { id: 'with_media', label: `Có ảnh/video (${sellerReviews.filter(r => ((Array.isArray(r.images) ? r.images.length > 0 : !!r.images) || !!(r.videoId || r.video_id || r.video_url))).length})` },
               { id: '5', label: '5 sao ★' },
               { id: '4', label: '4 sao ★' },
               { id: '3', label: '3 sao ★' },
@@ -2717,7 +3310,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                 key={f.id}
                 type="button"
                 onClick={() => setSellerReviewFilter(f.id)}
-                className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 ${
+                className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer ${
                   sellerReviewFilter === f.id
                     ? 'bg-[#08482D] text-white shadow-xs'
                     : 'bg-white border border-[#DAE7C7] text-[#5E5E61] hover:text-[#101410]'
@@ -2744,7 +3337,8 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                   if (sellerReviewFilter === 'unreplied') return !r.seller_reply;
                   if (sellerReviewFilter === 'with_media') {
                     const hasImgs = Array.isArray(r.images) ? r.images.length > 0 : (r.images && r.images !== '[]');
-                    return hasImgs || !!r.video_url;
+                    const hasVid = !!(r.videoId || r.video_id || r.video_url);
+                    return hasImgs || hasVid;
                   }
                   if (['5', '4', '3', '2', '1'].includes(sellerReviewFilter)) {
                     return r.rating === Number(sellerReviewFilter);
@@ -2762,6 +3356,10 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                     : typeof rev.tags === 'string'
                     ? JSON.parse(rev.tags || '[]')
                     : [];
+                  const videoId = rev.videoId || rev.video_id;
+                  const videoThumb = rev.videoThumb || rev.video_thumb || rev.video_poster;
+                  const videoDuration = rev.videoDuration || rev.video_duration;
+                  const hasVideo = !!(videoId || rev.video_url);
 
                   return (
                     <div
@@ -2864,29 +3462,45 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                       </div>
 
                       {/* Media Thumbnails */}
-                      {(imagesList.length > 0 || rev.video_url) && (
+                      {(imagesList.length > 0 || hasVideo) && (
                         <div className="flex items-center gap-2.5 overflow-x-auto pb-1 pt-1">
                           {imagesList.map((imgUrl, i) => (
                             <img
                               key={i}
                               src={imgUrl}
                               alt={`review-${i}`}
-                              className="w-16 h-16 rounded-xl object-cover border border-[#DAE7C7] shrink-0"
+                              onClick={() => setSellerReviewLightbox({ open: true, type: 'image', url: imgUrl })}
+                              className="w-16 h-16 rounded-xl object-cover border border-[#DAE7C7] shrink-0 cursor-pointer hover:opacity-90 transition-opacity"
+                              title="Bấm để xem ảnh lớn"
                             />
                           ))}
-                          {rev.video_url && (
-                            <div className="relative w-16 h-16 rounded-xl overflow-hidden border border-[#DAE7C7] bg-black shrink-0 flex items-center justify-center">
-                              {rev.video_poster ? (
-                                <img src={rev.video_poster} alt="poster" className="w-full h-full object-cover opacity-80" />
-                              ) : (
+                          {hasVideo && (
+                            <div 
+                              onClick={() => setSellerReviewLightbox({ 
+                                open: true, 
+                                type: 'video', 
+                                mediaId: videoId, 
+                                url: rev.video_url, 
+                                videoThumb 
+                              })}
+                              className="relative w-16 h-16 rounded-xl overflow-hidden border border-[#DAE7C7] bg-black shrink-0 flex items-center justify-center cursor-pointer group"
+                              title="Bấm để phát video"
+                            >
+                              {videoThumb ? (
+                                <img src={videoThumb} alt="poster" className="w-full h-full object-cover opacity-80 group-hover:opacity-90" />
+                              ) : rev.video_url ? (
                                 <video src={rev.video_url} className="w-full h-full object-cover opacity-80" />
+                              ) : (
+                                <div className="w-full h-full bg-stone-900" />
                               )}
                               <div className="absolute inset-0 flex items-center justify-center">
-                                <Play className="w-5 h-5 text-white fill-white drop-shadow-md" />
+                                <div className="w-7 h-7 rounded-full bg-black/60 group-hover:bg-[#08482D] flex items-center justify-center transition-colors">
+                                  <Play className="w-3.5 h-3.5 text-white fill-white ml-0.5" />
+                                </div>
                               </div>
-                              {rev.video_duration && (
-                                <span className="absolute bottom-1 right-1 text-[9px] bg-black/70 text-white px-1 rounded font-mono">
-                                  {Math.round(rev.video_duration)}s
+                              {videoDuration && (
+                                <span className="absolute bottom-1 right-1 text-[9px] bg-black/75 text-white px-1 py-0.5 rounded font-mono font-bold">
+                                  {Math.floor(videoDuration / 60)}:{String(Math.round(videoDuration % 60)).padStart(2, '0')}
                                 </span>
                               )}
                             </div>
@@ -3280,7 +3894,49 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                 </div>
 
                 <div className="space-y-3">
-                  {/* Thumbnail Cards Grid */}
+                  {/* Drag-and-Drop + Mobile Camera Upload Zone */}
+                  <div
+                    onDragOver={(e) => { e.preventDefault(); setIsDraggingImages(true); }}
+                    onDragLeave={() => setIsDraggingImages(false)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setIsDraggingImages(false);
+                      if (e.dataTransfer.files) processProductImages(e.dataTransfer.files);
+                    }}
+                    className={`p-4 border-2 border-dashed rounded-2xl text-center transition-colors ${
+                      isDraggingImages ? 'border-[#08482D] bg-[#DAE7C7]/30' : 'border-[#DAE7C7] bg-[#F5F8EF]'
+                    }`}
+                  >
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5">
+                      <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-[#08482D] text-white rounded-xl text-xs font-bold hover:bg-[#063A24] transition-colors shadow-2xs">
+                        <Upload className="w-4 h-4" />
+                        <span>{uploadingImages ? 'Đang nén ảnh...' : 'Kéo ảnh vào đây hoặc bấm để chọn (tối đa 5 ảnh)'}</span>
+                        <input
+                          type="file"
+                          multiple
+                          accept="image/*"
+                          onChange={handleProductImageUpload}
+                          disabled={uploadingImages}
+                          className="hidden"
+                        />
+                      </label>
+
+                      <label className="cursor-pointer inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-[#08482D] text-[#08482D] rounded-xl text-xs font-bold hover:bg-[#DAE7C7]/40 transition-colors shadow-2xs">
+                        <Camera className="w-4 h-4" />
+                        <span>Chụp ảnh</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          onChange={handleMobileCameraUpload}
+                          disabled={uploadingImages}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Thumbnail Cards Grid (96px = w-24 h-24) */}
                   {(() => {
                     const currentImgs = (prodForm.imagesText ? prodForm.imagesText.split('\n') : (prodForm.image_url ? [prodForm.image_url] : []))
                       .map(s => s.trim())
@@ -3289,11 +3945,11 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                     return (
                       <div>
                         {currentImgs.length > 0 ? (
-                          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5 p-3 rounded-2xl bg-[#FAF7F2] border border-[#D8CEBE]">
+                          <div className="flex flex-wrap gap-2.5 p-3 rounded-2xl bg-[#FAF7F2] border border-[#D8CEBE]">
                             {currentImgs.map((imgUrl, idx) => (
                               <div
                                 key={`${imgUrl}-${idx}`}
-                                className="relative aspect-square rounded-xl overflow-hidden border border-[#D8CEBE] bg-white group shadow-2xs"
+                                className="relative w-24 h-24 rounded-xl overflow-hidden border border-[#D8CEBE] bg-white group shadow-2xs shrink-0"
                               >
                                 <img
                                   src={imgUrl}
@@ -3301,19 +3957,19 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                                   className="w-full h-full object-cover"
                                 />
 
-                                {/* Badge Ảnh chính */}
+                                {/* Badge Ảnh bìa */}
                                 {idx === 0 ? (
                                   <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded-md bg-[#08482D] text-white text-[9px] font-bold shadow-xs">
-                                    ★ Ảnh chính
+                                    Ảnh bìa
                                   </span>
                                 ) : (
                                   <button
                                     type="button"
                                     onClick={() => handleSetCoverProductImage(idx)}
-                                    className="absolute top-1 left-1 px-1.5 py-0.5 rounded-md bg-black/60 hover:bg-[#08482D] text-white text-[9px] font-medium opacity-0 group-hover:opacity-100 transition-opacity"
-                                    title="Đặt làm ảnh chính"
+                                    className="absolute top-1 left-1 px-1.5 py-0.5 rounded-md bg-black/60 hover:bg-[#08482D] text-white text-[9px] font-medium opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                                    title="Đặt làm ảnh bìa"
                                   >
-                                    Đặt bìa
+                                    Đặt làm bìa
                                   </button>
                                 )}
 
@@ -3333,7 +3989,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                                     <button
                                       type="button"
                                       onClick={() => handleMoveProductImage(idx, 'left')}
-                                      className="w-5 h-5 rounded-md bg-black/70 hover:bg-[#08482D] text-white flex items-center justify-center text-[10px] shadow-xs"
+                                      className="w-5 h-5 rounded-md bg-black/70 hover:bg-[#08482D] text-white flex items-center justify-center text-[10px] shadow-xs cursor-pointer"
                                       title="Chuyển sang trái"
                                     >
                                       ←
@@ -3344,7 +4000,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                                     <button
                                       type="button"
                                       onClick={() => handleMoveProductImage(idx, 'right')}
-                                      className="w-5 h-5 rounded-md bg-black/70 hover:bg-[#08482D] text-white flex items-center justify-center text-[10px] shadow-xs"
+                                      className="w-5 h-5 rounded-md bg-black/70 hover:bg-[#08482D] text-white flex items-center justify-center text-[10px] shadow-xs cursor-pointer"
                                       title="Chuyển sang phải"
                                     >
                                       →
@@ -3356,57 +4012,74 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                           </div>
                         ) : (
                           <div className="p-4 text-center rounded-xl border border-dashed border-[#D8CEBE] bg-[#FAF7F2] text-xs text-[#5E5E61]">
-                            Chưa có hình ảnh nào. Hãy tải từ máy hoặc dán link bên dưới.
+                            Chưa có hình ảnh nào. Hãy kéo thả ảnh hoặc chụp ảnh trực tiếp từ điện thoại.
                           </div>
                         )}
                       </div>
                     );
                   })()}
 
-                  {/* Upload + Add by Link Bar */}
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <label className="flex-1 flex items-center justify-center gap-2 p-2.5 border-2 border-dashed border-[#DAE7C7] rounded-xl bg-[#F5F8EF] hover:border-[#08482D] cursor-pointer transition-colors text-xs text-[#08482D] font-bold">
-                      <Upload className="w-4 h-4" />
-                      <span>{uploadingImages ? 'Đang nén ảnh...' : 'Tải thêm ảnh từ máy (Tối đa 5 ảnh)'}</span>
-                      <input
-                        type="file"
-                        multiple
-                        accept="image/*"
-                        onChange={handleProductImageUpload}
-                        disabled={uploadingImages}
-                        className="hidden"
-                      />
-                    </label>
+                  {/* Accordion Dán link URL ảnh (Nâng cao) */}
+                  <div className="pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowAdvancedUrlInput(!showAdvancedUrlInput)}
+                      className="text-[11px] font-semibold text-[#08482D] hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <span>{showAdvancedUrlInput ? '▼ Thu gọn link' : '▶ Nâng cao (dán link URL ảnh)'}</span>
+                    </button>
 
-                    <div className="flex items-center gap-1.5 flex-1">
-                      <input
-                        type="text"
-                        value={newImageUrlInput}
-                        onChange={e => setNewImageUrlInput(e.target.value)}
-                        placeholder="Dán link ảnh https://..."
-                        className="flex-1 px-3 py-2 rounded-xl border border-[#D8CEBE] bg-[#FAF7F2] text-xs"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handleAddProductImageUrl(newImageUrlInput)}
-                        className="px-3 py-2 rounded-xl bg-[#08482D] text-white text-xs font-bold hover:bg-[#063A24] cursor-pointer shrink-0"
-                      >
-                        Thêm link
-                      </button>
-                    </div>
+                    {showAdvancedUrlInput && (
+                      <div className="flex items-center gap-1.5 mt-2 animate-in fade-in">
+                        <input
+                          type="text"
+                          value={newImageUrlInput}
+                          onChange={e => setNewImageUrlInput(e.target.value)}
+                          placeholder="Dán link ảnh https://..."
+                          className="flex-1 px-3 py-2 rounded-xl border border-[#D8CEBE] bg-[#FAF7F2] text-xs"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleAddProductImageUrl(newImageUrlInput)}
+                          className="px-3 py-2 rounded-xl bg-[#08482D] text-white text-xs font-bold hover:bg-[#063A24] cursor-pointer shrink-0"
+                        >
+                          Thêm link
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
 
               <div>
-                <label className="font-semibold text-[#524B46] block mb-1">
-                  Khuyết điểm thật minh bạch (Mỗi dòng một khuyết điểm: Vị trí | Mô tả | URL ảnh)
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="font-semibold text-[#524B46] block text-xs">
+                    Khuyết điểm thật minh bạch (Vị trí | Mô tả | URL hoặc ảnh)
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="file"
+                      ref={defectPhotoInputRef}
+                      accept="image/*"
+                      capture="environment"
+                      onChange={handleDefectPhotoUpload}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => defectPhotoInputRef.current?.click()}
+                      className="px-2.5 py-1 text-[11px] font-bold text-[#08482D] bg-[#DAE7C7] hover:bg-[#c9dbb1] rounded-lg transition-colors inline-flex items-center gap-1 cursor-pointer"
+                    >
+                      <Camera className="w-3.5 h-3.5" />
+                      <span>Thêm ảnh cận (≤ 80KB)</span>
+                    </button>
+                  </div>
+                </div>
                 <textarea
                   rows={2}
                   value={prodForm.flawsText}
                   onChange={e => setProdForm({ ...prodForm, flawsText: e.target.value })}
-                  placeholder="Góc phải | Trầy xước nhẹ viền cạnh | https://images.unsplash.com/...&#10;Mặt đáy | Xước dăm không ảnh hưởng hoạt động |"
+                  placeholder="Góc phải | Trầy xước nhẹ viền cạnh | [Bấm Thêm ảnh cận hoặc dán URL]&#10;Mặt đáy | Xước dăm không ảnh hưởng hoạt động |"
                   className="w-full px-3 py-2 rounded-xl border border-[#D8CEBE] bg-[#FAF7F2] text-[11px]"
                 />
               </div>
@@ -4189,6 +4862,175 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                 </Button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* QUICK PHOTO MANAGER MODAL */}
+      {quickPhotoModal.open && quickPhotoModal.product && (
+        <div className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-lg bg-white rounded-3xl border border-[#D8CEBE] shadow-2xl p-6 space-y-4 animate-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-[#E6DFD5]">
+              <div>
+                <h3 className="text-lg font-bold text-[#101410] flex items-center gap-2">
+                  <Camera className="w-5 h-5 text-[#08482D]" />
+                  Quản lý nhanh ảnh món đồ
+                </h3>
+                <p className="text-xs text-stone-500 mt-0.5">{quickPhotoModal.product.name}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setQuickPhotoModal({ open: false, product: null, images: [], saving: false })}
+                className="text-stone-400 hover:text-stone-700 p-1 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-stone-700">
+                  Danh sách ảnh ({quickPhotoModal.images.length}/5 ảnh)
+                </span>
+                <span className="text-[11px] text-stone-500">Ảnh đầu tiên là ảnh bìa</span>
+              </div>
+
+              {quickPhotoModal.images.length > 0 ? (
+                <div className="flex flex-wrap gap-2.5 p-3 rounded-2xl bg-[#FAF7F2] border border-[#D8CEBE]">
+                  {quickPhotoModal.images.map((imgUrl, idx) => (
+                    <div
+                      key={idx}
+                      className="relative w-24 h-24 rounded-xl overflow-hidden border border-[#D8CEBE] bg-white group shadow-2xs shrink-0"
+                    >
+                      <img src={imgUrl} alt="" className="w-full h-full object-cover" />
+                      {idx === 0 ? (
+                        <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded-md bg-[#08482D] text-white text-[9px] font-bold shadow-xs">
+                          Ảnh bìa
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleSetQuickPhotoCover(idx)}
+                          className="absolute top-1 left-1 px-1.5 py-0.5 rounded-md bg-black/60 hover:bg-[#08482D] text-white text-[9px] font-medium opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                          title="Đặt làm ảnh bìa"
+                        >
+                          Đặt làm bìa
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveQuickPhoto(idx)}
+                        className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-600 text-white flex items-center justify-center text-xs font-bold hover:bg-red-700 shadow-xs opacity-80 group-hover:opacity-100 transition-opacity cursor-pointer"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-6 text-center rounded-2xl border border-dashed border-[#D8CEBE] bg-[#FAF7F2] text-xs text-stone-500">
+                  Món này hiện chưa có ảnh. Hãy tải thêm ảnh bên dưới.
+                </div>
+              )}
+
+              {quickPhotoModal.images.length < 5 && (
+                <div>
+                  <input
+                    type="file"
+                    ref={quickPhotoFileInputRef}
+                    multiple
+                    accept="image/*"
+                    onChange={handleQuickPhotoUpload}
+                    disabled={uploadingQuickPhotos}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    disabled={uploadingQuickPhotos}
+                    onClick={() => quickPhotoFileInputRef.current?.click()}
+                    className="w-full py-2.5 px-3 border-2 border-dashed border-[#DAE7C7] hover:border-[#08482D] rounded-xl text-xs font-bold text-[#08482D] bg-[#F5F8EF] flex items-center justify-center gap-2 cursor-pointer transition-colors"
+                  >
+                    <Upload className="w-4 h-4" />
+                    <span>{uploadingQuickPhotos ? 'Đang nén ảnh...' : `Thêm ảnh từ máy (Còn ${5 - quickPhotoModal.images.length} chỗ)`}</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2.5 pt-3 border-t border-[#E6DFD5]">
+              <Button
+                variant="secondary"
+                size="sm"
+                type="button"
+                onClick={() => setQuickPhotoModal({ open: false, product: null, images: [], saving: false })}
+              >
+                Hủy
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                type="button"
+                onClick={handleSaveQuickPhotos}
+                disabled={quickPhotoModal.saving || uploadingQuickPhotos}
+              >
+                {quickPhotoModal.saving ? 'Đang lưu...' : 'Lưu thay đổi ảnh'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SELLER CHAT LIGHTBOX */}
+      {activeSellerChatLightbox && (
+        <div
+          onClick={() => setActiveSellerChatLightbox(null)}
+          className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in"
+        >
+          <div className="relative max-w-3xl max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setActiveSellerChatLightbox(null)}
+              className="absolute -top-10 right-0 text-white hover:text-stone-300 p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors cursor-pointer"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            <img
+              src={activeSellerChatLightbox}
+              alt="Ảnh phóng to"
+              className="max-h-[85vh] max-w-full rounded-xl object-contain shadow-2xl"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* SELLER REVIEW MEDIA LIGHTBOX */}
+      {sellerReviewLightbox?.open && (
+        <div
+          onClick={() => setSellerReviewLightbox(null)}
+          className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in"
+        >
+          <div className="relative max-w-2xl max-h-[90vh] flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setSellerReviewLightbox(null)}
+              className="absolute -top-10 right-0 text-white hover:text-stone-300 p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors cursor-pointer"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            {sellerReviewLightbox.type === 'video' ? (
+              <div className="w-full max-w-md rounded-2xl overflow-hidden bg-black shadow-2xl">
+                <ReviewVideoPlayer
+                  mediaId={sellerReviewLightbox.mediaId}
+                  directUrl={sellerReviewLightbox.url}
+                  poster={sellerReviewLightbox.videoThumb}
+                  autoPlay={true}
+                  className="w-full max-h-[75vh]"
+                />
+              </div>
+            ) : (
+              <img
+                src={sellerReviewLightbox.url}
+                alt="Ảnh đánh giá"
+                className="max-h-[85vh] max-w-full rounded-xl object-contain shadow-2xl"
+              />
+            )}
           </div>
         </div>
       )}

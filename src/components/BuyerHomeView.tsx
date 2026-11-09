@@ -91,6 +91,53 @@ export const BuyerHomeView: React.FC<BuyerHomeViewProps> = ({
 
   // Fresh arrivals horizontal row scroll ref
   const freshScrollRef = useRef<HTMLDivElement>(null);
+  const recentScrollRef = useRef<HTMLDivElement>(null);
+  const [recentProducts, setRecentProducts] = useState<any[]>([]);
+
+  useEffect(() => {
+    const loadRecent = () => {
+      try {
+        const activeKey = sessionStorage.getItem('dcct_active') || 'guest';
+        const storageKey = `dcct_recent_${activeKey}`;
+        const raw = localStorage.getItem(storageKey);
+        if (raw) {
+          const list = JSON.parse(raw);
+          if (Array.isArray(list)) {
+            const enriched = list.map(item => {
+              const found = (allProducts || products).find(p => String(p.id) === String(item.id));
+              if (found) {
+                return {
+                  ...item,
+                  ...found,
+                  stock: found.stock,
+                  is_sold_out: (found.stock ?? 1) <= 0
+                };
+              }
+              return item;
+            });
+            setRecentProducts(enriched);
+            return;
+          }
+        }
+        setRecentProducts([]);
+      } catch {
+        setRecentProducts([]);
+      }
+    };
+
+    loadRecent();
+    window.addEventListener('dcct_recent_updated', loadRecent);
+    return () => window.removeEventListener('dcct_recent_updated', loadRecent);
+  }, [allProducts, products]);
+
+  const handleClearRecent = () => {
+    try {
+      const activeKey = sessionStorage.getItem('dcct_active') || 'guest';
+      localStorage.removeItem(`dcct_recent_${activeKey}`);
+      setRecentProducts([]);
+      window.dispatchEvent(new Event('dcct_recent_updated'));
+    } catch {}
+  };
 
   // Real-time onSnapshot subscription for cart, shipping orders & notifications
   useEffect(() => {
@@ -405,6 +452,118 @@ export const BuyerHomeView: React.FC<BuyerHomeViewProps> = ({
           ))}
         </div>
       </section>
+
+      {/* ======================================================== */}
+      {/* 3.1 "BẠN ĐÃ XEM GẦN ĐÂY" (Horizontal row)               */}
+      {/* ======================================================== */}
+      {recentProducts.length > 0 && (
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl sm:text-2xl font-bold text-[#101410]">
+                  Bạn đã xem gần đây
+                </h2>
+                <span className="text-[11px] font-bold font-mono px-2 py-0.5 rounded-full bg-[#E2E8D8] text-[#5E5E61]">
+                  {recentProducts.length} món
+                </span>
+              </div>
+              <p className="text-xs text-[#5E5E61] mt-0.5">
+                Các món đồ bạn vừa ghé xem trên thiết bị này
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleClearRecent}
+              className="text-xs font-semibold text-stone-500 hover:text-red-600 transition-colors cursor-pointer"
+            >
+              Xóa lịch sử
+            </button>
+          </div>
+
+          {/* Flat Horizontal Scrollable Row */}
+          <div 
+            ref={recentScrollRef}
+            className="flex items-stretch gap-4 overflow-x-auto pb-4 pt-1 scrollbar-none scroll-smooth snap-x"
+          >
+            {recentProducts.map((prod) => {
+              const isSoldOut = (prod.stock ?? 1) <= 0 || prod.is_sold_out;
+              return (
+                <div 
+                  key={prod.id}
+                  onClick={() => onSelectProduct(prod)}
+                  className={`w-60 sm:w-64 shrink-0 snap-start bg-white rounded-3xl border border-[#E2E8D8] p-3 flex flex-col justify-between hover:shadow-md hover:border-[#08482D] transition-all cursor-pointer group ${
+                    isSoldOut ? 'opacity-85' : ''
+                  }`}
+                >
+                  <div className="relative aspect-4/3 rounded-2xl overflow-hidden bg-[#F5F8EF] mb-3">
+                    <ProductImage
+                      src={prod.thumb || prod.image_url}
+                      alt={prod.name}
+                      productName={prod.name}
+                      category={prod.category}
+                      conditionPct={prod.condition_pct}
+                      className="w-full h-full"
+                      imgClassName={`transition-transform duration-300 group-hover:scale-105 ${isSoldOut ? 'grayscale-30' : ''}`}
+                    />
+                    {isSoldOut ? (
+                      <div className="absolute inset-0 bg-stone-900/40 backdrop-blur-2xs flex items-center justify-center">
+                        <span className="px-3 py-1 rounded-full bg-stone-900/85 text-white text-[11px] font-bold shadow-md">
+                          Đã có chủ mới
+                        </span>
+                      </div>
+                    ) : (
+                      prod.condition_pct && (
+                        <div className="absolute top-2 left-2 bg-[#DAE7C7]/95 backdrop-blur-xs text-[#08482D] text-[10px] font-bold font-mono px-2 py-0.5 rounded-full border border-white/60">
+                          {prod.condition_pct}% MỚI
+                        </div>
+                      )
+                    )}
+                  </div>
+
+                  <div className="flex-1 flex flex-col justify-between">
+                    <div>
+                      {prod.category && (
+                        <span className="text-[10px] text-[#08482D] font-bold uppercase tracking-wider block">
+                          {prod.category}
+                        </span>
+                      )}
+                      <h3 className="text-sm font-bold text-[#101410] line-clamp-1 group-hover:text-[#08482D] transition-colors">
+                        {prod.name}
+                      </h3>
+                    </div>
+
+                    <div className="mt-3 pt-2.5 border-t border-[#E2E8D8] flex items-center justify-between">
+                      <span className="font-mono text-sm font-bold text-[#C2522D]">
+                        {formatVND(prod.price)}
+                      </span>
+                      {!isSoldOut ? (
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onAddToCart(prod);
+                          }}
+                          className="h-8 text-xs px-2.5 cursor-pointer"
+                        >
+                          <ShoppingBag className="w-3.5 h-3.5 mr-1" />
+                          <span>Thêm</span>
+                        </Button>
+                      ) : (
+                        <span className="text-[11px] font-semibold text-stone-400">
+                          Hết hàng
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {/* ======================================================== */}
       {/* 4. FILTER BAR & PRODUCTS GRID                            */}

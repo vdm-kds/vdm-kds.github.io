@@ -77,3 +77,15 @@ export function validateLuhn(cardNumber: string): boolean {
 
   return sum % 10 === 0;
 }
+
+// Loại bỏ dấu tiếng Việt để tìm kiếm không phân biệt dấu (ví dụ: "dong ho" -> "Đồng hồ")
+export function removeVietnameseTones(str: string | undefined | null): string {
+  if (!str) return '';
+  return str
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase()
+    .trim();
+}

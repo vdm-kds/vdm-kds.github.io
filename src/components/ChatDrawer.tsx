@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Send, ShieldAlert, AlertCircle, Sparkles, MessageCircle, ShoppingBag, Package } from 'lucide-react';
+import { X, Send, ShieldAlert, AlertCircle, Sparkles, MessageCircle, ShoppingBag, Package, Camera, Loader2 } from 'lucide-react';
 import { ChatConversation, ChatMessage, Product, Order } from '../types';
 import { formatVND } from '../utils/format';
 import { api } from '../services/api';
+import { compressChatImage } from '../utils/image';
 import { Button } from './Button';
 
 interface ChatDrawerProps {
@@ -32,10 +33,14 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({
   const [conversation, setConversation] = useState<ChatConversation | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
+  const [pendingImages, setPendingImages] = useState<string[]>([]);
+  const [compressingImage, setCompressingImage] = useState(false);
+  const [activeLightboxImage, setActiveLightboxImage] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -100,7 +105,7 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, pendingImages]);
 
   // Client safety filter
   const validateContent = (text: string): boolean => {
@@ -115,17 +120,57 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({
     return true;
   };
 
+  const handlePickImages = async (fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0) return;
+    const remainingSlots = 3 - pendingImages.length;
+    if (remainingSlots <= 0) return;
+
+    const files = Array.from(fileList).slice(0, remainingSlots);
+    setCompressingImage(true);
+    try {
+      for (const file of files) {
+        const res = await compressChatImage(file);
+        setPendingImages((prev) => [...prev, res.dataUrl].slice(0, 3));
+      }
+    } catch (err: any) {
+      setWarning(err.message || 'Lỗi xử lý ảnh');
+    } finally {
+      setCompressingImage(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
   const handleSend = async (contentToSend?: string) => {
     const text = (contentToSend || inputText).trim();
-    if (!text || !conversation?.id || sending) return;
+    const hasImages = pendingImages.length > 0;
+    if ((!text && !hasImages) || !conversation?.id || sending) return;
 
-    if (!validateContent(text)) return;
+    if (text && !validateContent(text)) return;
 
     try {
       setSending(true);
-      const res = await api.sendChatMessage(conversation.id, text);
-      setMessages(prev => [...prev, res.message]);
-      setInputText('');
+
+      // Send attached images sequentially (max 3)
+      if (hasImages) {
+        for (const imgUrl of pendingImages) {
+          const res = await api.sendChatMessage({
+            conversation_id: conversation.id,
+            type: 'image',
+            text: '',
+            image: imgUrl
+          } as any);
+          setMessages((prev) => [...prev, res.message]);
+        }
+        setPendingImages([]);
+      }
+
+      // Send text if present
+      if (text) {
+        const res = await api.sendChatMessage(conversation.id, text);
+        setMessages((prev) => [...prev, res.message]);
+        setInputText('');
+      }
+
       setWarning(null);
     } catch (err: any) {
       setWarning(err.message || 'Không thể gửi tin nhắn.');
@@ -223,6 +268,7 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({
           ) : (
             messages.map((msg) => {
               const isMine = msg.sender_role === currentRole;
+              const isImage = msg.type === 'image' || Boolean(msg.image);
               const timeStr = new Date(msg.created_at).toLocaleTimeString('vi-VN', {
                 hour: '2-digit',
                 minute: '2-digit'
@@ -233,15 +279,28 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({
                   key={msg.id}
                   className={`flex flex-col ${isMine ? 'items-end' : 'items-start'}`}
                 >
-                  <div
-                    className={`max-w-[82%] px-4 py-2.5 text-sm rounded-2xl shadow-xs break-words ${
-                      isMine
-                        ? 'bg-[#08482D] text-white rounded-tr-xs'
-                        : 'bg-white text-[#101410] border border-[#DAE7C7] rounded-tl-xs'
-                    }`}
-                  >
-                    {msg.content}
-                  </div>
+                  {isImage ? (
+                    <div
+                      onClick={() => setActiveLightboxImage(msg.image || '')}
+                      className="max-w-[220px] rounded-2xl overflow-hidden cursor-pointer shadow-xs border border-[#DAE7C7] bg-stone-100 hover:opacity-95 transition-opacity"
+                    >
+                      <img
+                        src={msg.image || ''}
+                        alt="Ảnh chat"
+                        className="w-full h-auto object-cover max-h-[220px]"
+                      />
+                    </div>
+                  ) : (
+                    <div
+                      className={`max-w-[82%] px-4 py-2.5 text-sm rounded-2xl shadow-xs break-words ${
+                        isMine
+                          ? 'bg-[#08482D] text-white rounded-tr-xs'
+                          : 'bg-white text-[#101410] border border-[#DAE7C7] rounded-tl-xs'
+                      }`}
+                    >
+                      {msg.content || msg.message}
+                    </div>
+                  )}
                   <div className="flex items-center gap-1.5 mt-1 px-1 text-[10px] text-[#5E5E61]">
                     <span>{timeStr}</span>
                     {isMine && msg.is_read ? (
@@ -280,8 +339,44 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({
           </div>
         )}
 
+        {/* Pending Image Attachments Preview */}
+        {pendingImages.length > 0 && (
+          <div className="p-2.5 bg-[#F5F8EF] border-t border-[#DAE7C7] flex items-center gap-2">
+            {pendingImages.map((img, idx) => (
+              <div key={idx} className="relative w-14 h-14 rounded-xl overflow-hidden border border-[#DAE7C7] bg-white flex-shrink-0">
+                <img src={img} alt="Đính kèm" className="w-full h-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => setPendingImages((prev) => prev.filter((_, i) => i !== idx))}
+                  className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-black/70 hover:bg-red-600 text-white flex items-center justify-center text-[10px]"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+            <span className="text-[11px] text-[#5E5E61]">{pendingImages.length}/3 ảnh đính kèm</span>
+          </div>
+        )}
+
         {/* Input Bar */}
         <div className="p-3 bg-white border-t border-[#DAE7C7] flex items-center gap-2">
+          <input
+            type="file"
+            ref={fileInputRef}
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => handlePickImages(e.target.files)}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={sending || pendingImages.length >= 3 || compressingImage}
+            className="p-2 text-[#08482D] hover:bg-[#DAE7C7]/40 rounded-xl transition-colors disabled:opacity-40"
+            title="Đính kèm ảnh (tối đa 3 ảnh)"
+          >
+            {compressingImage ? <Loader2 className="w-4 h-4 animate-spin text-[#08482D]" /> : <Camera className="w-4 h-4" />}
+          </button>
           <input
             type="text"
             value={inputText}
@@ -303,12 +398,33 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({
             variant="primary"
             size="sm"
             onClick={() => handleSend()}
-            disabled={!inputText.trim() || sending}
+            disabled={(!inputText.trim() && pendingImages.length === 0) || sending}
             className="rounded-xl px-3.5 py-2.5"
           >
             <Send className="w-4 h-4" />
           </Button>
         </div>
+
+        {/* Full-screen Chat Image Lightbox */}
+        {activeLightboxImage && (
+          <div
+            className="fixed inset-0 z-70 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in"
+            onClick={() => setActiveLightboxImage(null)}
+          >
+            <button
+              onClick={() => setActiveLightboxImage(null)}
+              className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            <img
+              src={activeLightboxImage}
+              alt=""
+              className="max-h-[85vh] max-w-[90vw] object-contain rounded-2xl shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

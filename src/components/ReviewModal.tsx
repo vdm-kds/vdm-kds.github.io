@@ -48,88 +48,12 @@ const CRITERIA_CHIPS = [
   'Shop nhiệt tình'
 ];
 
-// Helper: Tự nén ảnh JPEG 0.8, cạnh dài nhất 1280px
-function compressImage(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        let { width, height } = img;
-        const maxDim = 1280;
-        if (width > maxDim || height > maxDim) {
-          if (width > height) {
-            height = Math.round((height * maxDim) / width);
-            width = maxDim;
-          } else {
-            width = Math.round((width * maxDim) / height);
-            height = maxDim;
-          }
-        }
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return reject(new Error('Lỗi canvas'));
-        ctx.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', 0.8));
-      };
-      img.onerror = () => reject(new Error('Không thể đọc file ảnh'));
-      img.src = e.target?.result as string;
-    };
-    reader.onerror = () => reject(new Error('Lỗi đọc file'));
-    reader.readAsDataURL(file);
-  });
-}
-
-// Helper: Kiểm tra độ dài video và lấy ảnh bìa canvas
-function processVideo(file: File): Promise<{ dataUrl: string; duration: number; poster: string }> {
-  return new Promise((resolve, reject) => {
-    const video = document.createElement('video');
-    video.preload = 'metadata';
-    video.muted = true;
-    video.playsInline = true;
-    const objectUrl = URL.createObjectURL(file);
-    video.src = objectUrl;
-
-    video.onloadedmetadata = () => {
-      if (video.duration > 30) {
-        URL.revokeObjectURL(objectUrl);
-        return reject(new Error('Video tối đa 30 giây'));
-      }
-      video.currentTime = 0.1;
-    };
-
-    video.onseeked = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = video.videoWidth || 640;
-      canvas.height = video.videoHeight || 360;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      }
-      const poster = canvas.toDataURL('image/jpeg', 0.8);
-      const duration = Math.round(video.duration);
-      URL.revokeObjectURL(objectUrl);
-
-      const reader = new FileReader();
-      reader.onload = () => {
-        resolve({
-          dataUrl: reader.result as string,
-          duration,
-          poster
-        });
-      };
-      reader.onerror = () => reject(new Error('Lỗi đọc dữ liệu video'));
-      reader.readAsDataURL(file);
-    };
-
-    video.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      reject(new Error('Không thể phát tệp video, vui lòng chọn định dạng MP4 hoặc WebM'));
-    };
-  });
-}
+import {
+  compressReviewImage,
+  extractVideoMetadataAndThumb,
+  compressVideoInBrowser,
+  validateAndNormalizeReviewImages
+} from '../utils/image';
 
 export function ReviewModal({
   isOpen,
@@ -207,16 +131,15 @@ export function ReviewModal({
     const filesToProcess = Array.from(fileList).slice(0, remainingSlots);
 
     for (const file of filesToProcess) {
-      if (file.size > 10 * 1024 * 1024) {
-        showToast(`Ảnh "${file.name}" vượt quá giới hạn 10MB`, 'error');
+      if (file.size > 20 * 1024 * 1024) {
+        showToast(`Ảnh "${file.name}" vượt quá giới hạn 20MB`, 'error');
         continue;
       }
       try {
         setProcessing(true);
-        setProcessMsg('Đang nén và tải ảnh lên...');
-        const compressedBase64 = await compressImage(file);
-        const res = await api.uploadFile(compressedBase64);
-        setImages(prev => [...prev, res.url].slice(0, 5));
+        setProcessMsg('Đang nén ảnh...');
+        const compressedBase64 = await compressReviewImage(file);
+        setImages(prev => [...prev, compressedBase64].slice(0, 5));
       } catch (err: any) {
         showToast(err.message || 'Lỗi khi xử lý hình ảnh', 'error');
       } finally {
@@ -231,26 +154,29 @@ export function ReviewModal({
     if (!fileList || fileList.length === 0) return;
     const file = fileList[0];
 
-    if (file.size > 20 * 1024 * 1024) {
-      showToast('Dung lượng video tối đa 20MB', 'error');
-      return;
-    }
-
     try {
       setProcessing(true);
-      setProcessMsg('Đang kiểm tra độ dài video và trích xuất ảnh bìa...');
-      const { dataUrl, duration, poster } = await processVideo(file);
+      setProcessMsg('Đang kiểm tra thời lượng video (tối đa 1 phút)...');
+      const meta = await extractVideoMetadataAndThumb(file);
 
-      setProcessMsg('Đang tải video lên kho lưu trữ...');
-      const uploadRes = await api.uploadFile(dataUrl);
+      setProcessMsg('Đang nén video...');
+      const compressedBlob = await compressVideoInBrowser(file, (pct) => {
+        setProcessMsg(`Đang nén video... ${pct}%`);
+      });
 
-      // Upload poster as well
-      const posterRes = await api.uploadFile(poster);
+      if (compressedBlob.size > 8 * 1024 * 1024) {
+        throw new Error('Dung lượng video sau nén vẫn vượt quá 8MB, vui lòng chọn video ngắn hơn.');
+      }
 
-      setVideoUrl(uploadRes.url);
-      setVideoDuration(duration);
-      setVideoPoster(posterRes.url);
-      showToast(`Đã thêm video (${duration}s)`, 'success');
+      setProcessMsg('Đang lưu video vào máy chủ...');
+      const uploadRes = await api.uploadReviewVideo(compressedBlob, meta.duration, (pct) => {
+        setProcessMsg(`Đang lưu video vào máy chủ... ${pct}%`);
+      });
+
+      setVideoUrl(uploadRes.mediaId);
+      setVideoDuration(meta.duration);
+      setVideoPoster(meta.poster);
+      showToast(`Đã thêm video (${meta.duration}s)`, 'success');
     } catch (err: any) {
       showToast(err.message || 'Lỗi xử lý video', 'error');
     } finally {
@@ -313,16 +239,21 @@ export function ReviewModal({
 
     setSubmitting(true);
     try {
+      const normalizedImages = await validateAndNormalizeReviewImages(images);
       const payload = {
         order_id: orderId,
         product_id: product.id,
         rating,
         comment: trimmed,
         tags: selectedChips,
-        images,
-        video_url: videoUrl,
+        images: normalizedImages,
+        video_id: videoUrl || null,
+        videoId: videoUrl || null,
+        video_url: videoUrl || null,
         video_duration: videoDuration,
+        videoDuration: videoDuration,
         video_poster: videoPoster,
+        videoThumb: videoPoster,
         is_anonymous: isAnonymous
       };
 
@@ -491,7 +422,7 @@ export function ReviewModal({
                 Hình ảnh & Video thực tế
               </label>
               <span className="text-xs text-[#5E5E61]">
-                Ảnh: {images.length}/5 · Video: {videoUrl ? '1/1' : '0/1'}
+                Ảnh: {images.length}/5 ảnh · Video: {videoUrl ? '1/1' : '0/1'}
               </span>
             </div>
 
@@ -528,7 +459,7 @@ export function ReviewModal({
                     disabled={processing}
                     className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-xl border border-[#DAE7C7] bg-[#F5F8EF] hover:bg-[#DAE7C7]/40 text-[#C2522D] transition-colors"
                   >
-                    <Video className="w-3.5 h-3.5 text-[#C2522D]" /> Quay video (&le;30s)
+                    <Video className="w-3.5 h-3.5 text-[#C2522D]" /> Quay video (≤ 1 phút)
                   </button>
                   <button
                     type="button"
@@ -583,12 +514,12 @@ export function ReviewModal({
               </div>
             )}
 
-            {/* Previews grid */}
+            {/* Previews grid (80px squares) */}
             {(images.length > 0 || videoUrl) && (
-              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5 pt-2">
+              <div className="flex flex-wrap gap-2.5 pt-2">
                 {/* Images */}
                 {images.map((img, idx) => (
-                  <div key={idx} className="relative group aspect-square rounded-xl overflow-hidden border border-[#DAE7C7] bg-stone-100 shadow-xs">
+                  <div key={idx} className="relative group w-20 h-20 rounded-xl overflow-hidden border border-[#DAE7C7] bg-stone-100 shadow-xs flex-shrink-0">
                     <img src={img} alt={`Đánh giá ${idx + 1}`} className="w-full h-full object-cover" />
                     <button
                       type="button"
@@ -606,15 +537,15 @@ export function ReviewModal({
 
                 {/* Video */}
                 {videoUrl && (
-                  <div className="relative group aspect-square rounded-xl overflow-hidden border-2 border-[#C2522D]/40 bg-black shadow-xs">
+                  <div className="relative group w-20 h-20 rounded-xl overflow-hidden border-2 border-[#C2522D]/40 bg-black shadow-xs flex-shrink-0">
                     {videoPoster ? (
                       <img src={videoPoster} alt="Video poster" className="w-full h-full object-cover opacity-80" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-stone-900 text-white text-xs">Video</div>
                     )}
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <div className="w-8 h-8 rounded-full bg-black/60 flex items-center justify-center text-white">
-                        <Play className="w-4 h-4 fill-white ml-0.5" />
+                      <div className="w-7 h-7 rounded-full bg-black/60 flex items-center justify-center text-white">
+                        <Play className="w-3.5 h-3.5 fill-white ml-0.5" />
                       </div>
                     </div>
                     <button
@@ -636,7 +567,7 @@ export function ReviewModal({
             )}
             
             <p className="text-[11px] text-[#5E5E61]">
-              * Kéo thả ảnh/video vào đây. Ảnh tự nén chuẩn 1280px (gốc &le;10MB). Video tối đa 30 giây (&le;20MB).
+              * Kéo thả ảnh/video vào đây. Ảnh tự nén chuẩn 1024px. Video tối đa 1 phút (&le;8MB).
             </p>
           </div>
 

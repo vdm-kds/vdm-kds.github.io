@@ -103,8 +103,14 @@ export interface Review {
   tags?: string[];
   images?: string[];
   video_url?: string | null;
+  video_id?: string | null;
+  videoId?: string | null;
+  videoThumb?: string | null;
+  video_thumb?: string | null;
+  videoDuration?: number | null;
   video_duration?: number | null;
   video_poster?: string | null;
+  video_local_id?: string | null;
   is_anonymous?: boolean;
   author_name?: string;
   author_phone?: string;
@@ -346,7 +352,10 @@ export interface ChatMessage {
   sender_id: any;
   content?: string;
   message?: string;
-  type?: 'text' | 'context';
+  type?: 'text' | 'context' | 'image';
+  image?: string | null;
+  width?: number | null;
+  height?: number | null;
   context_type?: string;
   context_id?: any;
   is_read?: number | boolean;

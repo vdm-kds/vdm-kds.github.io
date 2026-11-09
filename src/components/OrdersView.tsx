@@ -56,6 +56,45 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
   const [showReturnModal, setShowReturnModal] = useState(false);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [showChatDrawer, setShowChatDrawer] = useState(false);
+  const [reordering, setReordering] = useState(false);
+
+  const handleReorder = async (order: Order, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (!order.items || order.items.length === 0 || reordering) return;
+    setReordering(true);
+    try {
+      const pRes = await api.getProducts();
+      const currentProducts = pRes.products || [];
+
+      let addedCount = 0;
+      const outOfStockItems: string[] = [];
+
+      for (const item of order.items) {
+        const liveProd = currentProducts.find((p: any) => String(p.id) === String(item.product_id));
+        if (!liveProd || (liveProd.stock ?? 0) <= 0) {
+          outOfStockItems.push(item.product_name || 'Sản phẩm');
+        } else {
+          await api.addToCart(liveProd.id, Math.min(item.quantity || 1, liveProd.stock));
+          addedCount++;
+        }
+      }
+
+      if (outOfStockItems.length > 0) {
+        showToast(`Món đã có chủ mới (hết hàng): ${outOfStockItems.join(', ')}`, 'info');
+      }
+
+      if (addedCount > 0) {
+        showToast(`Đã thêm ${addedCount} món vào giỏ hàng`, 'success');
+        window.dispatchEvent(new Event('open-cart'));
+      } else if (outOfStockItems.length === 0) {
+        showToast('Không có món nào để thêm vào giỏ', 'info');
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Lỗi khi mua lại đơn hàng', 'error');
+    } finally {
+      setReordering(false);
+    }
+  };
 
   // Fetch reviewed items for currently selected order
   const fetchReviewedItems = async (orderId: number) => {
@@ -434,9 +473,24 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                     </div>
                   )}
 
-                  <div className="mt-3 pt-2 flex items-center justify-end text-xs font-semibold text-[#C2522D]">
-                    <span>Xem hành trình chi tiết</span>
-                    <ChevronRight className="w-4 h-4 ml-0.5" />
+                  <div className="mt-3 pt-2 flex items-center justify-between text-xs font-semibold">
+                    {(order.status === 'completed' || order.status === 'cancelled') ? (
+                      <button
+                        type="button"
+                        onClick={(e) => handleReorder(order, e)}
+                        disabled={reordering}
+                        className="px-2.5 py-1 bg-[#08482D] hover:bg-[#063A24] text-white rounded-lg text-xs font-bold inline-flex items-center gap-1 transition-colors cursor-pointer"
+                        title="Mua lại các món trong đơn này"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>Mua lại</span>
+                      </button>
+                    ) : <span />}
+
+                    <div className="flex items-center text-[#C2522D]">
+                      <span>Xem hành trình chi tiết</span>
+                      <ChevronRight className="w-4 h-4 ml-0.5" />
+                    </div>
                   </div>
                 </div>
               );
@@ -937,6 +991,20 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                 >
                   <RotateCcw className="w-4 h-4 text-amber-700" />
                   Yêu cầu trả hàng
+                </button>
+              )}
+
+              {/* Mua lại button for completed / cancelled orders */}
+              {(selectedOrder.status === 'completed' || selectedOrder.status === 'cancelled') && (
+                <button
+                  type="button"
+                  onClick={() => handleReorder(selectedOrder)}
+                  disabled={reordering}
+                  className="py-2.5 px-3.5 bg-[#08482D] hover:bg-[#063A24] text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
+                  title="Mua lại các món trong đơn này"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  <span>Mua lại đơn này</span>
                 </button>
               )}
 

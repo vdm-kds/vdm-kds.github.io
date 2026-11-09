@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   MessageCircle, X, Send, Search, ArrowLeft, Store, Package, 
-  ExternalLink, Sparkles, CheckCircle2, Clock, ShieldCheck
+  ExternalLink, Sparkles, CheckCircle2, Clock, ShieldCheck, Camera, Loader2
 } from 'lucide-react';
 import { ChatConversation, ChatMessage, ChatMessageContext } from '../types';
 import { api } from '../services/api';
 import { createShopAvatarSvg } from '../services/db';
 import { formatVND } from '../utils/format';
+import { compressChatImage } from '../utils/image';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { ProductImage } from './ProductImage';
@@ -31,12 +32,16 @@ export const BuyerChatDock: React.FC<BuyerChatDockProps> = ({ onNavigateToShop }
   const [selectedConvId, setSelectedConvId] = useState<string | number | null>(null);
   const [activeMessages, setActiveMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
+  const [pendingImages, setPendingImages] = useState<string[]>([]);
+  const [compressingImage, setCompressingImage] = useState(false);
+  const [activeLightboxImage, setActiveLightboxImage] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -150,19 +155,62 @@ export const BuyerChatDock: React.FC<BuyerChatDockProps> = ({ onNavigateToShop }
     };
   }, [user]);
 
+  const handlePickImages = async (fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0) return;
+    const remainingSlots = 3 - pendingImages.length;
+    if (remainingSlots <= 0) return;
+
+    const files = Array.from(fileList).slice(0, remainingSlots);
+    setCompressingImage(true);
+    try {
+      for (const file of files) {
+        const res = await compressChatImage(file);
+        setPendingImages((prev) => [...prev, res.dataUrl].slice(0, 3));
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Lỗi xử lý ảnh', 'error');
+    } finally {
+      setCompressingImage(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
   // Send message
   const handleSendMessage = async (textToSend?: string) => {
     const text = (textToSend || inputText).trim();
-    if (!text || !selectedConvId) return;
+    const hasImages = pendingImages.length > 0;
+    if ((!text && !hasImages) || !selectedConvId || sending) return;
 
     try {
       setSending(true);
-      const res = await api.sendChatMessage(selectedConvId, text);
-      setActiveMessages(prev => {
-        if (prev.some(m => String(m.id) === String(res.message.id))) return prev;
-        return [...prev, res.message];
-      });
-      setInputText('');
+
+      // Send attached images
+      if (hasImages) {
+        for (const imgUrl of pendingImages) {
+          const res = await api.sendChatMessage({
+            conversation_id: selectedConvId,
+            type: 'image',
+            text: '',
+            image: imgUrl
+          } as any);
+          setActiveMessages((prev) => {
+            if (prev.some((m) => String(m.id) === String(res.message.id))) return prev;
+            return [...prev, res.message];
+          });
+        }
+        setPendingImages([]);
+      }
+
+      // Send text if present
+      if (text) {
+        const res = await api.sendChatMessage(selectedConvId, text);
+        setActiveMessages((prev) => {
+          if (prev.some((m) => String(m.id) === String(res.message.id))) return prev;
+          return [...prev, res.message];
+        });
+        setInputText('');
+      }
+
       setTimeout(scrollToBottom, 100);
       loadConversations();
     } catch (err: any) {
@@ -461,6 +509,27 @@ export const BuyerChatDock: React.FC<BuyerChatDockProps> = ({ onNavigateToShop }
                               </div>
                             )}
 
+                            {/* Image bubble if present */}
+                            {((msg.type === 'image' || msg.image) && msg.image) && (
+                              <div
+                                onClick={() => setActiveLightboxImage(msg.image!)}
+                                className="cursor-pointer group relative overflow-hidden rounded-2xl border border-stone-200/60 shadow-xs mb-1"
+                                title="Bấm để xem ảnh lớn"
+                              >
+                                <img
+                                  src={msg.image}
+                                  alt="Ảnh đính kèm"
+                                  className="max-w-[220px] max-h-[220px] object-cover rounded-2xl group-hover:opacity-95 transition-all"
+                                  loading="lazy"
+                                />
+                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+                                  <span className="opacity-0 group-hover:opacity-100 text-[10px] bg-black/60 text-white px-2 py-0.5 rounded-full font-medium">
+                                    Xem ảnh
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+
                             {/* Message bubble */}
                             {(msg.content || msg.message) && (
                               <div
@@ -497,6 +566,25 @@ export const BuyerChatDock: React.FC<BuyerChatDockProps> = ({ onNavigateToShop }
                     ))}
                   </div>
 
+                  {/* Pending image previews */}
+                  {pendingImages.length > 0 && (
+                    <div className="px-3 py-2 bg-stone-50 border-t border-stone-200 flex items-center gap-2">
+                      {pendingImages.map((img, idx) => (
+                        <div key={idx} className="relative w-12 h-12 rounded-lg overflow-hidden border border-stone-300">
+                          <img src={img} alt="preview" className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => setPendingImages(prev => prev.filter((_, i) => i !== idx))}
+                            className="absolute top-0.5 right-0.5 bg-black/70 hover:bg-black text-white rounded-full p-0.5"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                      <span className="text-[11px] text-stone-500">{pendingImages.length}/3 ảnh</span>
+                    </div>
+                  )}
+
                   {/* Input area */}
                   <form
                     onSubmit={(e) => {
@@ -505,6 +593,23 @@ export const BuyerChatDock: React.FC<BuyerChatDockProps> = ({ onNavigateToShop }
                     }}
                     className="p-2.5 sm:p-3 bg-white border-t border-stone-200 flex items-center gap-2 min-w-0 w-full"
                   >
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => handlePickImages(e.target.files)}
+                    />
+                    <button
+                      type="button"
+                      disabled={pendingImages.length >= 3 || compressingImage}
+                      onClick={() => fileInputRef.current?.click()}
+                      className="p-2 text-stone-500 hover:text-[#08482D] hover:bg-stone-100 rounded-xl transition-colors shrink-0 disabled:opacity-40 cursor-pointer"
+                      title="Gửi ảnh (tối đa 3 ảnh)"
+                    >
+                      {compressingImage ? <Loader2 className="w-4 h-4 animate-spin text-[#08482D]" /> : <Camera className="w-4 h-4" />}
+                    </button>
                     <input
                       type="text"
                       value={inputText}
@@ -520,10 +625,10 @@ export const BuyerChatDock: React.FC<BuyerChatDockProps> = ({ onNavigateToShop }
                     />
                     <button
                       type="submit"
-                      disabled={sending || !inputText.trim()}
+                      disabled={sending || (!inputText.trim() && pendingImages.length === 0)}
                       className="p-2.5 bg-[#08482D] text-white rounded-xl hover:bg-[#08482D]/90 disabled:opacity-40 transition-all shrink-0 cursor-pointer"
                     >
-                      <Send className="w-4 h-4" />
+                      {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                     </button>
                   </form>
                 </>
@@ -535,6 +640,28 @@ export const BuyerChatDock: React.FC<BuyerChatDockProps> = ({ onNavigateToShop }
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Lightbox Modal */}
+      {activeLightboxImage && (
+        <div
+          onClick={() => setActiveLightboxImage(null)}
+          className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in"
+        >
+          <div className="relative max-w-3xl max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setActiveLightboxImage(null)}
+              className="absolute -top-10 right-0 text-white hover:text-stone-300 p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors cursor-pointer"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            <img
+              src={activeLightboxImage}
+              alt="Ảnh phóng to"
+              className="max-h-[85vh] max-w-full rounded-xl object-contain shadow-2xl"
+            />
           </div>
         </div>
       )}

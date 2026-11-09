@@ -44,33 +44,38 @@ export const Header: React.FC<HeaderProps> = ({
   const [shopSuggestions, setShopSuggestions] = useState<Shop[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
-  // Debounced autocomplete search
+  const activeProducts = suggestions.slice(0, 4);
+  const activeShops = shopSuggestions.slice(0, 2);
+  const totalNavItems = activeProducts.length + activeShops.length;
+
+  // Debounced autocomplete search (requires >= 2 chars)
   useEffect(() => {
-    if (!searchQuery.trim() || searchQuery.trim().length < 1) {
+    const trimmed = (searchQuery || '').trim();
+    if (trimmed.length < 2) {
       setSuggestions([]);
       setShopSuggestions([]);
       setShowSuggestions(false);
+      setSelectedIndex(-1);
       return;
     }
 
     const timer = setTimeout(async () => {
       setIsSearching(true);
       try {
-        const [prodRes, shopRes] = await Promise.all([
-          api.getAutocomplete(searchQuery.trim()),
-          api.searchShops(searchQuery.trim())
-        ]);
-        setSuggestions((prodRes.suggestions || []) as any);
-        setShopSuggestions(shopRes.shops || []);
+        const res = await api.getAutocomplete(trimmed);
+        setSuggestions((res.suggestions || []).slice(0, 4) as any);
+        setShopSuggestions((res.shops || []).slice(0, 2) as any);
         setShowSuggestions(true);
+        setSelectedIndex(-1);
       } catch (err) {
         // Silent autocomplete failure
       } finally {
         setIsSearching(false);
       }
-    }, 300);
+    }, 250);
 
     return () => clearTimeout(timer);
   }, [searchQuery]);
@@ -80,22 +85,48 @@ export const Header: React.FC<HeaderProps> = ({
     const handleClickOutside = (e: MouseEvent) => {
       if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
         setShowSuggestions(false);
+        setSelectedIndex(-1);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleSearchKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'ArrowDown') {
+      if (!showSuggestions || totalNavItems === 0) return;
+      e.preventDefault();
+      setSelectedIndex((prev) => (prev + 1 >= totalNavItems ? 0 : prev + 1));
+    } else if (e.key === 'ArrowUp') {
+      if (!showSuggestions || totalNavItems === 0) return;
+      e.preventDefault();
+      setSelectedIndex((prev) => (prev <= 0 ? totalNavItems - 1 : prev - 1));
+    } else if (e.key === 'Escape') {
       e.preventDefault();
       setShowSuggestions(false);
-      if (onSearchSubmit) onSearchSubmit();
+      setSelectedIndex(-1);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (showSuggestions && selectedIndex >= 0 && selectedIndex < totalNavItems) {
+        if (selectedIndex < activeProducts.length) {
+          handleSelectSuggestion(activeProducts[selectedIndex]);
+        } else {
+          const shop = activeShops[selectedIndex - activeProducts.length];
+          setShowSuggestions(false);
+          setSelectedIndex(-1);
+          if (onNavigateToShop) onNavigateToShop(shop.slug);
+        }
+      } else {
+        setShowSuggestions(false);
+        setSelectedIndex(-1);
+        if (onSearchSubmit) onSearchSubmit();
+      }
     }
   };
 
   const handleSelectSuggestion = (p: Product) => {
     setShowSuggestions(false);
+    setSelectedIndex(-1);
     if (onSelectProduct) {
       onSelectProduct(p);
     } else {
@@ -138,8 +169,8 @@ export const Header: React.FC<HeaderProps> = ({
                 type="text"
                 value={searchQuery}
                 onChange={(e) => onSearchChange(e.target.value)}
-                onKeyDown={handleSearchKeyPress}
-                onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
+                onKeyDown={handleSearchKeyDown}
+                onFocus={() => { if (totalNavItems > 0) setShowSuggestions(true); }}
                 placeholder="Tìm áo da, máy ảnh film, đồng hồ vintage..."
                 className="w-full bg-[#FFFFFF] border border-[#E2E8D8] rounded-full pl-9 pr-8 py-2 text-xs text-[#101410] placeholder-[#5E5E61]/70 shadow-2xs focus:outline-none focus:border-[#08482D] focus:ring-1 focus:ring-[#08482D] transition-all"
               />
@@ -149,99 +180,131 @@ export const Header: React.FC<HeaderProps> = ({
               )}
 
               {/* Autocomplete Dropdown Popover */}
-              {showSuggestions && (suggestions.length > 0 || shopSuggestions.length > 0) && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-[#E2E8D8] rounded-2xl shadow-lg overflow-hidden z-50 animate-in fade-in slide-in-from-top-1">
-                  {/* Shop suggestions if any */}
-                  {shopSuggestions.length > 0 && (
-                    <div className="p-2 border-b border-[#E2E8D8] bg-[#F5F8EF]/60">
-                      <div className="text-[10px] uppercase font-bold text-[#5E5E61] tracking-wider mb-1.5 flex items-center gap-1 px-1">
-                        <Store className="w-3 h-3 text-[#08482D]" />
-                        Shop liên quan ({shopSuggestions.length})
+              {showSuggestions && totalNavItems > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-[#E2E8D8] rounded-2xl shadow-xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-1">
+                  {/* Product suggestions (max 4) */}
+                  {activeProducts.length > 0 && (
+                    <div>
+                      <div className="px-3 py-1.5 border-b border-[#E2E8D8] bg-[#F5F8EF] flex items-center justify-between text-[11px] text-[#5E5E61] font-medium">
+                        <span className="flex items-center gap-1.5 font-bold text-[#08482D]">
+                          <Sparkles className="w-3 h-3 text-[#08482D]" />
+                          Gợi ý sản phẩm ({activeProducts.length})
+                        </span>
+                        <span className="text-[10px] text-[#5E5E61]">Bấm hoặc Enter để xem</span>
                       </div>
-                      <div className="space-y-1">
-                        {shopSuggestions.map((s) => (
-                          <div
-                            key={s.id}
-                            className="flex items-center justify-between p-2 rounded-xl bg-white border border-[#E2E8D8]/70 hover:border-[#08482D] transition-colors"
-                          >
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <div
-                                className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0 overflow-hidden"
-                                style={{ backgroundColor: s.cover_color || '#08482D' }}
-                              >
-                                {s.avatar ? (
-                                  <img src={s.avatar} alt={s.name} className="w-full h-full object-cover" />
-                                ) : (
-                                  s.name.charAt(0)
-                                )}
-                              </div>
-                              <div className="min-w-0">
-                                <p className="text-xs font-semibold text-[#101410] truncate">{s.name}</p>
-                                <p className="text-[10px] text-[#5E5E61] truncate">{s.description || `@${s.slug}`}</p>
-                              </div>
-                            </div>
+                      <div className="divide-y divide-[#E2E8D8]/50 max-h-60 overflow-y-auto">
+                        {activeProducts.map((p, idx) => {
+                          const isSelected = selectedIndex === idx;
+                          return (
                             <button
+                              key={p.id}
                               type="button"
-                              onClick={() => {
-                                setShowSuggestions(false);
-                                if (onNavigateToShop) onNavigateToShop(s.slug);
-                              }}
-                              className="px-2.5 py-1 text-[11px] font-semibold text-[#08482D] bg-[#DAE7C7]/50 hover:bg-[#DAE7C7] rounded-lg shrink-0 transition-colors"
+                              onMouseEnter={() => setSelectedIndex(idx)}
+                              onClick={() => handleSelectSuggestion(p)}
+                              className={`w-full p-2.5 flex items-center gap-3 text-left transition-colors group ${
+                                isSelected ? 'bg-[#DAE7C7]/60' : 'hover:bg-[#F5F8EF]'
+                              }`}
                             >
-                              Ghé shop
+                              <img
+                                src={p.thumb || p.image_url}
+                                alt={p.name}
+                                className="w-10 h-10 rounded-xl object-cover border border-[#E2E8D8] shrink-0"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <p className={`text-xs font-semibold truncate ${
+                                  isSelected ? 'text-[#08482D]' : 'text-[#101410] group-hover:text-[#08482D]'
+                                }`}>
+                                  {p.name}
+                                </p>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <span className="text-[10px] font-mono font-bold text-[#C2522D]">
+                                    {formatVND(p.price)}
+                                  </span>
+                                  <span className="text-[10px] text-[#08482D] bg-[#DAE7C7] px-1.5 py-0.5 rounded-sm font-mono">
+                                    Mới {p.condition_pct}%
+                                  </span>
+                                  {p.shop_name && (
+                                    <span className="text-[10px] text-[#5E5E61] truncate">
+                                      • {p.shop_name}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
                             </button>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}
 
-                  {/* Product suggestions */}
-                  {suggestions.length > 0 && (
-                    <div>
-                      <div className="p-2 border-b border-[#E2E8D8] bg-[#F5F8EF] flex items-center justify-between text-[11px] text-[#5E5E61] font-medium">
-                        <span className="flex items-center gap-1">
-                          <Sparkles className="w-3 h-3 text-[#08482D]" />
-                          Gợi ý sản phẩm ({suggestions.length})
-                        </span>
-                        <span>Bấm để xem</span>
+                  {/* Shop suggestions (max 2) */}
+                  {activeShops.length > 0 && (
+                    <div className="p-2 border-t border-[#E2E8D8] bg-[#F5F8EF]/60">
+                      <div className="text-[10px] uppercase font-bold text-[#5E5E61] tracking-wider mb-1.5 flex items-center gap-1 px-1">
+                        <Store className="w-3 h-3 text-[#08482D]" />
+                        Shop liên quan ({activeShops.length})
                       </div>
-                      <div className="divide-y divide-[#E2E8D8]/50 max-h-60 overflow-y-auto">
-                        {suggestions.map((p) => (
-                          <button
-                            key={p.id}
-                            type="button"
-                            onClick={() => handleSelectSuggestion(p)}
-                            className="w-full p-2.5 flex items-center gap-3 text-left hover:bg-[#F5F8EF] transition-colors group"
-                          >
-                            <img
-                              src={p.image_url}
-                              alt={p.name}
-                              className="w-10 h-10 rounded-xl object-cover border border-[#E2E8D8] shrink-0"
-                            />
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs font-semibold text-[#101410] group-hover:text-[#08482D] truncate">
-                                {p.name}
-                              </p>
-                              <div className="flex items-center gap-2 mt-0.5">
-                                <span className="text-[10px] font-mono font-bold text-[#C2522D]">
-                                  {formatVND(p.price)}
-                                </span>
-                                <span className="text-[10px] text-[#08482D] bg-[#DAE7C7] px-1.5 py-0.2 rounded-sm font-mono">
-                                  Mới {p.condition_pct}%
-                                </span>
-                                {p.shop_name && (
-                                  <span className="text-[10px] text-[#5E5E61] truncate">
-                                    • {p.shop_name}
-                                  </span>
-                                )}
+                      <div className="space-y-1">
+                        {activeShops.map((s, sIdx) => {
+                          const globalIdx = activeProducts.length + sIdx;
+                          const isSelected = selectedIndex === globalIdx;
+                          return (
+                            <div
+                              key={s.id}
+                              onMouseEnter={() => setSelectedIndex(globalIdx)}
+                              onClick={() => {
+                                setShowSuggestions(false);
+                                setSelectedIndex(-1);
+                                if (onNavigateToShop) onNavigateToShop(s.slug);
+                              }}
+                              className={`flex items-center justify-between p-2 rounded-xl border transition-colors cursor-pointer ${
+                                isSelected
+                                  ? 'bg-[#DAE7C7]/70 border-[#08482D]'
+                                  : 'bg-white border-[#E2E8D8]/70 hover:border-[#08482D]'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <div
+                                  className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0 overflow-hidden"
+                                  style={{ backgroundColor: s.cover_color || '#08482D' }}
+                                >
+                                  {s.avatar ? (
+                                    <img src={s.avatar} alt={s.name} className="w-full h-full object-cover" />
+                                  ) : (
+                                    s.name.charAt(0)
+                                  )}
+                                </div>
+                                <div className="min-w-0">
+                                  <p className={`text-xs font-semibold truncate ${isSelected ? 'text-[#08482D]' : 'text-[#101410]'}`}>
+                                    {s.name}
+                                  </p>
+                                  <p className="text-[10px] text-[#5E5E61] truncate">{s.description || `@${s.slug}`}</p>
+                                </div>
                               </div>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setShowSuggestions(false);
+                                  setSelectedIndex(-1);
+                                  if (onNavigateToShop) onNavigateToShop(s.slug);
+                                }}
+                                className="px-2.5 py-1 text-[11px] font-semibold text-[#08482D] bg-[#DAE7C7]/60 hover:bg-[#DAE7C7] rounded-lg shrink-0 transition-colors"
+                              >
+                                Ghé shop
+                              </button>
                             </div>
-                          </button>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}
+
+                  {/* Navigation footer */}
+                  <div className="px-3 py-1.5 bg-[#FAFBF7] border-t border-[#E2E8D8] flex items-center justify-between text-[10px] text-[#5E5E61]">
+                    <span>Dùng phím <kbd className="font-mono bg-white border border-[#E2E8D8] px-1 py-0.5 rounded text-[9px]">↑</kbd> <kbd className="font-mono bg-white border border-[#E2E8D8] px-1 py-0.5 rounded text-[9px]">↓</kbd> để di chuyển</span>
+                    <span><kbd className="font-mono bg-white border border-[#E2E8D8] px-1 py-0.5 rounded text-[9px]">Enter</kbd> chọn • <kbd className="font-mono bg-white border border-[#E2E8D8] px-1 py-0.5 rounded text-[9px]">Esc</kbd> đóng</span>
+                  </div>
                 </div>
               )}
             </div>
@@ -396,7 +459,7 @@ export const Header: React.FC<HeaderProps> = ({
                 type="text"
                 value={searchQuery}
                 onChange={(e) => onSearchChange(e.target.value)}
-                onKeyDown={handleSearchKeyPress}
+                onKeyDown={handleSearchKeyDown}
                 placeholder="Tìm kiếm sản phẩm..."
                 className="w-full bg-white border border-[#E2E8D8] rounded-xl pl-9 pr-4 py-2 text-xs text-[#101410] focus:outline-none focus:border-[#08482D]"
               />

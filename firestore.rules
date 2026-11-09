@@ -161,5 +161,17 @@ service cloud.firestore {
         || onlyChanged(['helpfulUids', 'helpfulCount'])
       );
     }
+
+    // ===== Phương tiện đánh giá (Video chunks) =====
+    match /reviewMedia/{mediaId} {
+      allow read: if true;
+      allow create: if canWrite() && request.resource.data.ownerUid == uid();
+      allow update, delete: if canWrite() && resource.data.ownerUid == uid();
+
+      match /chunks/{chunkId} {
+        allow read: if true;
+        allow create, update, delete: if canWrite();
+      }
+    }
   }
 }

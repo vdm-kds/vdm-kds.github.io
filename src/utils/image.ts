@@ -234,6 +234,331 @@ export async function compressImageFile(file: File, maxDimension: number = 1024,
 }
 
 /**
+ * Compresses review image:
+ * - Max long side: 1024px
+ * - WEBP (fallback JPEG)
+ * - Max size <= 110KB
+ */
+export async function compressReviewImage(
+  source: File | Blob | string,
+  maxDimension: number = 1024,
+  maxBytes: number = 110 * 1024
+): Promise<string> {
+  return compressProductImage(source, maxDimension, maxBytes);
+}
+
+/**
+ * Validates total size of all images for one review (< 700KB)
+ * If exceeded, progressively compresses each image further.
+ */
+export async function validateAndNormalizeReviewImages(
+  images: string[],
+  maxTotalBytes: number = 700 * 1024
+): Promise<string[]> {
+  let totalBytes = images.reduce((acc, img) => acc + img.length * 0.75, 0);
+  if (totalBytes <= maxTotalBytes) return images;
+
+  // Re-compress images with aggressive threshold (e.g. 80KB each)
+  const recompressed: string[] = [];
+  for (const img of images) {
+    const c = await compressProductImage(img, 800, 80 * 1024);
+    recompressed.push(c);
+  }
+  totalBytes = recompressed.reduce((acc, img) => acc + img.length * 0.75, 0);
+  if (totalBytes > maxTotalBytes) {
+    throw new Error('Tổng dung lượng ảnh đánh giá vượt quá 700KB. Vui lòng bớt ảnh hoặc chọn ảnh nhẹ hơn.');
+  }
+  return recompressed;
+}
+
+/**
+ * Compresses chat image:
+ * - Max long side: 1024px
+ * - WEBP (fallback JPEG)
+ * - Max size <= 110KB
+ * - Returns dataUrl, width, height
+ */
+export async function compressChatImage(
+  source: File | Blob | string,
+  maxDimension: number = 1024,
+  maxBytes: number = 110 * 1024
+): Promise<{ dataUrl: string; width: number; height: number }> {
+  const img = await loadImageElement(source);
+  let { width, height } = img;
+  if (width > maxDimension || height > maxDimension) {
+    if (width > height) {
+      height = Math.round((height * maxDimension) / width);
+      width = maxDimension;
+    } else {
+      width = Math.round((width * maxDimension) / height);
+      height = maxDimension;
+    }
+  }
+  const dataUrl = await compressProductImage(source, maxDimension, maxBytes);
+  return { dataUrl, width, height };
+}
+
+/**
+ * Compresses defect photo:
+ * - Max long side: 1024px
+ * - Max size <= 80KB
+ */
+export async function compressDefectImage(
+  source: File | Blob | string,
+  maxDimension: number = 1024,
+  maxBytes: number = 80 * 1024
+): Promise<string> {
+  return compressProductImage(source, maxDimension, maxBytes);
+}
+
+/**
+ * Validates review video duration (<= 60s) and generates thumbnail at 1s (<= 40KB)
+ */
+export function extractVideoMetadataAndThumb(file: File): Promise<{
+  duration: number;
+  width: number;
+  height: number;
+  poster: string;
+  canSkipCompression: boolean;
+}> {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    video.muted = true;
+    video.playsInline = true;
+    const objectUrl = URL.createObjectURL(file);
+    video.src = objectUrl;
+
+    video.onloadedmetadata = () => {
+      // Validate duration <= 60s (allow minor margin 60.5s)
+      if (video.duration > 60.5) {
+        URL.revokeObjectURL(objectUrl);
+        return reject(new Error('Video tối đa 1 phút, vui lòng cắt ngắn lại'));
+      }
+      // Seek to 1s or half duration
+      const seekTime = Math.min(1.0, video.duration / 2);
+      video.currentTime = seekTime;
+    };
+
+    video.onseeked = () => {
+      const vWidth = video.videoWidth || 640;
+      const vHeight = video.videoHeight || 360;
+      const maxDim = 480;
+      let targetW = vWidth;
+      let targetH = vHeight;
+      if (targetW > maxDim || targetH > maxDim) {
+        if (targetW > targetH) {
+          targetH = Math.round((targetH * maxDim) / targetW);
+          targetW = maxDim;
+        } else {
+          targetW = Math.round((targetW * maxDim) / targetH);
+          targetH = maxDim;
+        }
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, targetW);
+      canvas.height = Math.max(1, targetH);
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      }
+      let quality = 0.8;
+      let poster = canvas.toDataURL('image/jpeg', quality);
+      while (poster.length * 0.75 > 40 * 1024 && quality > 0.3) {
+        quality -= 0.1;
+        poster = canvas.toDataURL('image/jpeg', quality);
+      }
+
+      const duration = Math.round(video.duration);
+      const canSkipCompression = file.size <= 6 * 1024 * 1024 && video.duration <= 60.5;
+      URL.revokeObjectURL(objectUrl);
+
+      resolve({
+        duration,
+        width: vWidth,
+        height: vHeight,
+        poster,
+        canSkipCompression
+      });
+    };
+
+    video.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('Không thể đọc tệp video. Vui lòng chọn định dạng MP4 hoặc WebM hợp lệ.'));
+    };
+  });
+}
+
+/**
+ * Compresses video in browser using canvas + MediaRecorder:
+ * - Max long side: 640px
+ * - Video bitrate: ~450000 bps
+ * - Audio bitrate: ~64000 bps
+ * - Target format: webm (vp9 -> vp8) or mp4
+ * - Max resulting size: <= 8MB
+ */
+export async function compressVideoInBrowser(
+  file: File,
+  onProgress?: (pct: number) => void
+): Promise<Blob> {
+  // If already <= 6MB, skip re-encoding
+  if (file.size <= 6 * 1024 * 1024) {
+    onProgress?.(100);
+    return file;
+  }
+
+  // Check MediaRecorder support
+  if (typeof window === 'undefined' || typeof MediaRecorder === 'undefined') {
+    if (file.size > 8 * 1024 * 1024) {
+      throw new Error('Dung lượng video vượt quá 8MB. Trình duyệt không hỗ trợ nén video tự động.');
+    }
+    return file;
+  }
+
+  return new Promise((resolve, reject) => {
+    const video = document.createElement('video');
+    video.preload = 'auto';
+    video.muted = true; // prevent audio echo during hidden processing
+    video.playsInline = true;
+    const objectUrl = URL.createObjectURL(file);
+    video.src = objectUrl;
+
+    video.onloadedmetadata = async () => {
+      try {
+        const vWidth = video.videoWidth || 640;
+        const vHeight = video.videoHeight || 360;
+        const maxDim = 640;
+        let targetW = vWidth;
+        let targetH = vHeight;
+        if (targetW > maxDim || targetH > maxDim) {
+          if (targetW > targetH) {
+            targetH = Math.round((targetH * maxDim) / targetW);
+            targetW = maxDim;
+          } else {
+            targetW = Math.round((targetW * maxDim) / targetH);
+            targetH = maxDim;
+          }
+        }
+        // Ensure even dimensions for video encoders
+        targetW = targetW % 2 === 0 ? targetW : targetW + 1;
+        targetH = targetH % 2 === 0 ? targetH : targetH + 1;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = targetW;
+        canvas.height = targetH;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          URL.revokeObjectURL(objectUrl);
+          return resolve(file);
+        }
+
+        // Stream from canvas
+        const canvasStream = (canvas as any).captureStream ? (canvas as any).captureStream(24) : null;
+        if (!canvasStream) {
+          URL.revokeObjectURL(objectUrl);
+          return resolve(file);
+        }
+
+        // Try to capture audio from video
+        try {
+          const videoStream = (video as any).captureStream ? (video as any).captureStream() : (video as any).mozCaptureStream ? (video as any).mozCaptureStream() : null;
+          if (videoStream) {
+            const audioTracks = videoStream.getAudioTracks();
+            if (audioTracks && audioTracks.length > 0) {
+              canvasStream.addTrack(audioTracks[0]);
+            }
+          }
+        } catch {}
+
+        // Mime types preference
+        const preferredTypes = [
+          'video/webm;codecs=vp9,opus',
+          'video/webm;codecs=vp9',
+          'video/webm;codecs=vp8,opus',
+          'video/webm;codecs=vp8',
+          'video/webm',
+          'video/mp4'
+        ];
+        let mimeType = preferredTypes.find(t => MediaRecorder.isTypeSupported(t)) || '';
+
+        const recorderOptions: MediaRecorderOptions = {
+          videoBitsPerSecond: 450000,
+          audioBitsPerSecond: 64000
+        };
+        if (mimeType) {
+          recorderOptions.mimeType = mimeType;
+        }
+
+        const recorder = new MediaRecorder(canvasStream, recorderOptions);
+        const chunks: Blob[] = [];
+
+        recorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) {
+            chunks.push(e.data);
+          }
+        };
+
+        let animFrameId: number;
+        const drawFrame = () => {
+          if (!video.paused && !video.ended) {
+            ctx.drawImage(video, 0, 0, targetW, targetH);
+            if (video.duration) {
+              const pct = Math.min(99, Math.round((video.currentTime / video.duration) * 100));
+              onProgress?.(pct);
+            }
+            animFrameId = requestAnimationFrame(drawFrame);
+          }
+        };
+
+        recorder.onstop = () => {
+          cancelAnimationFrame(animFrameId);
+          URL.revokeObjectURL(objectUrl);
+          onProgress?.(100);
+
+          const finalBlob = new Blob(chunks, { type: recorder.mimeType || mimeType || 'video/webm' });
+          if (finalBlob.size > 8 * 1024 * 1024) {
+            return reject(new Error('Dung lượng video sau khi nén vẫn vượt quá 8MB. Vui lòng chọn video ngắn hơn hoặc quay ở độ phân giải thấp hơn.'));
+          }
+          resolve(finalBlob);
+        };
+
+        recorder.onerror = (err) => {
+          cancelAnimationFrame(animFrameId);
+          URL.revokeObjectURL(objectUrl);
+          if (file.size <= 8 * 1024 * 1024) {
+            resolve(file);
+          } else {
+            reject(new Error('Lỗi khi nén video: ' + (err as any)?.message));
+          }
+        };
+
+        recorder.start(1000); // 1-second timeslice
+        video.currentTime = 0;
+        await video.play();
+        drawFrame();
+
+        video.onended = () => {
+          recorder.stop();
+        };
+      } catch (err) {
+        URL.revokeObjectURL(objectUrl);
+        if (file.size <= 8 * 1024 * 1024) {
+          resolve(file);
+        } else {
+          reject(err);
+        }
+      }
+    };
+
+    video.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('Không thể giải mã video để nén'));
+    };
+  });
+}
+
+/**
  * Default sample photo paths in public/seed/
  */
 export const SEED_MEDIA_DEFAULTS = {

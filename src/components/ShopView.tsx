@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { 
   Store, Star, Users, MessageSquare, Clock, ShieldCheck, Ticket, Check, 
   Search, SlidersHorizontal, ArrowLeft, Heart, ShoppingBag, MessageCircle, 
-  ExternalLink, Sparkles, MapPin, Phone, Eye, Edit3
+  ExternalLink, Sparkles, MapPin, Phone, Eye, Edit3, Play, X
 } from 'lucide-react';
 import { Shop, Product, Coupon, Review } from '../types';
 import { api } from '../services/api';
 import { formatVND } from '../utils/format';
 import { Button } from './Button';
 import { ProductCard } from './ProductCard';
+import { ReviewVideoPlayer } from './ReviewVideoPlayer';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 
@@ -70,6 +71,11 @@ export const ShopView: React.FC<ShopViewProps> = ({
 
   // Review star filter
   const [reviewRatingFilter, setReviewRatingFilter] = useState<number | 'all'>('all');
+  const [mediaLightbox, setMediaLightbox] = useState<{
+    type: 'image' | 'video';
+    url: string;
+    poster?: string;
+  } | null>(null);
 
   const isOwnerOfShop = user?.role === 'seller' && shop?.owner_user_id === user?.id;
 
@@ -822,17 +828,50 @@ export const ShopView: React.FC<ShopViewProps> = ({
                         {rev.comment}
                       </p>
 
-                      {/* Review Images */}
-                      {rev.images && rev.images.length > 0 && (
-                        <div className="flex items-center gap-2 mt-2 overflow-x-auto">
-                          {rev.images.map((img: string, i: number) => (
-                            <img
-                              key={i}
-                              src={img}
-                              alt=""
-                              className="w-16 h-16 rounded-xl object-cover border border-stone-200"
-                            />
-                          ))}
+                      {/* Review Media (Photos & Video) */}
+                      {((rev.images && rev.images.length > 0) || Boolean(rev.video_url || rev.videoId || rev.video_id)) && (
+                        <div className="flex items-center gap-2 mt-2 overflow-x-auto pt-1">
+                          {/* Video */}
+                          {Boolean(rev.video_url || rev.videoId || rev.video_id) && (
+                            <div
+                              onClick={() =>
+                                setMediaLightbox({
+                                  type: 'video',
+                                  url: (rev.video_url || rev.videoId || rev.video_id)!,
+                                  poster: (rev.video_poster || rev.videoThumb || rev.video_thumb) || undefined
+                                })
+                              }
+                              className="relative w-16 h-16 rounded-xl overflow-hidden border border-[#DAE7C7] bg-black cursor-pointer group shadow-2xs flex-shrink-0"
+                            >
+                              <img
+                                src={rev.video_poster || rev.videoThumb || rev.video_thumb || rev.product_image || ''}
+                                alt=""
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform opacity-80"
+                              />
+                              <div className="absolute inset-0 flex items-center justify-center">
+                                <div className="w-6 h-6 rounded-full bg-black/60 flex items-center justify-center text-white">
+                                  <Play className="w-3 h-3 fill-white ml-0.5" />
+                                </div>
+                              </div>
+                              {(rev.video_duration || rev.videoDuration) ? (
+                                <span className="absolute bottom-0.5 right-0.5 bg-black/70 text-white text-[8px] px-1 rounded font-mono">
+                                  {Math.floor((rev.video_duration || rev.videoDuration)! / 60)}:{String((rev.video_duration || rev.videoDuration)! % 60).padStart(2, '0')}
+                                </span>
+                              ) : null}
+                            </div>
+                          )}
+
+                          {/* Images */}
+                          {Array.isArray(rev.images) &&
+                            rev.images.map((img: string, i: number) => (
+                              <img
+                                key={i}
+                                src={img}
+                                alt=""
+                                onClick={() => setMediaLightbox({ type: 'image', url: img })}
+                                className="w-16 h-16 rounded-xl object-cover border border-[#DAE7C7] cursor-pointer hover:opacity-90 transition-opacity flex-shrink-0"
+                              />
+                            ))}
                         </div>
                       )}
 
@@ -855,6 +894,32 @@ export const ShopView: React.FC<ShopViewProps> = ({
                 })}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Media Lightbox */}
+        {mediaLightbox && (
+          <div className="fixed inset-0 z-70 bg-black/90 backdrop-blur-md flex flex-col justify-between p-4 animate-fade-in text-white">
+            <div className="w-full flex items-center justify-end px-4 py-2">
+              <button
+                onClick={() => setMediaLightbox(null)}
+                className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+                title="Đóng"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="relative flex-1 w-full flex items-center justify-center overflow-hidden my-auto p-2">
+              {mediaLightbox.type === 'video' ? (
+                <ReviewVideoPlayer videoIdOrUrl={mediaLightbox.url} poster={mediaLightbox.poster} />
+              ) : (
+                <img
+                  src={mediaLightbox.url}
+                  alt=""
+                  className="max-h-[80vh] max-w-[90vw] object-contain rounded-2xl shadow-2xl"
+                />
+              )}
+            </div>
           </div>
         )}
       </div>

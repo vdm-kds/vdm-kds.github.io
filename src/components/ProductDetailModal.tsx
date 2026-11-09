@@ -13,6 +13,7 @@ import { ProductImage } from './ProductImage';
 import { ProductFallbackImage } from './ProductFallbackImage';
 import { OfferModal } from './OfferModal';
 import { ChatDrawer } from './ChatDrawer';
+import { ReviewVideoPlayer } from './ReviewVideoPlayer';
 import { createShopAvatarSvg, isValidImageSrc } from '../services/db';
 
 interface ProductDetailModalProps {
@@ -138,6 +139,46 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
       unsubReviews();
     };
   }, [fullProduct.shop_slug, fullProduct.shop_id, fullProduct.id]);
+
+  // Track recently viewed product in localStorage dcct_recent_<uid or guest>
+  useEffect(() => {
+    if (!fullProduct?.id) return;
+    try {
+      const activeKey = sessionStorage.getItem('dcct_active') || 'guest';
+      const storageKey = `dcct_recent_${activeKey}`;
+      const raw = localStorage.getItem(storageKey);
+      let list: any[] = [];
+      if (raw) {
+        try {
+          list = JSON.parse(raw);
+        } catch {}
+      }
+      if (!Array.isArray(list)) list = [];
+
+      const itemToSave = {
+        id: fullProduct.id,
+        name: fullProduct.name,
+        price: fullProduct.price,
+        image_url: fullProduct.thumb || fullProduct.image_url || (fullProduct.images && fullProduct.images[0]) || '',
+        thumb: fullProduct.thumb || fullProduct.image_url,
+        condition_pct: fullProduct.condition_pct,
+        stock: fullProduct.stock ?? 1,
+        is_sold_out: (fullProduct.stock ?? 1) <= 0,
+        shop_name: fullProduct.shop_name || 'Đồ Cũ Còn Thương',
+        shop_id: fullProduct.shop_id || fullProduct.shop_slug || 'do-cu-con-thuong',
+        category: fullProduct.category || '',
+        viewed_at: Date.now()
+      };
+
+      const filtered = list.filter((p) => String(p.id) !== String(fullProduct.id));
+      filtered.unshift(itemToSave);
+      const trimmed = filtered.slice(0, 12);
+      localStorage.setItem(storageKey, JSON.stringify(trimmed));
+      window.dispatchEvent(new Event('dcct_recent_updated'));
+    } catch (e) {
+      console.warn('Could not save recent item:', e);
+    }
+  }, [fullProduct.id, fullProduct.name, fullProduct.price, fullProduct.stock]);
 
   const fetchActiveOffer = async () => {
     if (!currentUser || !fullProduct?.id) {
@@ -307,7 +348,13 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   const totalReviews = reviewsData?.total_reviews || 0;
   const avgRating = reviewsData?.average_rating || 0;
   const distribution = reviewsData?.distribution || { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-  const mediaCount = reviewsData?.media_count || 0;
+  const actualMediaCount = React.useMemo(() => {
+    if (!reviewsData?.reviews) return 0;
+    return reviewsData.reviews.filter((r: any) =>
+      (Array.isArray(r.images) && r.images.length > 0) ||
+      Boolean(r.video_url || r.videoId || r.video_id)
+    ).length;
+  }, [reviewsData]);
 
   const currentDisplayImage = imageList[selectedImageIndex] || imageList[0] || fullProduct.thumb || fullProduct.image_url;
 
@@ -323,13 +370,14 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
       comment?: string;
     }> = [];
     reviewsData.reviews.forEach((r: any) => {
-      if (r.video_url) {
+      const vidId = r.video_url || r.videoId || r.video_id;
+      if (vidId) {
         items.push({
           type: 'video',
-          url: r.video_url,
-          poster: r.video_poster,
-          duration: r.video_duration,
-          author: r.author_name,
+          url: vidId,
+          poster: r.video_poster || r.videoThumb || r.video_thumb,
+          duration: r.video_duration || r.videoDuration,
+          author: r.author_name || r.buyer_name,
           comment: r.comment
         });
       }
@@ -338,7 +386,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
           items.push({
             type: 'image',
             url: img,
-            author: r.author_name,
+            author: r.author_name || r.buyer_name,
             comment: r.comment
           });
         });
@@ -356,7 +404,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
         return r.rating === Number(activeReviewFilter);
       }
       if (activeReviewFilter === 'media') {
-        return (r.images && r.images.length > 0) || Boolean(r.video_url);
+        return (Array.isArray(r.images) && r.images.length > 0) || Boolean(r.video_url || r.videoId || r.video_id);
       }
       if (activeReviewFilter === 'comment') {
         return r.comment && r.comment.trim().length > 0;
@@ -822,7 +870,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                         { id: '3', label: `3 sao (${distribution[3] || 0})` },
                         { id: '2', label: `2 sao (${distribution[2] || 0})` },
                         { id: '1', label: `1 sao (${distribution[1] || 0})` },
-                        { id: 'media', label: `Có hình ảnh/video (${mediaCount})` },
+                        { id: 'media', label: `Có hình ảnh/video (${actualMediaCount})` },
                         { id: 'comment', label: 'Có bình luận' }
                       ].map(tab => (
                         <button
@@ -852,13 +900,14 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                       ) : (
                         filteredReviews.slice(0, visibleReviewCount).map((rev: any) => {
                           const revMedia: Array<{ type: 'image' | 'video'; url: string; poster?: string; duration?: number | null; author?: string; comment?: string }> = [];
-                          if (rev.video_url) {
+                          const revVidId = rev.video_url || rev.videoId || rev.video_id;
+                          if (revVidId) {
                             revMedia.push({
                               type: 'video',
-                              url: rev.video_url,
-                              poster: rev.video_poster,
-                              duration: rev.video_duration,
-                              author: rev.author_name,
+                              url: revVidId,
+                              poster: rev.video_poster || rev.videoThumb || rev.video_thumb,
+                              duration: rev.video_duration || rev.videoDuration,
+                              author: rev.author_name || rev.buyer_name,
                               comment: rev.comment
                             });
                           }
@@ -867,7 +916,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                               revMedia.push({
                                 type: 'image',
                                 url: img,
-                                author: rev.author_name,
+                                author: rev.author_name || rev.buyer_name,
                                 comment: rev.comment
                               });
                             });
@@ -879,8 +928,8 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                             ? (() => {
                                 const parts = rawAuthorName.trim().split(/\s+/).filter(Boolean);
                                 if (parts.length === 1) {
-                                  const single = parts[0];
-                                  return single.length > 2 ? `${single[0]}***${single.slice(-1)}` : `${single[0]}***`;
+                                   const single = parts[0];
+                                   return single.length > 2 ? `${single[0]}***${single.slice(-1)}` : `${single[0]}***`;
                                 }
                                 return `${parts[0][0]}***${parts[parts.length - 1].slice(-1)}`;
                               })()
@@ -946,6 +995,11 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                                           <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
                                             <Play className="w-3.5 h-3.5 fill-white text-white ml-0.5" />
                                           </div>
+                                          {m.duration ? (
+                                            <span className="absolute bottom-0.5 right-0.5 bg-black/70 text-white text-[8px] px-1 rounded font-mono">
+                                              {Math.floor(m.duration / 60)}:{String(m.duration % 60).padStart(2, '0')}
+                                            </span>
+                                          ) : null}
                                         </>
                                       ) : (
                                         <img src={m.url} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
@@ -1568,12 +1622,9 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
           {/* Media display */}
           <div className="relative flex-1 w-full flex items-center justify-center overflow-hidden my-auto p-2">
             {mediaLightbox.items[mediaLightbox.index]?.type === 'video' ? (
-              <video
-                src={mediaLightbox.items[mediaLightbox.index].url}
-                controls
-                autoPlay
-                playsInline
-                className="max-h-[75vh] max-w-[90vw] rounded-2xl shadow-2xl bg-black"
+              <ReviewVideoPlayer
+                videoIdOrUrl={mediaLightbox.items[mediaLightbox.index].url}
+                poster={mediaLightbox.items[mediaLightbox.index].poster}
               />
             ) : (
               <img

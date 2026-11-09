@@ -17,7 +17,8 @@ import {
   onSnapshot,
   Unsubscribe,
   DocumentData,
-  getFirestore
+  getFirestore,
+  Bytes
 } from 'firebase/firestore';
 import {
   createUserWithEmailAndPassword,
@@ -66,7 +67,8 @@ import {
   ShipmentEvent,
   SellerStats
 } from '../types';
-import { SEED_MEDIA_DEFAULTS } from '../utils/image';
+import { SEED_MEDIA_DEFAULTS, validateAndNormalizeReviewImages } from '../utils/image';
+import { removeVietnameseTones } from '../utils/format';
 
 export function cleanObject<T extends Record<string, any>>(obj: T): Partial<T> {
   const result: any = {};
@@ -343,6 +345,101 @@ export async function getLocalVideo(id: string): Promise<Blob | null> {
     return null;
   }
 }
+
+const videoBlobCache = new Map<string, string>();
+
+export async function uploadReviewVideo(
+  blob: Blob,
+  duration: number,
+  onProgress?: (pct: number) => void
+): Promise<{ mediaId: string }> {
+  const db = getActiveFirestore();
+  const mediaId = `rm_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  const buffer = await blob.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  const totalBytes = bytes.length;
+  const chunkSize = 650 * 1024; // 650KB chunk binary
+  const totalChunks = Math.max(1, Math.ceil(totalBytes / chunkSize));
+
+  const mediaRef = doc(db, 'reviewMedia', mediaId);
+  await setDoc(mediaRef, {
+    mediaId,
+    duration: Math.round(duration || 0),
+    totalChunks,
+    totalBytes,
+    mimeType: blob.type || 'video/webm',
+    createdAt: serverTimestamp()
+  });
+
+  for (let i = 0; i < totalChunks; i++) {
+    const start = i * chunkSize;
+    const end = Math.min(start + chunkSize, totalBytes);
+    const chunkBytes = bytes.subarray(start, end);
+    const chunkId = String(i).padStart(3, '0');
+    const chunkRef = doc(db, 'reviewMedia', mediaId, 'chunks', chunkId);
+    await setDoc(chunkRef, {
+      chunkIndex: i,
+      data: Bytes.fromUint8Array(chunkBytes),
+      size: chunkBytes.length
+    });
+    if (onProgress) {
+      onProgress(Math.round(((i + 1) / totalChunks) * 100));
+    }
+  }
+
+  const objectUrl = URL.createObjectURL(blob);
+  videoBlobCache.set(mediaId, objectUrl);
+
+  return { mediaId };
+}
+
+export async function getReviewVideoBlobUrl(mediaId: string): Promise<string> {
+  if (!mediaId) return '';
+  if (videoBlobCache.has(mediaId)) {
+    return videoBlobCache.get(mediaId)!;
+  }
+  const db = getActiveFirestore();
+  const mediaRef = doc(db, 'reviewMedia', mediaId);
+  const mediaSnap = await getDoc(mediaRef);
+  if (!mediaSnap.exists()) {
+    const localBlob = await getLocalVideo(mediaId);
+    if (localBlob) {
+      const url = URL.createObjectURL(localBlob);
+      videoBlobCache.set(mediaId, url);
+      return url;
+    }
+    return '';
+  }
+
+  const mediaData = mediaSnap.data();
+  const chunksSnap = await getDocs(collection(db, 'reviewMedia', mediaId, 'chunks'));
+  if (chunksSnap.empty) return '';
+
+  const sortedDocs = chunksSnap.docs
+    .map((d) => d.data())
+    .sort((a, b) => (a.chunkIndex ?? 0) - (b.chunkIndex ?? 0));
+
+  const totalBytes = Number(mediaData.totalBytes || 0);
+  const merged = new Uint8Array(
+    totalBytes > 0
+      ? totalBytes
+      : sortedDocs.reduce((acc, c) => acc + (c.data?.toUint8Array?.()?.length || 0), 0)
+  );
+  let offset = 0;
+  for (const c of sortedDocs) {
+    if (c.data && typeof c.data.toUint8Array === 'function') {
+      const u8 = c.data.toUint8Array();
+      merged.set(u8, offset);
+      offset += u8.length;
+    }
+  }
+
+  const blob = new Blob([merged], { type: mediaData.mimeType || 'video/webm' });
+  const blobUrl = URL.createObjectURL(blob);
+  videoBlobCache.set(mediaId, blobUrl);
+  return blobUrl;
+}
+
 
 // =========================================================================
 // CURRENT IN-MEMORY SESSION & SUBSCRIBERS
@@ -1130,26 +1227,50 @@ export class DCCTDatabaseService {
     suggestions: Array<{ id: number; name: string; price: number; condition_pct: number; image_url: string; shop_name?: string }>;
     shops: Array<{ id: number; name: string; slug: string; avatar: string }>;
   }> {
-    const q = queryStr.toLowerCase().trim();
-    if (!q) return { suggestions: [], shops: [] };
+    const rawQ = (queryStr || '').trim();
+    if (rawQ.length < 2) return { suggestions: [], shops: [] };
+    const qLower = rawQ.toLowerCase();
+    const qNorm = removeVietnameseTones(rawQ);
 
     const { products } = await this.getProducts();
     const matchedProducts = products
-      .filter((p) => p.name.toLowerCase().includes(q) || p.category.toLowerCase().includes(q))
-      .slice(0, 5)
+      .filter((p) => {
+        const nameLower = (p.name || '').toLowerCase();
+        const catLower = (p.category || '').toLowerCase();
+        const nameNorm = removeVietnameseTones(p.name);
+        const catNorm = removeVietnameseTones(p.category);
+        return (
+          nameLower.includes(qLower) ||
+          catLower.includes(qLower) ||
+          nameNorm.includes(qNorm) ||
+          catNorm.includes(qNorm)
+        );
+      })
+      .slice(0, 4)
       .map((p) => ({
         id: p.id as any,
         name: p.name,
         price: p.price,
         condition_pct: p.condition_pct,
-        image_url: p.image_url,
+        image_url: p.thumb || p.image_url,
         shop_name: p.shop_name
       }));
 
     const { shops } = await this.getShops();
     const matchedShops = shops
-      .filter((s) => s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q))
-      .slice(0, 3)
+      .filter((s) => {
+        const nameLower = (s.name || '').toLowerCase();
+        const descLower = (s.description || '').toLowerCase();
+        const nameNorm = removeVietnameseTones(s.name);
+        const descNorm = removeVietnameseTones(s.description || '');
+        return (
+          nameLower.includes(qLower) ||
+          descLower.includes(qLower) ||
+          nameNorm.includes(qNorm) ||
+          descNorm.includes(qNorm)
+        );
+      })
+      .slice(0, 2)
       .map((s) => ({
         id: s.id as any,
         name: s.name,
@@ -1750,9 +1871,23 @@ export class DCCTDatabaseService {
 
   async searchShops(queryStr: string): Promise<{ shops: Shop[] }> {
     const { shops } = await this.getShops();
-    const s = queryStr.toLowerCase().trim();
+    const rawS = (queryStr || '').trim();
+    if (!rawS) return { shops };
+    const sLower = rawS.toLowerCase();
+    const sNorm = removeVietnameseTones(rawS);
     return {
-      shops: shops.filter((sh) => sh.name.toLowerCase().includes(s) || sh.description.toLowerCase().includes(s))
+      shops: shops.filter((sh) => {
+        const nameLower = (sh.name || '').toLowerCase();
+        const descLower = (sh.description || '').toLowerCase();
+        const nameNorm = removeVietnameseTones(sh.name);
+        const descNorm = removeVietnameseTones(sh.description || '');
+        return (
+          nameLower.includes(sLower) ||
+          descLower.includes(sLower) ||
+          nameNorm.includes(sNorm) ||
+          descNorm.includes(sNorm)
+        );
+      })
     };
   }
 
@@ -2744,6 +2879,14 @@ export class DCCTDatabaseService {
     tags?: string[];
     images?: string[];
     video_blob?: Blob;
+    video_id?: string;
+    videoId?: string;
+    video_thumb?: string;
+    videoThumb?: string;
+    video_duration?: number;
+    videoDuration?: number;
+    anonymous?: boolean;
+    is_anonymous?: boolean;
   }): Promise<{ message: string }> {
     const cur = getCurrentUser();
     if (!cur) throw new Error('Chưa đăng nhập');
@@ -2752,17 +2895,17 @@ export class DCCTDatabaseService {
     const pid = String(payload.product_id);
     const orderCode = String(payload.order_id);
 
-    const compressedImages: string[] = [];
-    for (const img of (payload.images || []).slice(0, 3)) {
-      const c = await compressImage(img, 800, 120 * 1024);
-      compressedImages.push(c);
-    }
+    // Up to 5 compressed images (<110KB each, total <700KB)
+    const rawImages = (payload.images || []).slice(0, 5);
+    const compressedImages = await validateAndNormalizeReviewImages(rawImages);
 
-    let videoLocalId: string | null = null;
-    let videoThumb: string | null = null;
-    if (payload.video_blob) {
-      videoLocalId = await saveLocalVideo(payload.video_blob);
-      videoThumb = compressedImages[0] || null;
+    let videoId = payload.videoId || payload.video_id || null;
+    const videoThumb = payload.videoThumb || payload.video_thumb || (compressedImages[0] || null);
+    const videoDuration = Number(payload.videoDuration || payload.video_duration || 0);
+
+    if (payload.video_blob && !videoId) {
+      const up = await uploadReviewVideo(payload.video_blob, videoDuration);
+      videoId = up.mediaId;
     }
 
     const reviewId = `${orderCode}_${pid}`;
@@ -2786,8 +2929,10 @@ export class DCCTDatabaseService {
       tags: payload.tags || [],
       comment: payload.comment,
       images: compressedImages,
-      videoLocalId,
-      videoThumb,
+      videoId: videoId || null,
+      videoThumb: videoThumb || null,
+      videoDuration: videoDuration || 0,
+      videoLocalId: videoId || null,
       helpfulUids: [],
       helpfulCount: 0,
       sellerReply: null,
@@ -2884,6 +3029,15 @@ export class DCCTDatabaseService {
           tags: data.tags || [],
           comment: data.comment,
           images: data.images || [],
+          video_url: data.videoId || data.videoLocalId || data.videoUrl || null,
+          video_poster: data.videoThumb || null,
+          video_id: data.videoId || null,
+          videoId: data.videoId || null,
+          video_thumb: data.videoThumb || null,
+          videoThumb: data.videoThumb || null,
+          video_duration: data.videoDuration || null,
+          videoDuration: data.videoDuration || null,
+          video_local_id: data.videoLocalId || null,
           helpful_count: data.helpfulCount || 0,
           created_at: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString()
         });
@@ -2943,6 +3097,15 @@ export class DCCTDatabaseService {
         tags: data.tags || [],
         comment: data.comment,
         images: data.images || [],
+        video_url: data.videoId || data.videoLocalId || data.videoUrl || null,
+        video_poster: data.videoThumb || null,
+        video_id: data.videoId || null,
+        videoId: data.videoId || null,
+        video_thumb: data.videoThumb || null,
+        videoThumb: data.videoThumb || null,
+        video_duration: data.videoDuration || null,
+        videoDuration: data.videoDuration || null,
+        video_local_id: data.videoLocalId || null,
         helpful_count: data.helpfulCount || 0,
         seller_reply: data.sellerReply?.text || null,
         seller_reply_at: data.sellerReply?.at || null,
@@ -3011,8 +3174,15 @@ export class DCCTDatabaseService {
         tags: data.tags || [],
         comment: data.comment || '',
         images: data.images || [],
-        video_url: data.videoLocalId || data.videoUrl || null,
+        video_url: data.videoId || data.videoLocalId || data.videoUrl || null,
         video_poster: data.videoThumb || null,
+        video_id: data.videoId || null,
+        videoId: data.videoId || null,
+        video_thumb: data.videoThumb || null,
+        videoThumb: data.videoThumb || null,
+        video_duration: data.videoDuration || null,
+        videoDuration: data.videoDuration || null,
+        video_local_id: data.videoLocalId || null,
         helpful_count: data.helpfulCount || 0,
         seller_reply: data.sellerReply?.text || (typeof data.sellerReply === 'string' ? data.sellerReply : null),
         seller_reply_at: data.sellerReply?.at || null,
@@ -3761,14 +3931,18 @@ export class DCCTDatabaseService {
       const data = d.data();
       const rawText = data.text || data.content || '';
       const ctx = data.context;
+      const isImg = data.type === 'image' || !!data.image;
       messages.push({
         id: d.id as any,
         conversation_id: conversationId as any,
         sender_id: data.senderUid as any,
         sender_role: data.senderRole,
-        type: data.type || (ctx ? 'context' : 'text'),
-        content: rawText,
-        message: rawText,
+        type: isImg ? 'image' : (ctx ? 'context' : (data.type || 'text')),
+        content: isImg ? (data.text || '📷 Đã gửi một ảnh') : rawText,
+        message: isImg ? (data.text || '📷 Đã gửi một ảnh') : rawText,
+        image: data.image || null,
+        width: data.width || null,
+        height: data.height || null,
         context_card: ctx ? {
           kind: ctx.kind || ctx.type,
           type: ctx.kind || ctx.type,
@@ -3792,7 +3966,11 @@ export class DCCTDatabaseService {
   async sendMessage(payload: {
     conversation_id?: string;
     shop_id?: string | number;
-    text: string;
+    text?: string;
+    type?: 'text' | 'context' | 'image';
+    image?: string | null;
+    width?: number | null;
+    height?: number | null;
     context?: any;
   }): Promise<{ message: ChatMessage }> {
     const cur = getCurrentUser();
@@ -3805,6 +3983,10 @@ export class DCCTDatabaseService {
       convId = `${cur.uid}_${payload.shop_id}`;
     }
     if (!convId) throw new Error('Thiếu thông tin cuộc trò chuyện');
+
+    const isImage = payload.type === 'image' || !!payload.image;
+    const rawText = payload.text || '';
+    const lastSummary = isImage ? '📷 Đã gửi một ảnh' : (rawText || 'Tin nhắn mới');
 
     const convRef = doc(db, 'conversations', convId);
     const convSnap = await getDoc(convRef);
@@ -3822,7 +4004,7 @@ export class DCCTDatabaseService {
         shopId: String(payload.shop_id),
         shopName: shopData.name,
         sellerUid: shopData.ownerUid,
-        lastMessage: payload.text,
+        lastMessage: lastSummary,
         lastMessageAt: serverTimestamp(),
         buyerUnread: 0,
         sellerUnread: 1,
@@ -3832,7 +4014,7 @@ export class DCCTDatabaseService {
       const data = convSnap.data();
       toUid = cur.role === 'buyer' ? data.sellerUid : data.buyerUid;
       await updateDoc(convRef, {
-        lastMessage: payload.text,
+        lastMessage: lastSummary,
         lastMessageAt: serverTimestamp(),
         buyerUnread: cur.role === 'seller' ? increment(1) : 0,
         sellerUnread: cur.role === 'buyer' ? increment(1) : 0
@@ -3888,11 +4070,16 @@ export class DCCTDatabaseService {
     const msgDoc: any = {
       senderUid: cur.uid,
       senderRole: cur.role,
-      type: resolvedContext ? 'context' : 'text',
-      text: payload.text,
+      type: isImage ? 'image' : (resolvedContext ? 'context' : 'text'),
+      text: rawText,
       createdAt: serverTimestamp(),
       readAt: null
     };
+    if (isImage) {
+      msgDoc.image = payload.image || null;
+      msgDoc.width = payload.width || null;
+      msgDoc.height = payload.height || null;
+    }
     if (resolvedContext) {
       msgDoc.context = resolvedContext;
     }
@@ -3907,7 +4094,7 @@ export class DCCTDatabaseService {
         fromUid: cur.uid,
         type: 'chat',
         title: `Tin nhắn mới từ ${cur.full_name}`,
-        body: payload.text,
+        body: lastSummary,
         link: `/chat?conv=${convId}`,
         isRead: false,
         count: increment(1),
@@ -3922,8 +4109,12 @@ export class DCCTDatabaseService {
         conversation_id: convId as any,
         sender_id: cur.uid as any,
         sender_role: cur.role,
-        content: payload.text,
-        message: payload.text,
+        type: isImage ? 'image' : (resolvedContext ? 'context' : 'text'),
+        content: rawText,
+        message: rawText,
+        image: payload.image || null,
+        width: payload.width || null,
+        height: payload.height || null,
         context_card: resolvedContext,
         created_at: new Date().toISOString()
       }
@@ -3934,7 +4125,11 @@ export class DCCTDatabaseService {
     return this.sendMessage({
       conversation_id: payload.conversation_id ? String(payload.conversation_id) : undefined,
       shop_id: payload.shop_id,
-      text: payload.content || payload.text,
+      text: payload.content || payload.text || '',
+      type: payload.type,
+      image: payload.image,
+      width: payload.width,
+      height: payload.height,
       context: payload.context_card || payload.context
     });
   }
@@ -4351,6 +4546,14 @@ export class DCCTDatabaseService {
     }
     const comp = await compressImage(dataUrl, 1024, 150 * 1024);
     return { url: comp };
+  }
+
+  async uploadReviewVideo(blob: Blob, duration: number, onProgress?: (pct: number) => void) {
+    return uploadReviewVideo(blob, duration, onProgress);
+  }
+
+  async getReviewVideoBlobUrl(mediaId: string): Promise<string> {
+    return getReviewVideoBlobUrl(mediaId);
   }
 
   // --- SELLER STATS ---
@@ -5004,6 +5207,22 @@ export class DCCTDatabaseService {
         });
         await batch.commit();
       }
+    }
+
+    // Clear reviewMedia and its chunks
+    try {
+      const rmSnap = await getDocs(collection(db, 'reviewMedia'));
+      for (const rmDoc of rmSnap.docs) {
+        const chunksSnap = await getDocs(collection(db, 'reviewMedia', rmDoc.id, 'chunks'));
+        if (!chunksSnap.empty) {
+          const chunkBatch = writeBatch(db);
+          chunksSnap.forEach((cd) => chunkBatch.delete(cd.ref));
+          await chunkBatch.commit();
+        }
+        await deleteDoc(rmDoc.ref);
+      }
+    } catch (e) {
+      console.warn('Could not clear reviewMedia:', e);
     }
 
     // Reset user-specific volatile state on EVERY document in `users`

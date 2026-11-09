@@ -456,11 +456,15 @@ function MainShopApp() {
       }
     };
 
+    const handleOpenCart = () => setIsCartOpen(true);
+
     window.addEventListener('close-all-overlays', handleCloseAll);
     window.addEventListener('navigate-path', handleNavigatePath);
+    window.addEventListener('open-cart', handleOpenCart);
     return () => {
       window.removeEventListener('close-all-overlays', handleCloseAll);
       window.removeEventListener('navigate-path', handleNavigatePath);
+      window.removeEventListener('open-cart', handleOpenCart);
     };
   }, []);
 
