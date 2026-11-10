@@ -236,8 +236,14 @@ export const api = {
   // --- UPLOAD & MEDIA ---
   uploadFile: (dataUrl: string, type: 'image' | 'video' = 'image') =>
     db.uploadFile(dataUrl, type),
-  uploadReviewVideo: (blob: Blob, duration: number, onProgress?: (pct: number) => void) =>
-    db.uploadReviewVideo(blob, duration, onProgress),
+  uploadReviewVideo: (
+    blob: Blob,
+    duration: number,
+    onProgress?: (pct: number) => void,
+    meta?: { productId?: string | number; orderId?: string | number; reviewId?: string; width?: number; height?: number; thumb?: string }
+  ) => db.uploadReviewVideo(blob, duration, onProgress, meta),
+  deleteReviewMedia: (mediaId: string) =>
+    db.deleteReviewMedia(mediaId),
   getReviewVideoBlobUrl: (mediaId: string) =>
     db.getReviewVideoBlobUrl(mediaId),
 

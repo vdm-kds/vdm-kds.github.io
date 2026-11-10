@@ -104,8 +104,6 @@ export const BuyerChatDock: React.FC<BuyerChatDockProps> = ({ onNavigateToShop }
         context?: any;
       }>;
       const detail = customEvent.detail;
-      if (!detail) return;
-
       if (!user) {
         showToast('Vui lòng đăng nhập để chat với shop', 'info');
         return;
@@ -117,14 +115,19 @@ export const BuyerChatDock: React.FC<BuyerChatDockProps> = ({ onNavigateToShop }
 
       setIsOpen(true);
 
-      const targetShopId = detail.shopId || detail.product?.shop_id || detail.order?.shop_id || 1;
-      const contextPayload = detail.product ? {
+      const targetShopId = detail?.shopId || detail?.product?.shop_id || detail?.order?.shop_id;
+      if (!targetShopId && !detail?.context) {
+        setMobileView('list');
+        return;
+      }
+
+      const contextPayload = detail?.product ? {
         type: 'product' as const,
         product_id: detail.product.id
-      } : (detail.order ? {
+      } : (detail?.order ? {
         type: 'order' as const,
         order_code: detail.order.code || String(detail.order.id)
-      } : detail.context);
+      } : detail?.context);
 
       try {
         setLoading(true);
@@ -315,7 +318,7 @@ export const BuyerChatDock: React.FC<BuyerChatDockProps> = ({ onNavigateToShop }
                 {filteredConversations.length === 0 ? (
                   <div className="p-8 text-center text-stone-400">
                     <Store className="w-8 h-8 mx-auto mb-2 text-stone-300" />
-                    <p className="text-xs">Chưa có cuộc trò chuyện nào với shop.</p>
+                    <p className="text-xs">Chưa có cuộc trò chuyện nào – hãy nhắn shop từ trang sản phẩm</p>
                   </div>
                 ) : (
                   filteredConversations.map(c => {

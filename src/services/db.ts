@@ -18,7 +18,8 @@ import {
   Unsubscribe,
   DocumentData,
   getFirestore,
-  Bytes
+  Bytes,
+  collectionGroup
 } from 'firebase/firestore';
 import {
   createUserWithEmailAndPassword,
@@ -67,7 +68,12 @@ import {
   ShipmentEvent,
   SellerStats
 } from '../types';
-import { SEED_MEDIA_DEFAULTS, validateAndNormalizeReviewImages } from '../utils/image';
+import {
+  SEED_MEDIA_DEFAULTS,
+  validateAndNormalizeReviewImages,
+  createProductThumbnail,
+  compressProductImage
+} from '../utils/image';
 import { removeVietnameseTones } from '../utils/format';
 
 export function cleanObject<T extends Record<string, any>>(obj: T): Partial<T> {
@@ -241,7 +247,14 @@ export function assertDocSize(data: any): void {
   const json = JSON.stringify(data);
   const size = new Blob([json]).size;
   if (size > 900 * 1024) {
-    throw new Error('Ảnh quá lớn, vui lòng bớt ảnh');
+    if (data.images && Array.isArray(data.images)) {
+      data.images.forEach((img: string, i: number) => {
+        if (typeof img === 'string' && img.length > 180000) {
+          throw new Error(`Ảnh thứ ${i + 1} quá lớn, vui lòng chọn ảnh khác`);
+        }
+      });
+    }
+    throw new Error('Dung lượng sản phẩm vượt quá 900KB, vui lòng giảm bớt ảnh');
   }
 }
 
@@ -351,8 +364,21 @@ const videoBlobCache = new Map<string, string>();
 export async function uploadReviewVideo(
   blob: Blob,
   duration: number,
-  onProgress?: (pct: number) => void
+  onProgress?: (pct: number) => void,
+  meta?: {
+    productId?: string | number;
+    orderId?: string | number;
+    reviewId?: string;
+    width?: number;
+    height?: number;
+    thumb?: string;
+  }
 ): Promise<{ mediaId: string }> {
+  const cur = getCurrentUser();
+  if (!cur) {
+    throw new Error('Vui lòng đăng nhập để tải video đánh giá');
+  }
+
   const db = getActiveFirestore();
   const mediaId = `rm_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
   const buffer = await blob.arrayBuffer();
@@ -361,36 +387,91 @@ export async function uploadReviewVideo(
   const chunkSize = 650 * 1024; // 650KB chunk binary
   const totalChunks = Math.max(1, Math.ceil(totalBytes / chunkSize));
 
+  const prodId = String(meta?.productId || '');
+  const ordId = String(meta?.orderId || '');
+  const revId = meta?.reviewId || (ordId && prodId ? `${ordId}_${prodId}` : '');
+
   const mediaRef = doc(db, 'reviewMedia', mediaId);
+  // 1. Tạo reviewMedia document TRƯỚC với ownerUid và đầy đủ thông tin metadata
   await setDoc(mediaRef, {
     mediaId,
+    ownerUid: cur.uid,
+    productId: prodId,
+    orderId: ordId,
+    reviewId: revId,
+    mime: blob.type || 'video/webm',
+    size: totalBytes,
     duration: Math.round(duration || 0),
+    width: meta?.width || 640,
+    height: meta?.height || 360,
+    chunkCount: totalChunks,
+    thumb: meta?.thumb || '',
+    status: 'uploading',
+    createdAt: serverTimestamp(),
+    // Các trường tương thích ngược
     totalChunks,
     totalBytes,
-    mimeType: blob.type || 'video/webm',
-    createdAt: serverTimestamp()
+    mimeType: blob.type || 'video/webm'
   });
 
-  for (let i = 0; i < totalChunks; i++) {
-    const start = i * chunkSize;
-    const end = Math.min(start + chunkSize, totalBytes);
-    const chunkBytes = bytes.subarray(start, end);
-    const chunkId = String(i).padStart(3, '0');
-    const chunkRef = doc(db, 'reviewMedia', mediaId, 'chunks', chunkId);
-    await setDoc(chunkRef, {
-      chunkIndex: i,
-      data: Bytes.fromUint8Array(chunkBytes),
-      size: chunkBytes.length
-    });
-    if (onProgress) {
-      onProgress(Math.round(((i + 1) / totalChunks) * 100));
+  const writtenChunkRefs: any[] = [];
+  try {
+    // 2. Ghi từng chunk vào subcollection chunks/{000, 001, ...}
+    for (let i = 0; i < totalChunks; i++) {
+      const start = i * chunkSize;
+      const end = Math.min(start + chunkSize, totalBytes);
+      const chunkBytes = bytes.subarray(start, end);
+      const chunkId = String(i).padStart(3, '0');
+      const chunkRef = doc(db, 'reviewMedia', mediaId, 'chunks', chunkId);
+      await setDoc(chunkRef, {
+        index: i,
+        chunkIndex: i,
+        data: Bytes.fromUint8Array(chunkBytes),
+        size: chunkBytes.length
+      });
+      writtenChunkRefs.push(chunkRef);
+      if (onProgress) {
+        onProgress(Math.round(((i + 1) / totalChunks) * 100));
+      }
     }
+
+    // 3. Cập nhật status: 'ready' khi hoàn tất
+    await updateDoc(mediaRef, {
+      status: 'ready',
+      updatedAt: serverTimestamp()
+    });
+  } catch (err: any) {
+    // 4. Nếu lỗi giữa chừng: dọn dẹp các chunk đã ghi và document reviewMedia
+    try {
+      for (const cr of writtenChunkRefs) {
+        await deleteDoc(cr);
+      }
+      await deleteDoc(mediaRef);
+    } catch {}
+    throw new Error(err?.message || 'Lỗi khi lưu video lên máy chủ');
   }
 
   const objectUrl = URL.createObjectURL(blob);
   videoBlobCache.set(mediaId, objectUrl);
 
   return { mediaId };
+}
+
+export async function deleteReviewMedia(mediaId: string): Promise<void> {
+  if (!mediaId || !mediaId.startsWith('rm_')) return;
+  try {
+    const db = getActiveFirestore();
+    const chunksSnap = await getDocs(collection(db, 'reviewMedia', mediaId, 'chunks'));
+    for (const cd of chunksSnap.docs) {
+      await deleteDoc(cd.ref);
+    }
+    await deleteDoc(doc(db, 'reviewMedia', mediaId));
+    if (videoBlobCache.has(mediaId)) {
+      videoBlobCache.delete(mediaId);
+    }
+  } catch (e) {
+    console.warn('Could not delete reviewMedia:', e);
+  }
 }
 
 export async function getReviewVideoBlobUrl(mediaId: string): Promise<string> {
@@ -417,9 +498,9 @@ export async function getReviewVideoBlobUrl(mediaId: string): Promise<string> {
 
   const sortedDocs = chunksSnap.docs
     .map((d) => d.data())
-    .sort((a, b) => (a.chunkIndex ?? 0) - (b.chunkIndex ?? 0));
+    .sort((a, b) => ((a.index ?? a.chunkIndex) ?? 0) - ((b.index ?? b.chunkIndex) ?? 0));
 
-  const totalBytes = Number(mediaData.totalBytes || 0);
+  const totalBytes = Number(mediaData.size || mediaData.totalBytes || 0);
   const merged = new Uint8Array(
     totalBytes > 0
       ? totalBytes
@@ -434,7 +515,8 @@ export async function getReviewVideoBlobUrl(mediaId: string): Promise<string> {
     }
   }
 
-  const blob = new Blob([merged], { type: mediaData.mimeType || 'video/webm' });
+  const mimeType = mediaData.mime || mediaData.mimeType || 'video/webm';
+  const blob = new Blob([merged], { type: mimeType });
   const blobUrl = URL.createObjectURL(blob);
   videoBlobCache.set(mediaId, blobUrl);
   return blobUrl;
@@ -756,6 +838,37 @@ export async function isAccountOwner(role: 'buyer' | 'seller', username: string,
     } catch {}
   }
   return false;
+}
+
+export function mapChatMessageDoc(docId: string, conversationId: string, data: any): ChatMessage {
+  const rawText = data.text || data.content || '';
+  const ctx = data.context;
+  const isImg = data.type === 'image' || !!data.image;
+  return {
+    id: docId as any,
+    conversation_id: conversationId as any,
+    sender_id: data.senderUid as any,
+    sender_role: data.senderRole,
+    type: isImg ? 'image' : (ctx ? 'context' : (data.type || 'text')),
+    content: isImg ? (data.text || '📷 Đã gửi một ảnh') : rawText,
+    message: isImg ? (data.text || '📷 Đã gửi một ảnh') : rawText,
+    image: data.image || null,
+    width: data.width || null,
+    height: data.height || null,
+    context_card: ctx ? {
+      kind: ctx.kind || ctx.type,
+      type: ctx.kind || ctx.type,
+      ref_id: ctx.refId || ctx.product_id || ctx.order_code,
+      product_id: ctx.product_id || (ctx.kind === 'product' ? ctx.refId : undefined),
+      order_code: ctx.order_code || (ctx.kind === 'order' ? String(ctx.refId) : undefined),
+      title: ctx.title || '',
+      price: ctx.price,
+      image: ctx.image || ctx.image_url || '',
+      image_url: ctx.image || ctx.image_url || ''
+    } : null,
+    created_at: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : (typeof data.createdAt === 'string' ? data.createdAt : (data.created_at || new Date().toISOString())),
+    read_at: data.readAt?.toDate ? data.readAt.toDate().toISOString() : (data.read_at || null)
+  };
 }
 
 // =========================================================================
@@ -1296,12 +1409,26 @@ export class DCCTDatabaseService {
 
     const rawImages = data.images || (data.image_url ? [data.image_url] : []);
     const compressedImages: string[] = [];
-    for (const img of rawImages.slice(0, 4)) {
-      if (img.startsWith('data:image/svg+xml')) {
+    let idx = 1;
+    for (const img of rawImages.slice(0, 5)) {
+      if (img.startsWith('data:image/svg+xml') || img.startsWith('http://') || img.startsWith('https://')) {
         compressedImages.push(img);
       } else {
-        const comp = await compressImage(img, 1024, 150 * 1024);
+        const comp = await compressProductImage(img, 1024, 150000);
+        if (comp.length > 200000) {
+          throw new Error(`Ảnh thứ ${idx} quá lớn, vui lòng chọn ảnh khác`);
+        }
         compressedImages.push(comp);
+      }
+      idx++;
+    }
+
+    let thumb = data.thumb;
+    if (!thumb && compressedImages[0]) {
+      try {
+        thumb = await createProductThumbnail(compressedImages[0]);
+      } catch {
+        thumb = compressedImages[0];
       }
     }
 
@@ -1317,13 +1444,20 @@ export class DCCTDatabaseService {
       conditionPct: Number(data.condition_pct || 90),
       conditionNote: data.condition_detail || '',
       description: data.description || data.condition_detail || '',
-      defects: (data.flaws || []).map((f) => ({ text: f.description, image: f.image_url || '' })),
+      defects: (data.flaws || []).map((f: any) => ({
+        text: f.description || f.note || '',
+        location: f.location || '',
+        image: f.photo_url || f.image_url || f.image || ''
+      })),
       inspection: {
         date: data.inspection_date || new Date().toISOString().slice(0, 10),
         inspector: data.inspector_name || 'KTV Chuyên Sâu',
         checks: data.inspection_checklist || ['Đã kiểm định hoạt động']
       },
       images: compressedImages,
+      imageUrl: compressedImages[0] || '',
+      thumb: thumb || compressedImages[0] || '',
+      thumbnail: thumb || compressedImages[0] || '',
       icon: getProductEmoji(data.name, data.category),
       stock: Number(data.stock ?? 1),
       sold: 0,
@@ -1405,17 +1539,22 @@ export class DCCTDatabaseService {
     if (data.stock !== undefined) updatePayload.stock = Number(data.stock);
 
     if (data.images && Array.isArray(data.images) && data.images.length > 0) {
-      updatePayload.images = data.images;
+      updatePayload.images = data.images.slice(0, 5);
     } else if (data.image_url) {
       updatePayload.images = [data.image_url];
     }
     if (data.image_url) updatePayload.imageUrl = data.image_url;
 
+    if (data.thumb !== undefined) {
+      updatePayload.thumb = data.thumb;
+      updatePayload.thumbnail = data.thumb;
+    }
+
     if (data.flaws) {
       updatePayload.defects = data.flaws.map((f: any) => ({
         text: f.description || f.note || '',
         location: f.location || '',
-        image: f.image_url || f.photo_url || ''
+        image: f.photo_url || f.image_url || f.image || ''
       }));
     }
 
@@ -3747,32 +3886,48 @@ export class DCCTDatabaseService {
     if (!cur) throw new Error('Vui lòng đăng nhập');
 
     const db = getActiveFirestore();
-    const convId = `${cur.uid}_${shopId}`;
+    const sDocId = String(shopId);
+    let sData: any = null;
+    let actualShopId = sDocId;
+    const sSnap = await getDoc(doc(db, 'shops', sDocId));
+    if (sSnap.exists()) {
+      sData = sSnap.data();
+      actualShopId = sSnap.id;
+    } else {
+      const { shops } = await this.getShops();
+      const found = shops.find((s) => s.slug === sDocId || String(s.id) === sDocId);
+      if (found) {
+        actualShopId = found.slug || String(found.id);
+        sData = found;
+      }
+    }
+
+    if (!sData) {
+      throw new Error('Không tìm thấy cửa hàng');
+    }
+
+    const shopName = sData.name || 'Cửa hàng';
+    const sellerUid = sData.ownerUid || sData.owner_id;
+    if (!sellerUid) {
+      throw new Error('Không tìm thấy chủ cửa hàng');
+    }
+
+    const shopAvatar = sData.avatar && !sData.avatar.includes('unsplash.com') && !sData.avatar.includes('photo-1544816155-12df9643f363')
+      ? sData.avatar
+      : createShopAvatarSvg(shopName, sData.coverColor || '#08482D', actualShopId);
+
+    const convId = `${cur.uid}_${actualShopId}`;
     const convRef = doc(db, 'conversations', convId);
     const snap = await getDoc(convRef);
 
     let created = false;
-    let shopName = 'Đồ Cũ Còn Thương';
-    let sellerUid = 'seller_admin';
-    let shopAvatar = createShopAvatarSvg(shopName, '#08482D', String(shopId));
-
-    const sSnap = await getDoc(doc(db, 'shops', String(shopId)));
-    if (sSnap.exists()) {
-      const sData = sSnap.data();
-      shopName = sData.name || shopName;
-      sellerUid = sData.ownerUid || sellerUid;
-      shopAvatar = sData.avatar && !sData.avatar.includes('unsplash.com') && !sData.avatar.includes('photo-1544816155-12df9643f363')
-        ? sData.avatar
-        : createShopAvatarSvg(shopName, sData.coverColor || '#08482D', sData.slug || String(shopId));
-    }
-
     if (!snap.exists()) {
       created = true;
       await setDoc(convRef, {
         buyerUid: cur.uid,
         buyerName: cur.full_name,
         buyerPhone: cur.phone || '',
-        shopId: String(shopId),
+        shopId: actualShopId,
         shopName,
         shopAvatar,
         sellerUid,
@@ -3928,35 +4083,7 @@ export class DCCTDatabaseService {
 
     const messages: ChatMessage[] = [];
     snap.forEach((d) => {
-      const data = d.data();
-      const rawText = data.text || data.content || '';
-      const ctx = data.context;
-      const isImg = data.type === 'image' || !!data.image;
-      messages.push({
-        id: d.id as any,
-        conversation_id: conversationId as any,
-        sender_id: data.senderUid as any,
-        sender_role: data.senderRole,
-        type: isImg ? 'image' : (ctx ? 'context' : (data.type || 'text')),
-        content: isImg ? (data.text || '📷 Đã gửi một ảnh') : rawText,
-        message: isImg ? (data.text || '📷 Đã gửi một ảnh') : rawText,
-        image: data.image || null,
-        width: data.width || null,
-        height: data.height || null,
-        context_card: ctx ? {
-          kind: ctx.kind || ctx.type,
-          type: ctx.kind || ctx.type,
-          ref_id: ctx.refId || ctx.product_id || ctx.order_code,
-          product_id: ctx.product_id || (ctx.kind === 'product' ? ctx.refId : undefined),
-          order_code: ctx.order_code || (ctx.kind === 'order' ? String(ctx.refId) : undefined),
-          title: ctx.title || '',
-          price: ctx.price,
-          image: ctx.image || ctx.image_url || '',
-          image_url: ctx.image || ctx.image_url || ''
-        } : null,
-        created_at: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString(),
-        read_at: data.readAt?.toDate ? data.readAt.toDate().toISOString() : null
-      });
+      messages.push(mapChatMessageDoc(d.id, conversationId, d.data()));
     });
 
     messages.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
@@ -3993,17 +4120,38 @@ export class DCCTDatabaseService {
 
     let toUid = '';
     if (!convSnap.exists()) {
-      const shopSnap = await getDoc(doc(db, 'shops', String(payload.shop_id)));
-      const shopData = shopSnap.exists() ? shopSnap.data() : { name: 'Đồ Cũ Còn Thương', ownerUid: 'seller_admin' };
-      toUid = shopData.ownerUid;
+      const sDocId = String(payload.shop_id || '');
+      let sData: any = null;
+      let actualShopId = sDocId;
+      if (sDocId) {
+        const shopSnap = await getDoc(doc(db, 'shops', sDocId));
+        if (shopSnap.exists()) {
+          sData = shopSnap.data();
+          actualShopId = shopSnap.id;
+        } else {
+          const { shops } = await this.getShops();
+          const found = shops.find((s) => s.slug === sDocId || String(s.id) === sDocId);
+          if (found) {
+            actualShopId = found.slug || String(found.id);
+            sData = found;
+          }
+        }
+      }
+      if (!sData) {
+        throw new Error('Không tìm thấy cửa hàng');
+      }
+      toUid = sData.ownerUid || sData.owner_id;
+      if (!toUid) {
+        throw new Error('Không tìm thấy chủ cửa hàng');
+      }
 
       await setDoc(convRef, {
         buyerUid: cur.uid,
         buyerName: cur.full_name,
         buyerPhone: cur.phone || '',
-        shopId: String(payload.shop_id),
-        shopName: shopData.name,
-        sellerUid: shopData.ownerUid,
+        shopId: actualShopId,
+        shopName: sData.name || 'Cửa hàng',
+        sellerUid: toUid,
         lastMessage: lastSummary,
         lastMessageAt: serverTimestamp(),
         buyerUnread: 0,
@@ -4104,20 +4252,10 @@ export class DCCTDatabaseService {
     );
 
     return {
-      message: {
-        id: msgId as any,
-        conversation_id: convId as any,
-        sender_id: cur.uid as any,
-        sender_role: cur.role,
-        type: isImage ? 'image' : (resolvedContext ? 'context' : 'text'),
-        content: rawText,
-        message: rawText,
-        image: payload.image || null,
-        width: payload.width || null,
-        height: payload.height || null,
-        context_card: resolvedContext,
-        created_at: new Date().toISOString()
-      }
+      message: mapChatMessageDoc(msgId, convId, {
+        ...msgDoc,
+        createdAt: new Date().toISOString()
+      })
     };
   }
 
@@ -4548,8 +4686,17 @@ export class DCCTDatabaseService {
     return { url: comp };
   }
 
-  async uploadReviewVideo(blob: Blob, duration: number, onProgress?: (pct: number) => void) {
-    return uploadReviewVideo(blob, duration, onProgress);
+  async uploadReviewVideo(
+    blob: Blob,
+    duration: number,
+    onProgress?: (pct: number) => void,
+    meta?: { productId?: string | number; orderId?: string | number; reviewId?: string; width?: number; height?: number; thumb?: string }
+  ) {
+    return uploadReviewVideo(blob, duration, onProgress, meta);
+  }
+
+  async deleteReviewMedia(mediaId: string): Promise<void> {
+    return deleteReviewMedia(mediaId);
   }
 
   async getReviewVideoBlobUrl(mediaId: string): Promise<string> {
@@ -5209,17 +5356,37 @@ export class DCCTDatabaseService {
       }
     }
 
-    // Clear reviewMedia and its chunks
+    // Clean all subcollection messages via collectionGroup
+    try {
+      const allMsgsSnap = await getDocs(collectionGroup(db, 'messages'));
+      for (let i = 0; i < allMsgsSnap.docs.length; i += 400) {
+        const msgBatch = writeBatch(db);
+        allMsgsSnap.docs.slice(i, i + 400).forEach((md) => msgBatch.delete(md.ref));
+        await msgBatch.commit();
+      }
+    } catch (e) {
+      console.warn('Could not clear messages subcollection via collectionGroup:', e);
+    }
+
+    // Clean all subcollection chunks via collectionGroup
+    try {
+      const allChunksSnap = await getDocs(collectionGroup(db, 'chunks'));
+      for (let i = 0; i < allChunksSnap.docs.length; i += 400) {
+        const chunkBatch = writeBatch(db);
+        allChunksSnap.docs.slice(i, i + 400).forEach((cd) => chunkBatch.delete(cd.ref));
+        await chunkBatch.commit();
+      }
+    } catch (e) {
+      console.warn('Could not clear chunks subcollection via collectionGroup:', e);
+    }
+
+    // Clear reviewMedia parent documents
     try {
       const rmSnap = await getDocs(collection(db, 'reviewMedia'));
-      for (const rmDoc of rmSnap.docs) {
-        const chunksSnap = await getDocs(collection(db, 'reviewMedia', rmDoc.id, 'chunks'));
-        if (!chunksSnap.empty) {
-          const chunkBatch = writeBatch(db);
-          chunksSnap.forEach((cd) => chunkBatch.delete(cd.ref));
-          await chunkBatch.commit();
-        }
-        await deleteDoc(rmDoc.ref);
+      for (let i = 0; i < rmSnap.docs.length; i += 400) {
+        const rmBatch = writeBatch(db);
+        rmSnap.docs.slice(i, i + 400).forEach((d) => rmBatch.delete(d.ref));
+        await rmBatch.commit();
       }
     } catch (e) {
       console.warn('Could not clear reviewMedia:', e);
@@ -5249,6 +5416,23 @@ export class DCCTDatabaseService {
       prod_1: 1, prod_2: 1, prod_3: 3, prod_4: 1, prod_5: 5,
       prod_6: 1, prod_7: 1, prod_8: 2, prod_9: 1, prod_10: 2
     };
+
+    // Delete any seller-created products not in sampleProductIds
+    const sampleSet = new Set(sampleProductIds);
+    const allProdSnap = await getDocs(collection(db, 'products'));
+    for (let i = 0; i < allProdSnap.docs.length; i += 400) {
+      const delBatch = writeBatch(db);
+      let count = 0;
+      allProdSnap.docs.slice(i, i + 400).forEach((pDoc) => {
+        if (!sampleSet.has(pDoc.id)) {
+          delBatch.delete(pDoc.ref);
+          count++;
+        }
+      });
+      if (count > 0) {
+        await delBatch.commit();
+      }
+    }
 
     const prodBatch = writeBatch(db);
     for (const pid of sampleProductIds) {
@@ -5499,31 +5683,7 @@ export class DCCTDatabaseService {
     return onSnapshot(msgsRef, (snap) => {
       const messages: ChatMessage[] = [];
       snap.forEach((d) => {
-        const data = d.data();
-        const rawText = data.text || data.content || '';
-        const ctx = data.context;
-        messages.push({
-          id: d.id as any,
-          conversation_id: conversationId as any,
-          sender_id: data.senderUid as any,
-          sender_role: data.senderRole,
-          type: data.type || (ctx ? 'context' : 'text'),
-          content: rawText,
-          message: rawText,
-          context_card: ctx ? {
-            kind: ctx.kind || ctx.type,
-            type: ctx.kind || ctx.type,
-            ref_id: ctx.refId || ctx.product_id || ctx.order_code,
-            product_id: ctx.product_id || (ctx.kind === 'product' ? ctx.refId : undefined),
-            order_code: ctx.order_code || (ctx.kind === 'order' ? String(ctx.refId) : undefined),
-            title: ctx.title || '',
-            price: ctx.price,
-            image: ctx.image || ctx.image_url || '',
-            image_url: ctx.image || ctx.image_url || ''
-          } : null,
-          created_at: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString(),
-          read_at: data.readAt?.toDate ? data.readAt.toDate().toISOString() : null
-        });
+        messages.push(mapChatMessageDoc(d.id, conversationId, d.data()));
       });
       messages.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
       cb(messages);

@@ -277,6 +277,7 @@ export async function syncAndValidateAccounts(): Promise<{ validAccounts: Stored
     if (found) {
       const app = getOrCreateAccountApp(found.role, found.username);
       const auth = getAccountAuth(app);
+      await auth.authStateReady();
       if (auth.currentUser && auth.currentUser.uid === found.uid) {
         activeAccount = found;
       }

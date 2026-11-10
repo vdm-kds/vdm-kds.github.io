@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ToastProvider, useToast } from './context/ToastContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -111,6 +111,26 @@ function MainShopApp() {
     initialUsername?: string;
     promptMessage?: string;
   }>({ open: false, role: 'buyer' });
+  const pendingSellerPathRef = useRef<string | null>(null);
+
+  // If seller session restores while authModal is open, auto-close modal and restore seller path
+  useEffect(() => {
+    if (user && user.role === 'seller') {
+      if (authModal.open && authModal.role === 'seller') {
+        setAuthModal({ open: false, role: 'seller', initialIsRegister: false });
+      }
+      if (pendingSellerPathRef.current) {
+        const dest = pendingSellerPathRef.current;
+        pendingSellerPathRef.current = null;
+        window.history.replaceState({}, '', dest);
+        setCurrentView('seller');
+      } else if (window.location.pathname === '/seller/login' || window.location.pathname === '/seller/register') {
+        window.history.replaceState({}, '', '/seller');
+        setCurrentView('seller');
+      }
+    }
+  }, [user, authModal.open, authModal.role]);
+
   const [policyType, setPolicyType] = useState<'returns' | 'shipping' | 'guide' | 'about' | 'contact' | null>(null);
 
   // Online / Offline network state (Section 5)
@@ -343,8 +363,12 @@ function MainShopApp() {
       if (path.startsWith('/seller')) {
         if (user && user.role === 'seller') {
           setCurrentView('seller');
+          if (authModal.open && authModal.role === 'seller') {
+            setAuthModal({ open: false, role: 'seller', initialIsRegister: false });
+          }
         } else if (!user) {
           if (path !== '/seller/login' && path !== '/seller/register') {
+            pendingSellerPathRef.current = path;
             window.history.replaceState({}, '', '/seller/login');
           }
           setAuthModal({ open: true, role: 'seller', initialIsRegister: false });

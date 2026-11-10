@@ -149,6 +149,16 @@ export function ReviewModal({
     }
   };
 
+  const newlyUploadedMediaIdRef = useRef<string | null>(null);
+
+  const handleSafeClose = () => {
+    if (newlyUploadedMediaIdRef.current) {
+      api.deleteReviewMedia(newlyUploadedMediaIdRef.current).catch(() => {});
+      newlyUploadedMediaIdRef.current = null;
+    }
+    onClose();
+  };
+
   // Process and upload video
   const handleVideoFile = async (fileList: FileList | null) => {
     if (!fileList || fileList.length === 0) return;
@@ -169,9 +179,27 @@ export function ReviewModal({
       }
 
       setProcessMsg('Đang lưu video vào máy chủ...');
-      const uploadRes = await api.uploadReviewVideo(compressedBlob, meta.duration, (pct) => {
-        setProcessMsg(`Đang lưu video vào máy chủ... ${pct}%`);
-      });
+      const uploadRes = await api.uploadReviewVideo(
+        compressedBlob,
+        meta.duration,
+        (pct) => {
+          setProcessMsg(`Đang lưu video vào máy chủ... ${pct}%`);
+        },
+        {
+          productId: product.id,
+          orderId,
+          reviewId: `${orderId}_${product.id}`,
+          width: meta.width,
+          height: meta.height,
+          thumb: meta.poster
+        }
+      );
+
+      // Nếu đã có video tải trước đó mà chưa submit, xóa video cũ
+      if (newlyUploadedMediaIdRef.current && newlyUploadedMediaIdRef.current !== uploadRes.mediaId) {
+        api.deleteReviewMedia(newlyUploadedMediaIdRef.current).catch(() => {});
+      }
+      newlyUploadedMediaIdRef.current = uploadRes.mediaId;
 
       setVideoUrl(uploadRes.mediaId);
       setVideoDuration(meta.duration);
@@ -220,6 +248,10 @@ export function ReviewModal({
   };
 
   const removeVideo = () => {
+    if (newlyUploadedMediaIdRef.current) {
+      api.deleteReviewMedia(newlyUploadedMediaIdRef.current).catch(() => {});
+      newlyUploadedMediaIdRef.current = null;
+    }
     setVideoUrl(null);
     setVideoDuration(null);
     setVideoPoster(null);
@@ -265,6 +297,7 @@ export function ReviewModal({
         showToast('Cảm ơn bạn đã đánh giá!', 'success');
       }
 
+      newlyUploadedMediaIdRef.current = null;
       onSuccess();
       onClose();
     } catch (err: any) {
@@ -295,7 +328,7 @@ export function ReviewModal({
             </p>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleSafeClose}
             className="p-1.5 text-[#5E5E61] hover:text-[#101410] hover:bg-[#DAE7C7]/40 rounded-full transition-colors"
           >
             <X className="w-5 h-5" />
@@ -606,7 +639,7 @@ export function ReviewModal({
             <Button
               type="button"
               variant="secondary"
-              onClick={onClose}
+              onClick={handleSafeClose}
               disabled={submitting || processing}
             >
               Hủy

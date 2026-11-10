@@ -682,7 +682,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 {flawsList.length > 0 ? (
                   <div className="space-y-2">
                     {flawsList.map((flaw, idx) => {
-                      const flawImg = flaw.photo_url || (flaw as any).image_url || (flaw as any).image || (imageList.length > 1 ? imageList[1] : undefined);
+                      const flawImg = flaw.photo_url || (flaw as any).image_url || (flaw as any).image;
                       return (
                         <div key={idx} className="flex items-center gap-3 p-2 bg-white/70 rounded-xl border border-amber-200 text-xs">
                           {flawImg && (
@@ -693,8 +693,9 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                               decoding="async"
                               className="w-24 h-24 rounded-xl object-cover bg-amber-50 border border-amber-300 shrink-0 cursor-pointer shadow-2xs hover:opacity-90 transition-opacity"
                               onClick={() => {
-                                if (imageList.length > 1 && flawImg === imageList[1]) {
-                                  setSelectedImageIndex(1);
+                                const matchedIdx = imageList.indexOf(flawImg);
+                                if (matchedIdx >= 0) {
+                                  setSelectedImageIndex(matchedIdx);
                                 }
                                 setIsLightboxOpen(true);
                               }}
@@ -704,35 +705,15 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                             <p className="font-semibold text-amber-950">
                               {flaw.location ? `[${flaw.location}] ` : ''}{flaw.description}
                             </p>
-                            <span className="text-[10px] text-amber-800/80">Ảnh chụp phóng đại tại trung tâm kiểm định</span>
+                            <span className="text-[10px] text-amber-800/80">Ảnh ghi nhận từ người bán</span>
                           </div>
                         </div>
                       );
                     })}
                   </div>
-                ) : fullProduct.condition_detail && imageList.length > 1 ? (
-                  <div className="flex items-center gap-3 p-2 bg-white/70 rounded-xl border border-amber-200 text-xs">
-                    <img
-                      src={imageList[1]}
-                      alt="Ảnh cận tình trạng"
-                      loading="eager"
-                      decoding="async"
-                      className="w-24 h-24 rounded-xl object-cover bg-amber-50 border border-amber-300 shrink-0 cursor-pointer shadow-2xs hover:opacity-90 transition-opacity"
-                      onClick={() => {
-                        setSelectedImageIndex(1);
-                        setIsLightboxOpen(true);
-                      }}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-amber-950">
-                        {fullProduct.condition_detail}
-                      </p>
-                      <span className="text-[10px] text-amber-800/80">Ảnh chụp phóng đại tại trung tâm kiểm định</span>
-                    </div>
-                  </div>
                 ) : (
                   <p className="text-xs text-amber-900 italic">
-                    ✓ Không phát hiện khuyết điểm đáng kể qua kiểm tra thực tế. Bề mặt và linh kiện giữ nguyên độ mới tối ưu.
+                    ✓ Người bán chưa ghi nhận khuyết điểm nào cho sản phẩm này.
                   </p>
                 )}
               </div>

@@ -173,5 +173,13 @@ service cloud.firestore {
         allow create, update, delete: if canWrite();
       }
     }
+
+    // ===== Hỗ trợ truy vấn collectionGroup cho dọn dẹp dữ liệu demo =====
+    match /{path=**}/messages/{msgId} {
+      allow read, write: if isOwnerAccount();
+    }
+    match /{path=**}/chunks/{chunkId} {
+      allow read, write: if isOwnerAccount();
+    }
   }
 }

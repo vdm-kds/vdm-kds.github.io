@@ -62,54 +62,47 @@ export function loadImageElement(source: File | Blob | string): Promise<HTMLImag
 export async function compressProductImage(
   source: File | Blob | string,
   maxDimension: number = 1024,
-  maxBytes: number = 150 * 1024
+  maxStringLength: number = 150000 // ≈ 110KB
 ): Promise<string> {
   const img = await loadImageElement(source);
-  let { width, height } = img;
-
-  if (width > maxDimension || height > maxDimension) {
-    if (width > height) {
-      height = Math.round((height * maxDimension) / width);
-      width = maxDimension;
-    } else {
-      width = Math.round((width * maxDimension) / height);
-      height = maxDimension;
-    }
-  }
-
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.max(1, width);
-  canvas.height = Math.max(1, height);
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Không thể khởi tạo Canvas 2D context');
-
-  // Fill smooth background
-  ctx.drawImage(img, 0, 0, width, height);
-
+  let curDim = maxDimension;
+  let dataUrl = '';
   const mimeType = getPreferredMimeType();
-  let quality = 0.8;
-  let dataUrl = canvas.toDataURL(mimeType, quality);
 
-  // Fallback to jpeg if webp export failed or wasn't smaller
-  if (mimeType === 'image/webp' && !dataUrl.startsWith('data:image/webp')) {
-    dataUrl = canvas.toDataURL('image/jpeg', quality);
-  }
+  // Progressive dimensions: 1024 -> 900 -> 800 -> 700
+  const dims = [curDim, 900, 800, 700];
 
-  // Progressive compression loop
-  while (dataUrl.length * 0.75 > maxBytes && quality > 0.2) {
-    quality -= 0.08;
-    dataUrl = canvas.toDataURL(dataUrl.startsWith('data:image/webp') ? 'image/webp' : 'image/jpeg', quality);
-  }
+  for (const targetDim of dims) {
+    let { width, height } = img;
+    if (width > targetDim || height > targetDim) {
+      if (width > height) {
+        height = Math.round((height * targetDim) / width);
+        width = targetDim;
+      } else {
+        width = Math.round((width * targetDim) / height);
+        height = targetDim;
+      }
+    }
 
-  // If still above maxBytes, downscale dimensions slightly
-  if (dataUrl.length * 0.75 > maxBytes && (width > 600 || height > 600)) {
-    const scale = 0.75;
-    canvas.width = Math.round(width * scale);
-    canvas.height = Math.round(height * scale);
-    const scaledCtx = canvas.getContext('2d');
-    if (scaledCtx) {
-      scaledCtx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      dataUrl = canvas.toDataURL(dataUrl.startsWith('data:image/webp') ? 'image/webp' : 'image/jpeg', 0.7);
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, width);
+    canvas.height = Math.max(1, height);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Không thể khởi tạo Canvas 2D context');
+
+    ctx.drawImage(img, 0, 0, width, height);
+
+    // Try progressive qualities: 0.8 -> 0.7 -> 0.6 -> 0.5
+    const qualities = [0.8, 0.7, 0.6, 0.5];
+    for (const q of qualities) {
+      let candidate = canvas.toDataURL(mimeType, q);
+      if (mimeType === 'image/webp' && !candidate.startsWith('data:image/webp')) {
+        candidate = canvas.toDataURL('image/jpeg', q);
+      }
+      dataUrl = candidate;
+      if (dataUrl.length <= maxStringLength) {
+        return dataUrl;
+      }
     }
   }
 
@@ -119,36 +112,41 @@ export async function compressProductImage(
 /**
  * Creates a small thumbnail from cover image:
  * - Center square crop 240x240px
- * - Max size <= 20KB
+ * - String length <= 27.000 chars (≈ 20KB)
  */
 export async function createProductThumbnail(
   source: File | Blob | string,
   targetSize: number = 240,
-  maxBytes: number = 20 * 1024
+  maxStringLength: number = 27000 // ≈ 20KB
 ): Promise<string> {
   const img = await loadImageElement(source);
   const minSide = Math.min(img.width, img.height);
   const sx = (img.width - minSide) / 2;
   const sy = (img.height - minSide) / 2;
 
-  const canvas = document.createElement('canvas');
-  canvas.width = targetSize;
-  canvas.height = targetSize;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Không thể khởi tạo Canvas 2D context');
-
-  ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, targetSize, targetSize);
-
+  const sizes = [targetSize, 220, 200];
   const mimeType = getPreferredMimeType();
-  let quality = 0.8;
-  let dataUrl = canvas.toDataURL(mimeType, quality);
-  if (mimeType === 'image/webp' && !dataUrl.startsWith('data:image/webp')) {
-    dataUrl = canvas.toDataURL('image/jpeg', quality);
-  }
+  let dataUrl = '';
 
-  while (dataUrl.length * 0.75 > maxBytes && quality > 0.25) {
-    quality -= 0.1;
-    dataUrl = canvas.toDataURL(dataUrl.startsWith('data:image/webp') ? 'image/webp' : 'image/jpeg', quality);
+  for (const s of sizes) {
+    const canvas = document.createElement('canvas');
+    canvas.width = s;
+    canvas.height = s;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Không thể khởi tạo Canvas 2D context');
+
+    ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, s, s);
+
+    for (const q of [0.75, 0.65, 0.55, 0.45]) {
+      let candidate = canvas.toDataURL(mimeType, q);
+      if (mimeType === 'image/webp' && !candidate.startsWith('data:image/webp')) {
+        candidate = canvas.toDataURL('image/jpeg', q);
+      }
+      dataUrl = candidate;
+      if (dataUrl.length <= maxStringLength) {
+        return dataUrl;
+      }
+    }
   }
 
   return dataUrl;
@@ -329,18 +327,75 @@ export function extractVideoMetadataAndThumb(file: File): Promise<{
     const objectUrl = URL.createObjectURL(file);
     video.src = objectUrl;
 
-    video.onloadedmetadata = () => {
-      // Validate duration <= 60s (allow minor margin 60.5s)
-      if (video.duration > 60.5) {
+    let timer: any = null;
+    let settled = false;
+    let detectedDuration = 0;
+
+    const finalizeSeek = (finalDur: number) => {
+      if (settled) return;
+      settled = true;
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      if (finalDur > 60.5) {
         URL.revokeObjectURL(objectUrl);
         return reject(new Error('Video tối đa 1 phút, vui lòng cắt ngắn lại'));
       }
-      // Seek to 1s or half duration
-      const seekTime = Math.min(1.0, video.duration / 2);
+      detectedDuration = Math.round(finalDur);
+      // Seek to 1s or half duration for thumbnail capture
+      const seekTime = finalDur > 0 ? Math.min(1.0, finalDur / 2) : 0.1;
       video.currentTime = seekTime;
     };
 
+    video.onloadedmetadata = () => {
+      const dur = video.duration;
+      // If browser already provides finite valid duration
+      if (isFinite(dur) && !isNaN(dur) && dur > 0) {
+        finalizeSeek(dur);
+        return;
+      }
+
+      // WebM duration workaround: seek to far end to force browser to calculate duration
+      const handleDurationFound = () => {
+        video.removeEventListener('timeupdate', handleDurationFound);
+        video.removeEventListener('durationchange', handleDurationFound);
+        const realDur = video.duration;
+        video.currentTime = 0;
+        if (isFinite(realDur) && !isNaN(realDur) && realDur > 0) {
+          finalizeSeek(realDur);
+        } else {
+          // If still indeterminate but file <= 8MB, allow with duration = 0
+          if (file.size <= 8 * 1024 * 1024) {
+            finalizeSeek(0);
+          } else {
+            URL.revokeObjectURL(objectUrl);
+            reject(new Error('Không thể xác định thời lượng video và tệp vượt quá 8MB'));
+          }
+        }
+      };
+
+      video.addEventListener('timeupdate', handleDurationFound);
+      video.addEventListener('durationchange', handleDurationFound);
+      video.currentTime = 1e101;
+
+      timer = setTimeout(() => {
+        video.removeEventListener('timeupdate', handleDurationFound);
+        video.removeEventListener('durationchange', handleDurationFound);
+        video.currentTime = 0;
+        if (file.size <= 8 * 1024 * 1024) {
+          finalizeSeek(0);
+        } else {
+          URL.revokeObjectURL(objectUrl);
+          reject(new Error('Không thể đọc thời lượng video và tệp vượt quá 8MB'));
+        }
+      }, 5000);
+    };
+
     video.onseeked = () => {
+      // Ignore intermediate seek for duration discovery
+      if (!settled) return;
+
       const vWidth = video.videoWidth || 640;
       const vHeight = video.videoHeight || 360;
       const maxDim = 480;
@@ -370,12 +425,11 @@ export function extractVideoMetadataAndThumb(file: File): Promise<{
         poster = canvas.toDataURL('image/jpeg', quality);
       }
 
-      const duration = Math.round(video.duration);
-      const canSkipCompression = file.size <= 6 * 1024 * 1024 && video.duration <= 60.5;
+      const canSkipCompression = file.size <= 6 * 1024 * 1024 && detectedDuration <= 60.5 && detectedDuration > 0;
       URL.revokeObjectURL(objectUrl);
 
       resolve({
-        duration,
+        duration: detectedDuration,
         width: vWidth,
         height: vHeight,
         poster,
@@ -384,6 +438,7 @@ export function extractVideoMetadataAndThumb(file: File): Promise<{
     };
 
     video.onerror = () => {
+      if (timer) clearTimeout(timer);
       URL.revokeObjectURL(objectUrl);
       reject(new Error('Không thể đọc tệp video. Vui lòng chọn định dạng MP4 hoặc WebM hợp lệ.'));
     };

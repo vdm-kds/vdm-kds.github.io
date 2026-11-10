@@ -162,9 +162,9 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Zone 2: Navigation Links & Live Search with Autocomplete */}
-        <div ref={searchContainerRef} className="hidden md:flex items-center gap-6 flex-1 max-w-md mx-2 relative">
+        <div ref={searchContainerRef} className="hidden md:flex items-center gap-6 flex-1 max-w-md mx-2 relative min-w-0">
           {onSearchChange && (
-            <div className="relative w-full">
+            <div className="relative w-full min-w-0">
               <input
                 type="text"
                 value={searchQuery}
@@ -172,7 +172,7 @@ export const Header: React.FC<HeaderProps> = ({
                 onKeyDown={handleSearchKeyDown}
                 onFocus={() => { if (totalNavItems > 0) setShowSuggestions(true); }}
                 placeholder="Tìm áo da, máy ảnh film, đồng hồ vintage..."
-                className="w-full bg-[#FFFFFF] border border-[#E2E8D8] rounded-full pl-9 pr-8 py-2 text-xs text-[#101410] placeholder-[#5E5E61]/70 shadow-2xs focus:outline-none focus:border-[#08482D] focus:ring-1 focus:ring-[#08482D] transition-all"
+                className="w-full bg-[#FFFFFF] border border-[#E2E8D8] rounded-full pl-9 pr-8 py-2 text-xs text-[#101410] placeholder-[#5E5E61]/70 shadow-2xs focus:outline-none focus:border-[#08482D] focus:ring-1 focus:ring-[#08482D] focus:min-w-[240px] transition-all"
               />
               <Search className="w-4 h-4 text-[#5E5E61] absolute left-3 top-2.5 pointer-events-none" />
               {isSearching && (
@@ -181,7 +181,7 @@ export const Header: React.FC<HeaderProps> = ({
 
               {/* Autocomplete Dropdown Popover */}
               {showSuggestions && totalNavItems > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-[#E2E8D8] rounded-2xl shadow-xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-1">
+                <div className="absolute top-full left-0 sm:left-auto sm:right-0 mt-2 bg-white border border-[#E2E8D8] rounded-2xl shadow-xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-1 min-w-[320px] max-w-[calc(100vw-32px)] sm:w-[420px]">
                   {/* Product suggestions (max 4) */}
                   {activeProducts.length > 0 && (
                     <div>
