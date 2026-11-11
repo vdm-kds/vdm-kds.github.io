@@ -231,9 +231,16 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                                 </button>
                               </div>
 
-                              <span className="font-mono text-xs font-bold text-[#C2522D]">
-                                {formatVND(item.price * item.quantity)}
-                              </span>
+                              <div className="text-right">
+                                {Boolean(item.is_negotiated) && (
+                                  <span className="block text-[10px] text-[#5E5E61] line-through font-mono">
+                                    {formatVND((item.product?.price || item.original_item_price || item.price) * item.quantity)}
+                                  </span>
+                                )}
+                                <span className="font-mono text-xs font-bold text-[#C2522D]">
+                                  {formatVND(item.price * item.quantity)}
+                                </span>
+                              </div>
                             </div>
                           </div>
                         </div>

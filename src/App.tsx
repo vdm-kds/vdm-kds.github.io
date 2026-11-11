@@ -89,10 +89,17 @@ function MainShopApp() {
   const [successOrder, setSuccessOrder] = useState<Order | null>(null);
   const [successOrders, setSuccessOrders] = useState<Order[]>([]);
 
+  const prevProductPathRef = useRef<string>('/');
+
   const handleOpenProductDetail = (prod: Product) => {
     setDetailProduct(prod);
-    if (typeof window !== 'undefined' && !window.location.pathname.startsWith(`/product/${prod.id}`)) {
-      window.history.pushState(null, '', `/product/${prod.id}`);
+    if (typeof window !== 'undefined') {
+      if (!window.location.pathname.startsWith('/product/')) {
+        prevProductPathRef.current = window.location.pathname + window.location.search;
+      }
+      if (!window.location.pathname.startsWith(`/product/${prod.id}`)) {
+        window.history.pushState(null, '', `/product/${prod.id}`);
+      }
     }
   };
 
@@ -101,7 +108,10 @@ function MainShopApp() {
     setDetailOpenOffer(false);
     setDetailOpenChat(false);
     if (typeof window !== 'undefined' && window.location.pathname.startsWith('/product/')) {
-      window.history.pushState(null, '', '/');
+      const returnUrl = prevProductPathRef.current && !prevProductPathRef.current.startsWith('/product/')
+        ? prevProductPathRef.current
+        : '/';
+      window.history.pushState(null, '', returnUrl);
     }
   };
   const [authModal, setAuthModal] = useState<{ 

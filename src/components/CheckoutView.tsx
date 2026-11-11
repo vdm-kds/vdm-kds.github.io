@@ -170,6 +170,8 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
         price: priceToUse,
         effective_price: priceToUse,
         original_price: directItem.product.original_price || directItem.product.price,
+        original_item_price: directItem.product.price,
+        product: directItem.product,
         condition_pct: directItem.product.condition_pct,
         condition_detail: directItem.product.condition_detail,
         stock: directItem.product.stock,
@@ -225,15 +227,30 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
     }
   }, [currentItems, appliedCouponsDetails]);
 
-  // Fetch shop coupons for suggestion
+  const [savedCouponCodes, setSavedCouponCodes] = useState<Set<string>>(new Set());
+
+  // Fetch shop coupons for suggestion and user's saved coupons
   useEffect(() => {
     const fetchShopCoupons = async () => {
       const shopIds = Array.from(new Set(currentItems.map(it => it.shop_id || 1)));
       const map: Record<number, Coupon[]> = {};
+      let savedSet = new Set<string>();
+      try {
+        const savedRes = await api.getSavedShopVouchers();
+        savedSet = new Set((savedRes.vouchers || []).map(v => v.code.toUpperCase()));
+        setSavedCouponCodes(savedSet);
+      } catch {}
+
       for (const sId of shopIds) {
         try {
           const res = await api.listCouponsByShop(sId);
-          map[sId] = res.coupons || [];
+          const list = res.coupons || [];
+          list.sort((a, b) => {
+            const aSaved = savedSet.has(a.code.toUpperCase()) ? 1 : 0;
+            const bSaved = savedSet.has(b.code.toUpperCase()) ? 1 : 0;
+            return bSaved - aSaved;
+          });
+          map[sId] = list;
         } catch {
           map[sId] = [];
         }
@@ -1009,7 +1026,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                             <div className="text-right shrink-0">
                               {(item.is_negotiated || item.negotiated_price) && (
                                 <span className="block text-[10px] text-[#5E5E61] line-through font-mono">
-                                  {formatVND((item.original_price || item.price) * item.quantity)}
+                                  {formatVND((item.product?.price || item.original_item_price || item.price) * item.quantity)}
                                 </span>
                               )}
                               <span className="font-mono text-xs font-bold text-[#08482D]">
@@ -1075,17 +1092,29 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                             {availableShopCoupons.length > 0 && (
                               <div className="flex items-center gap-1.5 text-[10px] text-[#5E5E61] flex-wrap">
                                 <span>Gợi ý:</span>
-                                {availableShopCoupons.map((cpn) => (
-                                  <button
-                                    key={cpn.id}
-                                    type="button"
-                                    onClick={() => handleApplyShopCoupon(group.shop_id, cpn.code)}
-                                    className="font-mono px-2 py-0.5 rounded-lg bg-white border border-[#DAE7C7] hover:border-[#08482D] font-bold text-[#08482D] cursor-pointer"
-                                    title={cpn.description}
-                                  >
-                                    {cpn.code}
-                                  </button>
-                                ))}
+                                {availableShopCoupons.map((cpn) => {
+                                  const isSaved = savedCouponCodes.has(cpn.code.toUpperCase());
+                                  return (
+                                    <button
+                                      key={cpn.id}
+                                      type="button"
+                                      onClick={() => handleApplyShopCoupon(group.shop_id, cpn.code)}
+                                      className={`font-mono px-2 py-0.5 rounded-lg border font-bold text-[#08482D] cursor-pointer inline-flex items-center gap-1 transition-all ${
+                                        isSaved
+                                          ? 'bg-emerald-50 border-[#08482D] shadow-2xs'
+                                          : 'bg-white border-[#DAE7C7] hover:border-[#08482D]'
+                                      }`}
+                                      title={cpn.description}
+                                    >
+                                      {isSaved && (
+                                        <span className="px-1 py-0.2 rounded text-[9px] font-sans font-bold bg-[#08482D] text-white">
+                                          Đã lưu
+                                        </span>
+                                      )}
+                                      <span>{cpn.code}</span>
+                                    </button>
+                                  );
+                                })}
                               </div>
                             )}
 

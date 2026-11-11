@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { User, MapPin, KeyRound, Heart, Bell, Plus, Trash2, Edit2, CheckCircle2, ShieldCheck, ShoppingCart, ArrowLeft, Tag, Clock, Check, XCircle, Store, ExternalLink } from 'lucide-react';
+import { User, MapPin, KeyRound, Heart, Bell, Plus, Trash2, Edit2, CheckCircle2, ShieldCheck, ShoppingCart, ArrowLeft, Tag, Clock, Check, XCircle, Store, ExternalLink, Ticket } from 'lucide-react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { Product, Address, AppNotification, Offer, Shop } from '../types';
+import { Product, Address, AppNotification, Offer, Shop, Coupon } from '../types';
 import { formatVND } from '../utils/format';
 import { ProductImage } from './ProductImage';
 
@@ -14,7 +14,7 @@ interface AccountViewProps {
   onNavigateToShop?: (slug: string) => void;
 }
 
-type TabType = 'profile' | 'addresses' | 'password' | 'wishlist' | 'notifications' | 'offers' | 'followed_shops';
+type TabType = 'profile' | 'addresses' | 'password' | 'wishlist' | 'notifications' | 'offers' | 'followed_shops' | 'vouchers';
 
 export function AccountView({ onBackToHome, onSelectProduct, onAddToCart, onNavigateToShop }: AccountViewProps) {
   const { user, refreshCartCount } = useAuth();
@@ -173,12 +173,38 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart, onNavi
     }
   };
 
+  const [savedVouchers, setSavedVouchers] = useState<Coupon[]>([]);
+  const [loadingVouchers, setLoadingVouchers] = useState(false);
+
+  const loadSavedVouchers = async () => {
+    setLoadingVouchers(true);
+    try {
+      const res = await api.getSavedShopVouchers();
+      setSavedVouchers(res.vouchers || []);
+    } catch {
+      setSavedVouchers([]);
+    } finally {
+      setLoadingVouchers(false);
+    }
+  };
+
+  const handleUnsaveVoucher = async (code: string) => {
+    try {
+      await api.unsaveShopVoucher(code);
+      showToast('Đã xóa voucher khỏi ví', 'info');
+      await loadSavedVouchers();
+    } catch (err: any) {
+      showToast(err.message || 'Lỗi thao tác', 'error');
+    }
+  };
+
   useEffect(() => {
     if (activeTab === 'addresses') loadAddresses();
     if (activeTab === 'wishlist') loadWishlist();
     if (activeTab === 'notifications') loadNotifications();
     if (activeTab === 'offers') loadOffers();
     if (activeTab === 'followed_shops') loadFollowedShops();
+    if (activeTab === 'vouchers') loadSavedVouchers();
   }, [activeTab]);
 
   // Update profile
@@ -429,6 +455,22 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart, onNavi
             </button>
 
             <button
+              onClick={() => setActiveTab('vouchers')}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all text-left ${
+                activeTab === 'vouchers'
+                  ? 'bg-[#08482D] text-white shadow-sm'
+                  : 'text-[#5E5E61] hover:bg-[#F5F8EF] hover:text-[#101410]'
+              }`}
+            >
+              <Ticket className="w-4 h-4" /> Ví voucher
+              {savedVouchers.length > 0 && (
+                <span className="ml-auto text-[10px] bg-[#DAE7C7] text-[#08482D] px-2 py-0.5 rounded-full font-mono font-bold">
+                  {savedVouchers.length}
+                </span>
+              )}
+            </button>
+
+            <button
               onClick={() => setActiveTab('notifications')}
               className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all text-left ${
                 activeTab === 'notifications'
@@ -540,67 +582,70 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart, onNavi
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {addresses.map(addr => (
-                    <div
-                      key={addr.id}
-                      className={`p-4 rounded-2xl border transition-all ${
-                        addr.is_default === 1
-                          ? 'bg-[#F5F8EF]/70 border-[#C2522D]/60 shadow-sm'
-                          : 'bg-white border-[#E2E8D8]'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-sm text-[#101410]">
-                              {addr.recipient_name}
-                            </span>
-                            <span className="font-mono text-xs text-[#5E5E61]">
-                              ({addr.phone})
-                            </span>
-                            {addr.is_default === 1 && (
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[#C2522D] text-white">
-                                Mặc định
+                  {addresses.map(addr => {
+                    const isDef = Boolean(addr.is_default);
+                    return (
+                      <div
+                        key={addr.id}
+                        className={`p-4 rounded-2xl border transition-all ${
+                          isDef
+                            ? 'bg-[#F5F8EF]/70 border-[#08482D]/40 shadow-sm'
+                            : 'bg-white border-[#E2E8D8]'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-sm text-[#101410]">
+                                {addr.recipient_name}
                               </span>
+                              <span className="font-mono text-xs text-[#5E5E61]">
+                                ({addr.phone})
+                              </span>
+                              {isDef && (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[#08482D] text-white">
+                                  Mặc định
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-[#5E5E61] leading-relaxed">
+                              {addr.address_line}
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <button
+                              onClick={() => openEditAddressModal(addr)}
+                              className="p-1.5 rounded-xl border border-[#E2E8D8] text-[#5E5E61] hover:bg-[#F5F8EF] transition-colors"
+                              title="Sửa địa chỉ"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            {!isDef && addresses.length > 1 && (
+                              <button
+                                onClick={() => handleDeleteAddress(addr.id)}
+                                className="p-1.5 rounded-xl border border-[#E2E8D8] text-[#B33F33] hover:bg-red-50 transition-colors"
+                                title="Xóa địa chỉ"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             )}
                           </div>
-                          <p className="text-xs text-[#5E5E61] leading-relaxed">
-                            {addr.address_line}
-                          </p>
                         </div>
 
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          <button
-                            onClick={() => openEditAddressModal(addr)}
-                            className="p-1.5 rounded-xl border border-[#E2E8D8] text-[#5E5E61] hover:bg-[#F5F8EF] transition-colors"
-                            title="Sửa địa chỉ"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          {addresses.length > 1 && (
+                        {!isDef && (
+                          <div className="mt-3 pt-2 border-t border-[#E2E8D8]/50 flex justify-end">
                             <button
-                              onClick={() => handleDeleteAddress(addr.id)}
-                              className="p-1.5 rounded-xl border border-[#E2E8D8] text-[#B33F33] hover:bg-red-50 transition-colors"
-                              title="Xóa địa chỉ"
+                              onClick={() => handleSetDefaultAddress(addr.id)}
+                              className="text-[11px] font-bold text-[#08482D] hover:underline cursor-pointer"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              Thiết lập làm mặc định
                             </button>
-                          )}
-                        </div>
+                          </div>
+                        )}
                       </div>
-
-                      {addr.is_default !== 1 && (
-                        <div className="mt-3 pt-2 border-t border-[#E2E8D8]/50 flex justify-end">
-                          <button
-                            onClick={() => handleSetDefaultAddress(addr.id)}
-                            className="text-[11px] font-bold text-[#08482D] hover:underline"
-                          >
-                            Thiết lập làm mặc định
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -863,7 +908,8 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart, onNavi
                       statusLabel = `Đã mua với giá ${formatVND(finalPrice)}${item.order_code ? ` · Đơn #${item.order_code}` : ''}`;
                       badgeClass = 'bg-[#EBF5EE] text-[#08482D] border border-[#DAE7C7]';
                     } else if (isAccepted) {
-                      statusLabel = `Shop đã chấp nhận giá ${formatVND(item.offered_price)}`;
+                      const dealPrice = item.counter_price || (item as any).counterPrice || (item as any).final_price || item.offered_price || 0;
+                      statusLabel = `Đã chốt giá ${formatVND(dealPrice)}`;
                       badgeClass = 'bg-emerald-100 text-emerald-800';
                     } else if (isCountered) {
                       statusLabel = `Shop đề nghị ${formatVND(item.counter_price || item.offered_price)}`;
@@ -953,7 +999,7 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart, onNavi
                               className="px-4 py-2 bg-[#08482D] hover:bg-[#073d26] text-white rounded-xl text-xs font-bold transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer"
                             >
                               <ShoppingCart className="w-4 h-4" />
-                              Mua ngay với giá này ({formatVND(item.offered_price)})
+                              Mua ngay với giá này ({formatVND(item.counter_price || (item as any).counterPrice || (item as any).final_price || item.offered_price || 0)})
                             </button>
                           </div>
                         )}
@@ -1068,6 +1114,96 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart, onNavi
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB: VOUCHER WALLET */}
+          {activeTab === 'vouchers' && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-xl font-bold text-[#101410] flex items-center gap-2">
+                  <Ticket className="w-5 h-5 text-[#08482D]" />
+                  Ví Voucher Của Tôi
+                </h3>
+                <p className="text-xs text-[#5E5E61] mt-1">
+                  Mã giảm giá từ các shop bạn đã lưu để sử dụng khi thanh toán đơn hàng
+                </p>
+              </div>
+
+              {loadingVouchers ? (
+                <div className="py-8 text-center text-xs text-[#5E5E61]">Đang tải ví voucher...</div>
+              ) : savedVouchers.length === 0 ? (
+                <div className="text-center py-10 bg-[#F5F8EF]/40 rounded-2xl border border-dashed border-[#E2E8D8]">
+                  <Ticket className="w-8 h-8 text-[#5E5E61] mx-auto mb-2 opacity-50" />
+                  <p className="text-xs text-[#5E5E61]">Ví voucher trống. Bạn chưa lưu mã giảm giá nào.</p>
+                  <p className="text-[11px] text-[#5E5E61]/70 mt-1">
+                    Ghé thăm các shop hoặc trang sản phẩm để lưu thêm mã giảm giá hấp dẫn!
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {savedVouchers.map((cpn) => {
+                    const discountText = cpn.type === 'shipping'
+                      ? 'Miễn phí vận chuyển (tối đa 30.000đ)'
+                      : cpn.type === 'percent'
+                        ? `Giảm ${cpn.value}%${cpn.max_discount ? ` (tối đa ${formatVND(cpn.max_discount)})` : ''}`
+                        : `Giảm ${formatVND(cpn.value)}`;
+                    const minOrderText = cpn.min_order_amount > 0
+                      ? `Đơn tối thiểu ${formatVND(cpn.min_order_amount)}`
+                      : 'Không yêu cầu đơn tối thiểu';
+
+                    return (
+                      <div
+                        key={cpn.code || cpn.id}
+                        className="p-4 rounded-2xl border border-[#DAE7C7] bg-[#F5F8EF]/60 shadow-2xs space-y-3 flex flex-col justify-between"
+                      >
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-mono text-base font-bold text-[#08482D] bg-white px-2.5 py-0.5 rounded-lg border border-[#DAE7C7]">
+                              {cpn.code}
+                            </span>
+                            <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full">
+                              Đang có hiệu lực
+                            </span>
+                          </div>
+                          <p className="font-bold text-xs text-[#101410] pt-1">
+                            {discountText}
+                          </p>
+                          <p className="text-[11px] text-[#5E5E61]">
+                            {minOrderText}
+                          </p>
+                          {cpn.shop_name && (
+                            <p className="text-[11px] text-[#08482D] font-medium flex items-center gap-1">
+                              <Store className="w-3 h-3" />
+                              <span>Áp dụng tại: <strong>{cpn.shop_name}</strong></span>
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="pt-2 border-t border-[#DAE7C7]/50 flex items-center justify-between gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleUnsaveVoucher(cpn.code)}
+                            className="text-[11px] font-medium text-[#B33F33] hover:underline cursor-pointer"
+                          >
+                            Bỏ lưu
+                          </button>
+                          {onNavigateToShop && (cpn.shop_id || cpn.shop_name) && (
+                            <button
+                              type="button"
+                              onClick={() => onNavigateToShop(String(cpn.shop_id || 'do-cu-con-thuong'))}
+                              className="px-3 py-1.5 bg-[#08482D] text-white rounded-xl text-xs font-bold hover:bg-[#063A24] transition-colors flex items-center gap-1 cursor-pointer shadow-xs"
+                            >
+                              <span>Dùng ngay</span>
+                              <ExternalLink className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

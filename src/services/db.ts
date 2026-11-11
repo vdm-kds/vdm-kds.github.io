@@ -631,7 +631,12 @@ function normalizeShopDoc(docData: DocumentData, slug: string): Shop {
     review_count: rCount,
     total_reviews: rCount,
     response_rate: 98,
-    joined_text: 'Đang hoạt động',
+    joined_text: (() => {
+      const d = docData.createdAt?.toDate ? docData.createdAt.toDate() : (docData.createdAt ? new Date(docData.createdAt) : new Date(2026, 9, 1));
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const y = d.getFullYear();
+      return `${m}/${y}`;
+    })(),
     created_at: docData.createdAt?.toDate ? docData.createdAt.toDate().toISOString() : new Date().toISOString()
   };
 }
@@ -1658,6 +1663,7 @@ export class DCCTDatabaseService {
             category: p.category,
             price: effectivePrice,
             original_price: p.original_price,
+            original_item_price: p.price,
             condition_pct: p.condition_pct,
             condition_detail: p.condition_detail,
             stock: p.stock,
@@ -1984,6 +1990,16 @@ export class DCCTDatabaseService {
       savedCoupons: arrayUnion(code.toUpperCase().trim())
     });
     return { message: 'Đã lưu mã giảm giá vào ví voucher' };
+  }
+
+  async unsaveShopVoucher(code: string): Promise<{ message: string }> {
+    const cur = getCurrentUser();
+    if (!cur) throw new Error('Vui lòng đăng nhập');
+    const db = getActiveFirestore();
+    await updateDoc(doc(db, 'users', cur.uid), {
+      savedCoupons: arrayRemove(code.toUpperCase().trim())
+    });
+    return { message: 'Đã xóa mã giảm giá khỏi ví voucher' };
   }
 
   async getSavedShopVouchers(shopId?: number | string): Promise<{ vouchers: Coupon[] }> {
@@ -3192,7 +3208,9 @@ export class DCCTDatabaseService {
     const cur = getCurrentUser();
     if (!cur) return { reviews: [], avg: 0, total: 0, unreplied_count: 0 };
     const db = getActiveFirestore();
-    const q = query(collection(db, 'reviews'), where('sellerUid', '==', cur.uid));
+    const q = cur.shop_id
+      ? query(collection(db, 'reviews'), where('shopId', '==', String(cur.shop_id)))
+      : query(collection(db, 'reviews'), where('sellerUid', '==', cur.uid));
     const snap = await getDocs(q);
 
     // Cache missing product names/images for historical reviews
@@ -4350,7 +4368,9 @@ export class DCCTDatabaseService {
     const cur = getCurrentUser();
     if (!cur || cur.role !== 'seller') return { coupons: [] };
     const db = getActiveFirestore();
-    const q = query(collection(db, 'coupons'), where('ownerUid', '==', cur.uid));
+    const q = cur.shop_id
+      ? query(collection(db, 'coupons'), where('shopId', '==', String(cur.shop_id)))
+      : query(collection(db, 'coupons'), where('ownerUid', '==', cur.uid));
     const snap = await getDocs(q);
     const list: Coupon[] = [];
     snap.forEach((d) => {
@@ -4365,16 +4385,44 @@ export class DCCTDatabaseService {
     if (!cur.shop_id) {
       throw new Error('Vui lòng thiết lập thông tin shop trước khi tạo mã giảm giá');
     }
+
+    const code = (data.code || '').toUpperCase().replace(/[^A-Z0-9]/g, '').trim();
+    if (!code || code.length < 4 || code.length > 15) {
+      throw new Error('Mã giảm giá phải từ 4 đến 15 ký tự chữ hoa hoặc số (A-Z, 0-9)');
+    }
+
+    const type = data.type === 'shipping' ? 'freeship' : (data.type || 'percent');
+    const val = Number(data.value || 0);
+    const minOrder = Math.max(0, Number(data.min_order_amount || 0));
+    const maxDiscount = Math.max(0, Number(data.max_discount || 0));
+
+    if (type === 'percent') {
+      if (val < 1 || val > 90) {
+        throw new Error('Mức giảm theo phần trăm phải từ 1% đến 90%');
+      }
+    } else if (type === 'fixed') {
+      if (val <= 0) {
+        throw new Error('Số tiền giảm cố định phải lớn hơn 0đ');
+      }
+      if (minOrder > 0 && val >= minOrder) {
+        throw new Error('Số tiền giảm cố định phải nhỏ hơn giá trị đơn hàng tối thiểu');
+      }
+    }
+
     const db = getActiveFirestore();
-    const code = (data.code || '').toUpperCase().trim();
+    const existingSnap = await getDoc(doc(db, 'coupons', code));
+    if (existingSnap.exists()) {
+      throw new Error('Mã này đã tồn tại, vui lòng chọn mã khác');
+    }
+
     const couponDoc = {
       code,
       shopId: String(cur.shop_id),
       ownerUid: cur.uid,
-      type: data.type || 'percent',
-      value: Number(data.value || 0),
-      maxDiscount: Number(data.max_discount || 0),
-      minOrder: Number(data.min_order_amount || 0),
+      type,
+      value: val,
+      maxDiscount,
+      minOrder,
       active: true,
       usedCount: 0,
       createdAt: serverTimestamp(),
@@ -4384,11 +4432,66 @@ export class DCCTDatabaseService {
     return { coupon: normalizeCouponDoc(couponDoc, code) };
   }
 
+  async updateCoupon(code: string | number, data: any): Promise<{ coupon: Coupon; message: string }> {
+    const cur = getCurrentUser();
+    if (!cur || cur.role !== 'seller') throw new Error('Chỉ người bán mới được sửa mã');
+    const db = getActiveFirestore();
+    const strCode = String(code).toUpperCase().trim();
+    const ref = doc(db, 'coupons', strCode);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) throw new Error('Mã giảm giá không tồn tại');
+
+    const cpnData = snap.data();
+    if (cur.shop_id && String(cpnData.shopId) !== String(cur.shop_id) && cpnData.ownerUid !== cur.uid) {
+      throw new Error('Bạn không có quyền sửa mã này');
+    }
+
+    const type = data.type === 'shipping' ? 'freeship' : (data.type || cpnData.type);
+    const val = Number(data.value !== undefined ? data.value : cpnData.value);
+    const minOrder = Math.max(0, Number(data.min_order_amount !== undefined ? data.min_order_amount : (cpnData.minOrder || 0)));
+    const maxDiscount = Math.max(0, Number(data.max_discount !== undefined ? data.max_discount : (cpnData.maxDiscount || 0)));
+
+    if (type === 'percent') {
+      if (val < 1 || val > 90) {
+        throw new Error('Mức giảm theo phần trăm phải từ 1% đến 90%');
+      }
+    } else if (type === 'fixed') {
+      if (val <= 0) {
+        throw new Error('Số tiền giảm cố định phải lớn hơn 0đ');
+      }
+      if (minOrder > 0 && val >= minOrder) {
+        throw new Error('Số tiền giảm cố định phải nhỏ hơn giá trị đơn hàng tối thiểu');
+      }
+    }
+
+    const updates: any = {
+      type,
+      value: val,
+      minOrder,
+      maxDiscount,
+      updatedAt: serverTimestamp()
+    };
+
+    await updateDoc(ref, updates);
+    return {
+      coupon: normalizeCouponDoc({ ...cpnData, ...updates }, strCode),
+      message: 'Cập nhật mã giảm giá thành công'
+    };
+  }
+
   async toggleCoupon(code: string | number): Promise<{ is_active: boolean; message: string }> {
+    const cur = getCurrentUser();
+    if (!cur || cur.role !== 'seller') throw new Error('Chỉ người bán mới được thao tác mã');
     const db = getActiveFirestore();
     const ref = doc(db, 'coupons', String(code));
     const snap = await getDoc(ref);
     if (!snap.exists()) throw new Error('Mã không tồn tại');
+
+    const cpnData = snap.data();
+    if (cur.shop_id && String(cpnData.shopId) !== String(cur.shop_id) && cpnData.ownerUid !== cur.uid) {
+      throw new Error('Bạn không có quyền thao tác trên mã giảm giá này');
+    }
+
     const current = snap.data().active !== false;
     await updateDoc(ref, { active: !current });
     return {
@@ -4398,8 +4501,19 @@ export class DCCTDatabaseService {
   }
 
   async deleteCoupon(code: string | number): Promise<{ message: string }> {
+    const cur = getCurrentUser();
+    if (!cur || cur.role !== 'seller') throw new Error('Chỉ người bán mới được xóa mã');
     const db = getActiveFirestore();
-    await deleteDoc(doc(db, 'coupons', String(code)));
+    const ref = doc(db, 'coupons', String(code));
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return { message: 'Đã xóa mã' };
+
+    const cpnData = snap.data();
+    if (cur.shop_id && String(cpnData.shopId) !== String(cur.shop_id) && cpnData.ownerUid !== cur.uid) {
+      throw new Error('Bạn không có quyền thao tác trên mã giảm giá này');
+    }
+
+    await deleteDoc(ref);
     return { message: 'Đã xóa mã' };
   }
 
@@ -4526,16 +4640,27 @@ export class DCCTDatabaseService {
     const db = getActiveFirestore();
     const uSnap = await getDoc(doc(db, 'users', cur.uid));
     const raw = uSnap.data()?.addresses || [];
-    return {
-      addresses: raw.map((a: any, idx: number) => ({
-        id: a.id || idx + 1,
-        user_id: cur.uid as any,
-        recipient_name: a.receiver || a.recipient_name,
-        phone: a.phone,
-        address_line: a.address || a.address_line,
-        is_default: !!a.isDefault
-      }))
-    };
+
+    if (raw.length === 1 && !raw[0].isDefault) {
+      raw[0].isDefault = true;
+    }
+    const hasDefault = raw.some((a: any) => !!a.isDefault);
+    if (!hasDefault && raw.length > 0) {
+      raw[0].isDefault = true;
+    }
+
+    const list: Address[] = raw.map((a: any, idx: number) => ({
+      id: a.id || idx + 1,
+      user_id: cur.uid as any,
+      recipient_name: a.receiver || a.recipient_name,
+      phone: a.phone,
+      address_line: a.address || a.address_line,
+      is_default: Boolean(a.isDefault)
+    }));
+
+    // Default address sorted to top
+    list.sort((a, b) => (b.is_default ? 1 : 0) - (a.is_default ? 1 : 0));
+    return { addresses: list };
   }
 
   async addAddress(data: { recipient_name: string; phone: string; address_line: string; is_default?: boolean }): Promise<{ address: Address }> {
@@ -4615,7 +4740,12 @@ export class DCCTDatabaseService {
     const db = getActiveFirestore();
     const uRef = doc(db, 'users', cur.uid);
     const uSnap = await getDoc(uRef);
-    const addresses = (uSnap.data()?.addresses || []).filter((a: any) => a.id !== id);
+    const raw = uSnap.data()?.addresses || [];
+    const deleting = raw.find((a: any) => a.id === id);
+    const addresses = raw.filter((a: any) => a.id !== id);
+    if (deleting?.isDefault && addresses.length > 0) {
+      addresses[0].isDefault = true;
+    }
     await updateDoc(uRef, { addresses, updatedAt: serverTimestamp() });
     return { message: 'Đã xóa địa chỉ' };
   }
@@ -4768,7 +4898,8 @@ export class DCCTDatabaseService {
                                   (o as any).returnStatus === 'refunded';
 
       if ((o.status === 'completed' || o.payment_status === 'paid') && !isRefundedOrReturned) {
-        revenue += o.total;
+        const itemTotalAfterDiscount = Math.max(0, (o.subtotal || 0) - (o.discount_amount || (o as any).discount || 0));
+        revenue += itemTotalAfterDiscount;
       }
       if (o.status === 'pending') pending++;
       else if (o.status === 'confirmed') confirmed++;
@@ -5057,6 +5188,49 @@ export class DCCTDatabaseService {
     onProgress?.('Tạo 10 sản phẩm mẫu...');
     const batch2 = writeBatch(db);
 
+    const SAMPLE_PRODUCT_DEFECTS: Record<string, Array<{ location: string; description: string; text: string; image: string }>> = {
+      prod_1: [
+        { location: 'Khuỷu tay', description: 'Phai màu nhẹ tự nhiên ở hai khuỷu tay', text: 'Khuỷu tay: Phai màu nhẹ tự nhiên ở hai khuỷu tay', image: '' },
+        { location: 'Gấu áo', description: 'Một sợi chỉ viền gấu bị sờn nhẹ, không bung', text: 'Gấu áo: Một sợi chỉ viền gấu bị sờn nhẹ, không bung', image: '' }
+      ],
+      prod_2: [
+        { location: 'Quai xách', description: 'Sờn nhẹ ở mép quai do sử dụng', text: 'Quai xách: Sờn nhẹ ở mép quai do sử dụng', image: '' },
+        { location: 'Đáy túi', description: 'Một vết xước mảnh dài khoảng 1cm', text: 'Đáy túi: Một vết xước mảnh dài khoảng 1cm', image: '' }
+      ],
+      prod_3: [
+        { location: 'Mặt kính', description: 'Vài vết xước dăm rất nhỏ, chỉ thấy khi nghiêng dưới đèn', text: 'Mặt kính: Vài vết xước dăm rất nhỏ, chỉ thấy khi nghiêng dưới đèn', image: '' },
+        { location: 'Dây kim loại', description: 'Mắt dây cuối có vết mờ nhẹ', text: 'Dây kim loại: Mắt dây cuối có vết mờ nhẹ', image: '' }
+      ],
+      prod_4: [
+        { location: 'Vỏ ngoài', description: 'Một vết trầy nhỏ ở mặt sau thân nồi', text: 'Vỏ ngoài: Một vết trầy nhỏ ở mặt sau thân nồi', image: '' },
+        { location: 'Tay cầm giỏ chiên', description: 'Mờ nhẹ lớp sơn ở chỗ cầm', text: 'Tay cầm giỏ chiên: Mờ nhẹ lớp sơn ở chỗ cầm', image: '' }
+      ],
+      prod_5: [
+        { location: 'Gáy sách', description: 'Gáy hơi bạc màu', text: 'Gáy sách: Gáy hơi bạc màu', image: '' },
+        { location: 'Trang giấy', description: 'Giấy ngả vàng, vài trang có gạch chân bút chì', text: 'Trang giấy: Giấy ngả vàng, vài trang có gạch chân bút chì', image: '' }
+      ],
+      prod_6: [
+        { location: 'Mặt đàn', description: 'Hai vết xước nhỏ cạnh lỗ thoát âm do gảy pick', text: 'Mặt đàn: Hai vết xước nhỏ cạnh lỗ thoát âm do gảy pick', image: '' },
+        { location: 'Cần đàn', description: 'Phím 1–3 hơi mòn nhẹ', text: 'Cần đàn: Phím 1–3 hơi mòn nhẹ', image: '' }
+      ],
+      prod_7: [
+        { location: 'Thân máy', description: 'Tróc sơn nhẹ ở góc trên bên trái', text: 'Thân máy: Tróc sơn nhẹ ở góc trên bên trái', image: '' },
+        { location: 'Ống ngắm', description: 'Có vài hạt bụi nhỏ, không ảnh hưởng ảnh chụp', text: 'Ống ngắm: Có vài hạt bụi nhỏ, không ảnh hưởng ảnh chụp', image: '' }
+      ],
+      prod_8: [
+        { location: 'Viền nhôm', description: 'Cấn nhẹ ở góc dưới bên phải', text: 'Viền nhôm: Cấn nhẹ ở góc dưới bên phải', image: '' },
+        { location: 'Pin', description: 'Dung lượng pin còn 84%', text: 'Pin: Dung lượng pin còn 84%', image: '' }
+      ],
+      prod_9: [
+        { location: 'Vòm đầu', description: 'Lớp da trên vòm đầu hơi nhăn', text: 'Vòm đầu: Lớp da trên vòm đầu hơi nhăn', image: '' },
+        { location: 'Hộp đựng', description: 'Hộp có vết bẩn nhẹ bên ngoài', text: 'Hộp đựng: Hộp có vết bẩn nhẹ bên ngoài', image: '' }
+      ],
+      prod_10: [
+        { location: 'Keycap', description: 'Phím Space và Enter hơi bóng do dùng', text: 'Keycap: Phím Space và Enter hơi bóng do dùng', image: '' },
+        { location: 'Cạnh khung', description: 'Một vết xước nhỏ ở cạnh trái', text: 'Cạnh khung: Một vết xước nhỏ ở cạnh trái', image: '' }
+      ]
+    };
+
     const sampleProducts = [
       { id: 'prod_1', name: 'Áo khoác denim cũ size L', category: 'Thời trang', price: 350000, orig: 1200000, cond: 95, note: 'Không rách, phai màu nhẹ tự nhiên ở khuỷu tay, form áo đứng và dày dặn', stock: 1, shopId: 'do-cu-con-thuong', ownerUid: adminUid, shopName: 'Đồ Cũ Còn Thương', icon: '🧥' },
       { id: 'prod_2', name: 'Túi xách da thật vintage', category: 'Thời trang', price: 600000, orig: 1800000, cond: 80, note: 'Chất da bò thật patina bóng đẹp, khóa đồng vintage nguyên bản, có dấu sờn quai nhẹ', stock: 1, shopId: 'do-cu-con-thuong', ownerUid: adminUid, shopName: 'Đồ Cũ Còn Thương', icon: '👜' },
@@ -5090,7 +5264,7 @@ export class DCCTDatabaseService {
         conditionPct: p.cond,
         conditionNote: p.note,
         description: p.note,
-        defects: [{ text: p.note, image: '' }],
+        defects: SAMPLE_PRODUCT_DEFECTS[p.id] || [{ text: p.note, image: '' }],
         inspection: {
           date: '2026-10-20',
           inspector: 'Trần Minh Tuấn (KTV Chuyên Sâu)',
@@ -5434,6 +5608,49 @@ export class DCCTDatabaseService {
       }
     }
 
+    const sampleDefectsMap: Record<string, Array<{ location: string; description: string; text: string; image: string }>> = {
+      prod_1: [
+        { location: 'Khuỷu tay', description: 'Phai màu nhẹ tự nhiên ở hai khuỷu tay', text: 'Khuỷu tay: Phai màu nhẹ tự nhiên ở hai khuỷu tay', image: '' },
+        { location: 'Gấu áo', description: 'Một sợi chỉ viền gấu bị sờn nhẹ, không bung', text: 'Gấu áo: Một sợi chỉ viền gấu bị sờn nhẹ, không bung', image: '' }
+      ],
+      prod_2: [
+        { location: 'Quai xách', description: 'Sờn nhẹ ở mép quai do sử dụng', text: 'Quai xách: Sờn nhẹ ở mép quai do sử dụng', image: '' },
+        { location: 'Đáy túi', description: 'Một vết xước mảnh dài khoảng 1cm', text: 'Đáy túi: Một vết xước mảnh dài khoảng 1cm', image: '' }
+      ],
+      prod_3: [
+        { location: 'Mặt kính', description: 'Vài vết xước dăm rất nhỏ, chỉ thấy khi nghiêng dưới đèn', text: 'Mặt kính: Vài vết xước dăm rất nhỏ, chỉ thấy khi nghiêng dưới đèn', image: '' },
+        { location: 'Dây kim loại', description: 'Mắt dây cuối có vết mờ nhẹ', text: 'Dây kim loại: Mắt dây cuối có vết mờ nhẹ', image: '' }
+      ],
+      prod_4: [
+        { location: 'Vỏ ngoài', description: 'Một vết trầy nhỏ ở mặt sau thân nồi', text: 'Vỏ ngoài: Một vết trầy nhỏ ở mặt sau thân nồi', image: '' },
+        { location: 'Tay cầm giỏ chiên', description: 'Mờ nhẹ lớp sơn ở chỗ cầm', text: 'Tay cầm giỏ chiên: Mờ nhẹ lớp sơn ở chỗ cầm', image: '' }
+      ],
+      prod_5: [
+        { location: 'Gáy sách', description: 'Gáy hơi bạc màu', text: 'Gáy sách: Gáy hơi bạc màu', image: '' },
+        { location: 'Trang giấy', description: 'Giấy ngả vàng, vài trang có gạch chân bút chì', text: 'Trang giấy: Giấy ngả vàng, vài trang có gạch chân bút chì', image: '' }
+      ],
+      prod_6: [
+        { location: 'Mặt đàn', description: 'Hai vết xước nhỏ cạnh lỗ thoát âm do gảy pick', text: 'Mặt đàn: Hai vết xước nhỏ cạnh lỗ thoát âm do gảy pick', image: '' },
+        { location: 'Cần đàn', description: 'Phím 1–3 hơi mòn nhẹ', text: 'Cần đàn: Phím 1–3 hơi mòn nhẹ', image: '' }
+      ],
+      prod_7: [
+        { location: 'Thân máy', description: 'Tróc sơn nhẹ ở góc trên bên trái', text: 'Thân máy: Tróc sơn nhẹ ở góc trên bên trái', image: '' },
+        { location: 'Ống ngắm', description: 'Có vài hạt bụi nhỏ, không ảnh hưởng ảnh chụp', text: 'Ống ngắm: Có vài hạt bụi nhỏ, không ảnh hưởng ảnh chụp', image: '' }
+      ],
+      prod_8: [
+        { location: 'Viền nhôm', description: 'Cấn nhẹ ở góc dưới bên phải', text: 'Viền nhôm: Cấn nhẹ ở góc dưới bên phải', image: '' },
+        { location: 'Pin', description: 'Dung lượng pin còn 84%', text: 'Pin: Dung lượng pin còn 84%', image: '' }
+      ],
+      prod_9: [
+        { location: 'Vòm đầu', description: 'Lớp da trên vòm đầu hơi nhăn', text: 'Vòm đầu: Lớp da trên vòm đầu hơi nhăn', image: '' },
+        { location: 'Hộp đựng', description: 'Hộp có vết bẩn nhẹ bên ngoài', text: 'Hộp đựng: Hộp có vết bẩn nhẹ bên ngoài', image: '' }
+      ],
+      prod_10: [
+        { location: 'Keycap', description: 'Phím Space và Enter hơi bóng do dùng', text: 'Keycap: Phím Space và Enter hơi bóng do dùng', image: '' },
+        { location: 'Cạnh khung', description: 'Một vết xước nhỏ ở cạnh trái', text: 'Cạnh khung: Một vết xước nhỏ ở cạnh trái', image: '' }
+      ]
+    };
+
     const prodBatch = writeBatch(db);
     for (const pid of sampleProductIds) {
       const ref = doc(db, 'products', pid);
@@ -5445,25 +5662,83 @@ export class DCCTDatabaseService {
           viewCount: 0,
           ratingAvg: 0,
           ratingCount: 0,
+          defects: sampleDefectsMap[pid] || [],
           updatedAt: serverTimestamp()
         });
       }
     }
     await prodBatch.commit();
 
-    const sampleCoupons = ['DOCU10', 'FREESHIP', 'SACHHAY', 'TECH50'];
-    const cpnBatch = writeBatch(db);
-    for (const c of sampleCoupons) {
-      const ref = doc(db, 'coupons', c);
-      const snap = await getDoc(ref);
-      if (snap.exists()) {
-        cpnBatch.update(ref, {
-          usedCount: 0,
-          updatedAt: serverTimestamp()
-        });
-      }
+    // Recreate coupons: delete all documents in coupons, then create 4 default coupons
+    const allCpnSnap = await getDocs(collection(db, 'coupons'));
+    for (let i = 0; i < allCpnSnap.docs.length; i += 400) {
+      const delCpnBatch = writeBatch(db);
+      allCpnSnap.docs.slice(i, i + 400).forEach((cDoc) => {
+        delCpnBatch.delete(cDoc.ref);
+      });
+      await delCpnBatch.commit();
     }
-    await cpnBatch.commit();
+
+    const defaultCoupons = [
+      {
+        code: 'DOCU10',
+        shopId: 'do-cu-con-thuong',
+        type: 'percent',
+        value: 10,
+        maxDiscount: 100000,
+        minOrder: 300000,
+        usedCount: 0,
+        active: true,
+        ownerUid: 'dcct_admin_uid',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      },
+      {
+        code: 'FREESHIP',
+        shopId: 'do-cu-con-thuong',
+        type: 'freeship',
+        value: 100,
+        maxDiscount: 30000,
+        minOrder: 0,
+        usedCount: 0,
+        active: true,
+        ownerUid: 'dcct_admin_uid',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      },
+      {
+        code: 'SACHHAY',
+        shopId: 'goc-sach-nhac',
+        type: 'fixed',
+        value: 15000,
+        maxDiscount: 15000,
+        minOrder: 100000,
+        usedCount: 0,
+        active: true,
+        ownerUid: 'dcct_goc_sach_nhac_uid',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      },
+      {
+        code: 'TECH50',
+        shopId: 'retro-tech',
+        type: 'fixed',
+        value: 50000,
+        maxDiscount: 50000,
+        minOrder: 1000000,
+        usedCount: 0,
+        active: true,
+        ownerUid: 'dcct_retro_tech_uid',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      }
+    ];
+
+    const createCpnBatch = writeBatch(db);
+    for (const c of defaultCoupons) {
+      createCpnBatch.set(doc(db, 'coupons', c.code), c);
+    }
+    await createCpnBatch.commit();
 
     const sampleShops = [
       { id: 'do-cu-con-thuong', name: 'Đồ Cũ Còn Thương', color: '#08482D' },

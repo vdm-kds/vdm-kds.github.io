@@ -137,24 +137,24 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="sticky top-0 z-40 bg-[#F5F8EF]/95 backdrop-blur-md border-b border-[#E2E8D8] transition-all">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-4 sm:gap-8">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between gap-1.5 sm:gap-8 min-w-0">
         {/* Zone 1: Brand Wordmark with ♻ and leaf logo */}
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-2 sm:gap-3 shrink min-w-0">
           <button
             onClick={() => {
               if (user?.role === 'seller') onNavigate('seller');
               else onNavigate('home');
             }}
-            className="flex items-center gap-2.5 text-left group focus-visible:outline-none"
+            className="flex items-center gap-1.5 sm:gap-2.5 text-left group focus-visible:outline-none min-w-0"
           >
-            <div className="w-10 h-10 rounded-2xl bg-[#08482D] text-white flex items-center justify-center font-bold text-lg shadow-sm transition-transform duration-200 group-hover:scale-105">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-[#08482D] text-white flex items-center justify-center font-bold text-base sm:text-lg shadow-sm shrink-0 transition-transform duration-200 group-hover:scale-105">
               ♻
             </div>
-            <div>
-              <span className="text-xl sm:text-2xl font-bold tracking-tight text-[#101410] block leading-none">
+            <div className="min-w-0">
+              <span className="text-base sm:text-2xl font-bold tracking-tight text-[#101410] truncate block leading-none">
                 Đồ Cũ Còn Thương
               </span>
-              <span className="text-[11px] text-[#5E5E61] font-medium tracking-wide mt-1 hidden sm:block">
+              <span className="text-[11px] text-[#5E5E61] font-medium tracking-wide mt-1 hidden sm:block truncate">
                 Tiệm đồ cũ còn thương, chờ người thương mới
               </span>
             </div>
@@ -442,7 +442,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Mobile hamburger menu toggle */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="sm:hidden w-10 h-10 flex items-center justify-center rounded-xl text-[#101410] hover:bg-[#DAE7C7]/50 shrink-0"
+            className="sm:hidden w-9 h-9 flex items-center justify-center rounded-xl text-[#101410] hover:bg-[#DAE7C7]/50 shrink-0"
             aria-label="Menu"
           >
             {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}

@@ -99,6 +99,9 @@ export const api = {
   saveShopVoucher: (code: string, shopId: number | string) =>
     db.saveShopVoucher(code, shopId),
 
+  unsaveShopVoucher: (code: string) =>
+    db.unsaveShopVoucher(code),
+
   getSavedShopVouchers: (shopId?: number | string) =>
     db.getSavedShopVouchers(shopId),
 
@@ -362,6 +365,9 @@ export const api = {
 
   createSellerCoupon: (couponData: any) =>
     db.createCoupon(couponData),
+
+  updateSellerCoupon: (code: string | number, couponData: any) =>
+    db.updateCoupon(code, couponData),
 
   toggleSellerCoupon: (id: number | string) =>
     db.toggleCoupon(id),

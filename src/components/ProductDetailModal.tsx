@@ -316,8 +316,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     }
     if (isSoldOut) return;
     onAddToCart(fullProduct, quantity);
-    setJustAdded(true);
-    setTimeout(() => setJustAdded(false), 1500);
+    onClose();
   };
 
   const handleBuy = () => {
@@ -413,25 +412,30 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     });
   }, [reviewsData, activeReviewFilter]);
 
-  // Keyboard navigation for media lightbox
+  // Keyboard navigation for media lightbox and escape to close modal
   useEffect(() => {
-    if (!mediaLightbox) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setMediaLightbox(null);
-      if (e.key === 'ArrowLeft') {
-        setMediaLightbox(prev => prev ? { ...prev, index: (prev.index - 1 + prev.items.length) % prev.items.length } : null);
+      if (e.key === 'Escape') {
+        if (mediaLightbox) setMediaLightbox(null);
+        else if (isLightboxOpen) setIsLightboxOpen(false);
+        else onClose();
       }
-      if (e.key === 'ArrowRight') {
-        setMediaLightbox(prev => prev ? { ...prev, index: (prev.index + 1) % prev.items.length } : null);
+      if (mediaLightbox) {
+        if (e.key === 'ArrowLeft') {
+          setMediaLightbox(prev => prev ? { ...prev, index: (prev.index - 1 + prev.items.length) % prev.items.length } : null);
+        }
+        if (e.key === 'ArrowRight') {
+          setMediaLightbox(prev => prev ? { ...prev, index: (prev.index + 1) % prev.items.length } : null);
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [mediaLightbox]);
+  }, [mediaLightbox, isLightboxOpen, onClose]);
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-start md:items-center justify-center p-0 md:p-6 bg-black/60 backdrop-blur-xs overflow-y-auto">
+      <div className="fixed inset-0 z-50 flex items-start md:items-center justify-center p-0 md:p-6 bg-black/60 backdrop-blur-xs overflow-y-auto" onClick={onClose}>
         <div 
           className="relative w-full max-w-5xl bg-white rounded-none md:rounded-3xl border-0 md:border border-[#E2E8D8] shadow-2xl overflow-y-auto md:overflow-hidden min-h-screen md:min-h-0 md:max-h-[92vh] flex flex-col lg:flex-row text-[#101410]"
           onClick={(e) => e.stopPropagation()}
@@ -477,10 +481,34 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
               <div className="absolute top-3 right-3 z-30 flex items-center gap-1.5">
                 <button
                   type="button"
-                  onClick={() => {
+                  onClick={async () => {
                     const url = `${window.location.origin}/product/${fullProduct.id}`;
-                    navigator.clipboard.writeText(url);
-                    showToast('Đã sao chép liên kết sản phẩm!', 'success');
+                    try {
+                      if (navigator.clipboard && navigator.clipboard.writeText) {
+                        await navigator.clipboard.writeText(url);
+                      } else {
+                        throw new Error('Clipboard API unavailable');
+                      }
+                      showToast('Đã sao chép liên kết sản phẩm!', 'success');
+                    } catch {
+                      try {
+                        const ta = document.createElement('textarea');
+                        ta.value = url;
+                        ta.style.position = 'fixed';
+                        ta.style.opacity = '0';
+                        document.body.appendChild(ta);
+                        ta.select();
+                        const ok = document.execCommand('copy');
+                        document.body.removeChild(ta);
+                        if (ok) {
+                          showToast('Đã sao chép liên kết sản phẩm!', 'success');
+                        } else {
+                          showToast('Không thể sao chép liên kết', 'error');
+                        }
+                      } catch {
+                        showToast('Không thể sao chép liên kết', 'error');
+                      }
+                    }
                   }}
                   className="w-9 h-9 rounded-full bg-white/90 backdrop-blur-xs border border-[#E2E8D8] text-[#08482D] hover:bg-[#F5F8EF] flex items-center justify-center text-xs font-semibold shadow-md transition-colors cursor-pointer"
                   title="Sao chép liên kết"

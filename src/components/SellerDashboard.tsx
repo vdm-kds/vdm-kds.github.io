@@ -4,9 +4,9 @@ import {
   Plus, Edit2, Trash2, CheckCircle2, XCircle, Truck, Send, Clock, 
   MapPin, RefreshCw, X, ChevronRight, Eye, Printer, Download, Tag, Percent, CheckSquare, Square,
   MessageSquare, RotateCcw, Sparkles, ShieldAlert, Bell, KeyRound, LogOut, UserCheck, Star, Play, Flag, ChevronDown, Check, User,
-  Upload, ExternalLink, Camera, Loader2
+  Upload, ExternalLink, Camera, Loader2, Copy
 } from 'lucide-react';
-import { Product, Order, SellerStats, Coupon, Offer, ChatConversation, ChatMessage, ReturnRequest, ProductFlaw, Shop } from '../types';
+import { Product, Order, SellerStats, Coupon, Offer, ChatConversation, ChatMessage, ReturnRequest, ProductFlaw, Shop, AppNotification } from '../types';
 import { api } from '../services/api';
 import { formatVND, formatDate, getOrderStatusBadge, getPaymentStatusBadge } from '../utils/format';
 import { useToast } from '../context/ToastContext';
@@ -117,6 +117,8 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [loadingCoupons, setLoadingCoupons] = useState(false);
   const [couponModalOpen, setCouponModalOpen] = useState(false);
+  const [editingCoupon, setEditingCoupon] = useState<Coupon | null>(null);
+  const [couponFormErrors, setCouponFormErrors] = useState<Record<string, string>>({});
   const [couponForm, setCouponForm] = useState({
     code: '',
     type: 'percent' as 'percent' | 'fixed' | 'shipping',
@@ -124,6 +126,12 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
     max_discount: 100000,
     min_order_amount: 300000
   });
+
+  // Seller Realtime Notifications Dropdown State
+  const [sellerNotifications, setSellerNotifications] = useState<AppNotification[]>([]);
+  const [sellerUnreadNotifs, setSellerUnreadNotifs] = useState(0);
+  const [sellerNotifOpen, setSellerNotifOpen] = useState(false);
+  const sellerNotifRef = useRef<HTMLDivElement>(null);
 
   // Seller Action Modals
   const [carrierModalOrder, setCarrierModalOrder] = useState<Order | null>(null);
@@ -573,9 +581,22 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setSellerMenuOpen(false);
       }
+      if (sellerNotifRef.current && !sellerNotifRef.current.contains(e.target as Node)) {
+        setSellerNotifOpen(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    const unsub = api.subscribeNotifications((items, unread) => {
+      setSellerNotifications(items);
+      setSellerUnreadNotifs(unread);
+    });
+    return () => {
+      unsub();
+    };
   }, []);
 
   const fetchSellerReviews = async () => {
@@ -914,17 +935,96 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
     }
   };
 
-  const handleCreateCoupon = async (e: React.FormEvent) => {
+  const validateCouponForm = (): boolean => {
+    const errors: Record<string, string> = {};
+    const code = (couponForm.code || '').trim().toUpperCase();
+
+    if (!editingCoupon) {
+      if (!code) {
+        errors.code = 'Vui lòng nhập mã code';
+      } else if (!/^[A-Z0-9]{4,15}$/.test(code)) {
+        errors.code = 'Mã code từ 4-15 ký tự, chỉ gồm chữ in hoa và số (A-Z, 0-9), không dấu cách';
+      }
+    }
+
+    if (couponForm.type === 'percent') {
+      const val = Number(couponForm.value);
+      if (isNaN(val) || val < 1 || val > 90) {
+        errors.value = 'Mức giảm theo phần trăm phải từ 1% đến 90%';
+      }
+    } else if (couponForm.type === 'fixed') {
+      const val = Number(couponForm.value);
+      const minOrder = Number(couponForm.min_order_amount) || 0;
+      if (isNaN(val) || val <= 0) {
+        errors.value = 'Số tiền giảm cố định phải lớn hơn 0đ';
+      } else if (minOrder > 0 && val >= minOrder) {
+        errors.value = 'Số tiền giảm phải nhỏ hơn giá trị đơn hàng tối thiểu';
+      }
+    }
+
+    if (Number(couponForm.min_order_amount) < 0) {
+      errors.min_order_amount = 'Đơn tối thiểu không được âm';
+    }
+
+    if (couponForm.type !== 'shipping' && Number(couponForm.max_discount) < 0) {
+      errors.max_discount = 'Giảm tối đa không được âm';
+    }
+
+    setCouponFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleOpenCreateCoupon = () => {
+    setEditingCoupon(null);
+    setCouponForm({
+      code: '',
+      type: 'percent',
+      value: 10,
+      max_discount: 100000,
+      min_order_amount: 300000
+    });
+    setCouponFormErrors({});
+    setCouponModalOpen(true);
+  };
+
+  const handleOpenEditCoupon = (cpn: Coupon) => {
+    setEditingCoupon(cpn);
+    setCouponForm({
+      code: cpn.code,
+      type: (cpn.type as any) || 'percent',
+      value: cpn.value,
+      max_discount: cpn.max_discount || 0,
+      min_order_amount: cpn.min_order_amount || 0
+    });
+    setCouponFormErrors({});
+    setCouponModalOpen(true);
+  };
+
+  const handleSaveCoupon = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentShop?.id && !currentUser?.shop_id) {
       showToast('Vui lòng thiết lập thông tin shop trước khi tạo mã giảm giá', 'error');
       setShopProfileModal(true);
       return;
     }
+    if (!validateCouponForm()) {
+      return;
+    }
     try {
-      await api.createSellerCoupon(couponForm);
-      showToast('Tạo mã giảm giá mới thành công!', 'success');
+      if (editingCoupon) {
+        await api.updateSellerCoupon(editingCoupon.code || editingCoupon.id, {
+          type: couponForm.type,
+          value: Number(couponForm.value),
+          max_discount: Number(couponForm.max_discount) || 0,
+          min_order_amount: Number(couponForm.min_order_amount) || 0
+        });
+        showToast('Cập nhật mã giảm giá thành công!', 'success');
+      } else {
+        await api.createSellerCoupon(couponForm);
+        showToast('Tạo mã giảm giá mới thành công!', 'success');
+      }
       setCouponModalOpen(false);
+      setEditingCoupon(null);
       setCouponForm({
         code: '',
         type: 'percent',
@@ -932,9 +1032,48 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
         max_discount: 100000,
         min_order_amount: 300000
       });
+      setCouponFormErrors({});
       await fetchCoupons();
     } catch (err: any) {
-      showToast(err.message || 'Lỗi tạo mã giảm giá', 'error');
+      showToast(err.message || 'Lỗi lưu mã giảm giá', 'error');
+    }
+  };
+
+  // Seller Notifications Handlers
+  const handleSellerNotifClick = async (n: AppNotification) => {
+    if (!n.is_read) {
+      try {
+        await api.markNotificationRead(n.id);
+        setSellerNotifications(prev => prev.map(item => item.id === n.id ? { ...item, is_read: 1 } : item));
+        setSellerUnreadNotifs(prev => Math.max(0, prev - 1));
+      } catch {
+        // ignore
+      }
+    }
+    const typeLower = (n.type || '').toLowerCase();
+    const msgLower = `${n.message || ''} ${n.title || ''}`.toLowerCase();
+    if (typeLower.includes('offer') || msgLower.includes('trả giá')) {
+      setActiveTab('offers');
+    } else if (typeLower.includes('return') || msgLower.includes('trả hàng') || msgLower.includes('hoàn tiền')) {
+      setActiveTab('returns');
+    } else if (typeLower.includes('review') || msgLower.includes('đánh giá')) {
+      setActiveTab('reviews');
+    } else if (typeLower.includes('chat') || msgLower.includes('tin nhắn')) {
+      setActiveTab('chat');
+    } else {
+      setActiveTab('orders');
+    }
+    setSellerNotifOpen(false);
+  };
+
+  const handleMarkAllSellerNotifsRead = async () => {
+    try {
+      await api.markAllNotificationsRead();
+      setSellerNotifications(prev => prev.map(n => ({ ...n, is_read: 1 })));
+      setSellerUnreadNotifs(0);
+      showToast('Đã đánh dấu tất cả thông báo là đã đọc', 'success');
+    } catch {
+      // ignore
     }
   };
 
@@ -1348,25 +1487,76 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
               </Button>
             )}
 
-            {/* Chuông thông báo có badge */}
-            <div className="relative">
+            {/* Chuông thông báo có dropdown */}
+            <div className="relative" ref={sellerNotifRef}>
               <button
                 type="button"
-                onClick={() => {
-                  if ((stats?.status_counts?.pending || 0) > 0) setActiveTab('orders');
-                  else if (reviewsStats.unreplied_count > 0) setActiveTab('reviews');
-                  else setActiveTab('dashboard');
-                }}
+                onClick={() => setSellerNotifOpen(!sellerNotifOpen)}
                 className="p-2 rounded-xl border border-[#DAE7C7] hover:bg-[#F5F8EF] text-[#5E5E61] transition-colors relative"
                 title="Thông báo người bán"
               >
                 <Bell className="w-4 h-4 text-[#101410]" />
-                {((stats?.status_counts?.pending || 0) + reviewsStats.unreplied_count + (sellerReturns.filter(r => r.status === 'pending').length)) > 0 && (
-                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#C2522D] text-white text-[9px] font-bold flex items-center justify-center shadow-xs">
-                    {Math.min(99, (stats?.status_counts?.pending || 0) + reviewsStats.unreplied_count + (sellerReturns.filter(r => r.status === 'pending').length))}
+                {sellerUnreadNotifs > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-[#C2522D] text-white text-[9px] font-bold flex items-center justify-center shadow-xs">
+                    {sellerUnreadNotifs > 99 ? '99+' : sellerUnreadNotifs}
                   </span>
                 )}
               </button>
+
+              {sellerNotifOpen && (
+                <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white border border-[#DAE7C7] rounded-2xl shadow-xl z-50 overflow-hidden text-[#101410] animate-in fade-in zoom-in-95">
+                  <div className="p-3.5 bg-[#FAF7F2] border-b border-[#E6DFD5] flex items-center justify-between">
+                    <span className="font-bold text-xs text-[#101410]">Thông báo cửa hàng</span>
+                    {sellerNotifications.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleMarkAllSellerNotifsRead}
+                        className="text-[11px] font-semibold text-[#08482D] hover:underline"
+                      >
+                        Đánh dấu đã đọc tất cả
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="max-h-80 overflow-y-auto divide-y divide-[#F2ECE3]">
+                    {sellerNotifications.length === 0 ? (
+                      <div className="p-8 text-center text-xs text-[#5E5E61]">
+                        Không có thông báo mới
+                      </div>
+                    ) : (
+                      sellerNotifications.slice(0, 20).map(n => (
+                        <div
+                          key={n.id}
+                          onClick={() => handleSellerNotifClick(n)}
+                          className={`p-3 text-xs cursor-pointer hover:bg-[#FAF7F2] transition-colors flex items-start gap-2.5 ${
+                            !n.is_read ? 'bg-[#F5F8EF]' : ''
+                          }`}
+                        >
+                          <div className="mt-0.5 shrink-0">
+                            <Bell className={`w-3.5 h-3.5 ${!n.is_read ? 'text-[#C2522D]' : 'text-[#786F66]'}`} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-1 mb-0.5">
+                              <span className={`font-bold truncate text-[11px] ${!n.is_read ? 'text-[#101410]' : 'text-[#5E5E61]'}`}>
+                                {n.title}
+                              </span>
+                              {!n.is_read && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#C2522D] shrink-0" />
+                              )}
+                            </div>
+                            <p className="text-[11px] text-[#5E5E61] line-clamp-2">
+                              {n.message}
+                            </p>
+                            <span className="text-[9px] text-[#A8A29E] block mt-1">
+                              {formatDate(n.created_at)}
+                            </span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Avatar + Shop name menu */}
@@ -1550,7 +1740,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                     {formatVND(stats.total_revenue)}
                   </div>
                   <span className="text-[11px] text-[#08482D] font-medium block">
-                    Đã thanh toán
+                    Đã thanh toán (Chưa gồm phí vận chuyển)
                   </span>
                 </div>
 
@@ -2097,8 +2287,8 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                           : 'border-[#E6DFD5]'
                       }`}
                     >
-                      <div className="flex items-center justify-between pb-2 border-b border-[#F2ECE3]">
-                        <div className="flex items-center gap-2">
+                      <div className="flex items-center justify-between pb-2 border-b border-[#F2ECE3] gap-2 flex-wrap min-w-0">
+                        <div className="flex items-center gap-2 min-w-0">
                           <button
                             type="button"
                             onClick={(e) => {
@@ -2155,8 +2345,8 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
             {/* Selected order detail and seller actions on right */}
             {selectedOrder && (
               <div className="lg:col-span-7 bg-white rounded-3xl border border-[#E6DFD5] p-6 sm:p-8 space-y-6 shadow-sm animate-in fade-in">
-                <div className="flex items-start justify-between pb-4 border-b border-[#E6DFD5]">
-                  <div>
+                <div className="flex items-start justify-between pb-4 border-b border-[#E6DFD5] gap-3 flex-wrap min-w-0">
+                  <div className="min-w-0">
                     <span className="text-xs font-bold text-[#556B2F] uppercase block mb-1">
                       Xử lý đơn hàng
                     </span>
@@ -2492,7 +2682,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
             </div>
 
             <button
-              onClick={() => setCouponModalOpen(true)}
+              onClick={handleOpenCreateCoupon}
               className="px-4 py-2.5 rounded-xl bg-[#C2522D] hover:bg-[#c24621] text-white text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs"
             >
               <Plus className="w-4 h-4" />
@@ -2563,10 +2753,17 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                             {cpn.is_active ? '● Đang bật' : '○ Đã tắt'}
                           </button>
                         </td>
-                        <td className="py-3.5 px-4 text-right">
+                        <td className="py-3.5 px-4 text-right whitespace-nowrap space-x-1">
+                          <button
+                            onClick={() => handleOpenEditCoupon(cpn)}
+                            className="p-1.5 text-stone-500 hover:text-[#08482D] rounded-lg hover:bg-[#DAE7C7]/40 transition-colors inline-flex items-center"
+                            title="Sửa mã giảm giá"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
                           <button
                             onClick={() => handleDeleteCoupon(cpn.id)}
-                            className="p-1.5 text-stone-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
+                            className="p-1.5 text-stone-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors inline-flex items-center"
                             title="Xóa mã giảm giá"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -2626,8 +2823,8 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
 
                 return (
                   <div key={offer.id} className="bg-white rounded-3xl border border-[#E2E8D8] p-5 shadow-xs space-y-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3">
+                    <div className="flex items-start justify-between gap-3 flex-wrap sm:flex-nowrap min-w-0">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
                         <ProductImage
                           src={offer.product_image || (offer as any).thumb || (offer as any).image_url}
                           alt={offer.product_name || 'Sản phẩm trả giá'}
@@ -2701,7 +2898,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
 
                     {/* Action Buttons for Pending Offers */}
                     {isPending && (
-                      <div className="flex items-center gap-2 pt-1">
+                      <div className="flex items-center gap-2 pt-1 flex-wrap">
                         <Button
                           variant="primary"
                           size="sm"
@@ -3262,7 +3459,13 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
               <div>
                 <span className="text-xs text-[#5E5E61] block font-medium">Điểm đánh giá shop</span>
                 <span className="font-mono text-xl font-bold text-[#101410]">
-                  {reviewsStats.average_rating || 5.0} <span className="text-xs font-normal text-[#5E5E61]">/ 5 sao</span>
+                  {reviewsStats.total_reviews > 0 ? (
+                    <>
+                      {reviewsStats.average_rating || 5.0} <span className="text-xs font-normal text-[#5E5E61]">/ 5 sao</span>
+                    </>
+                  ) : (
+                    <span className="text-sm font-semibold text-[#5E5E61]">Chưa có đánh giá</span>
+                  )}
                 </span>
               </div>
             </div>
@@ -3673,38 +3876,66 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
         </div>
       )}
 
-      {/* MODAL: TẠO MÃ GIẢM GIÁ */}
+      {/* MODAL: TẠO / SỬA MÃ GIẢM GIÁ */}
       {couponModalOpen && (
         <div className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-white rounded-3xl border border-[#D8CEBE] shadow-2xl p-6 sm:p-8 space-y-4 animate-in zoom-in-95">
             <div className="flex items-center justify-between pb-3 border-b border-[#E6DFD5]">
               <h3 className="text-xl font-bold text-[#101410] flex items-center gap-2">
                 <Tag className="w-5 h-5 text-[#C2522D]" />
-                Tạo mã giảm giá mới
+                {editingCoupon ? 'Chỉnh sửa mã giảm giá' : 'Tạo mã giảm giá mới'}
               </h3>
-              <button onClick={() => setCouponModalOpen(false)} className="text-stone-400 hover:text-stone-700">
+              <button onClick={() => { setCouponModalOpen(false); setEditingCoupon(null); }} className="text-stone-400 hover:text-stone-700">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateCoupon} className="space-y-4 text-xs">
+            <form onSubmit={handleSaveCoupon} className="space-y-4 text-xs">
               <div>
                 <label className="font-semibold text-[#524B46] block mb-1">Mã Code (viết liền, in hoa) *</label>
-                <input
-                  type="text"
-                  required
-                  value={couponForm.code}
-                  onChange={e => setCouponForm({ ...couponForm, code: e.target.value.toUpperCase().trim() })}
-                  placeholder="VD: DOCUMOI20"
-                  className="w-full px-3 py-2 rounded-xl border border-[#D8CEBE] bg-[#FAF7F2] font-mono font-bold tracking-wider"
-                />
+                {editingCoupon ? (
+                  <div>
+                    <input
+                      type="text"
+                      readOnly
+                      disabled
+                      value={couponForm.code}
+                      className="w-full px-3 py-2 rounded-xl border border-[#D8CEBE] bg-[#E9EFE2] font-mono font-bold tracking-wider text-[#5E5E61] cursor-not-allowed"
+                    />
+                    <p className="text-[10px] text-[#5E5E61] mt-1 italic">Không thể đổi mã code</p>
+                  </div>
+                ) : (
+                  <div>
+                    <input
+                      type="text"
+                      required
+                      value={couponForm.code}
+                      onChange={e => {
+                        setCouponForm({ ...couponForm, code: e.target.value.toUpperCase().trim() });
+                        if (couponFormErrors.code) {
+                          setCouponFormErrors(prev => { const n = { ...prev }; delete n.code; return n; });
+                        }
+                      }}
+                      placeholder="VD: DOCUMOI20"
+                      className={`w-full px-3 py-2 rounded-xl border font-mono font-bold tracking-wider ${
+                        couponFormErrors.code ? 'border-red-500 bg-red-50 text-red-900' : 'border-[#D8CEBE] bg-[#FAF7F2]'
+                      }`}
+                    />
+                    {couponFormErrors.code && (
+                      <p className="text-[11px] text-red-600 mt-1 font-medium">{couponFormErrors.code}</p>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div>
                 <label className="font-semibold text-[#524B46] block mb-1">Loại giảm giá *</label>
                 <select
                   value={couponForm.type}
-                  onChange={e => setCouponForm({ ...couponForm, type: e.target.value as any })}
+                  onChange={e => {
+                    setCouponForm({ ...couponForm, type: e.target.value as any });
+                    setCouponFormErrors({});
+                  }}
                   className="w-full px-3 py-2 rounded-xl border border-[#D8CEBE] bg-[#FAF7F2]"
                 >
                   <option value="percent">Giảm theo phần trăm (%)</option>
@@ -3721,23 +3952,41 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                     </label>
                     <input
                       type="number"
-                      min={1}
                       required
                       value={couponForm.value}
-                      onChange={e => setCouponForm({ ...couponForm, value: Number(e.target.value) })}
-                      className="w-full px-3 py-2 rounded-xl border border-[#D8CEBE] bg-[#FAF7F2] font-mono"
+                      onChange={e => {
+                        setCouponForm({ ...couponForm, value: Number(e.target.value) });
+                        if (couponFormErrors.value) {
+                          setCouponFormErrors(prev => { const n = { ...prev }; delete n.value; return n; });
+                        }
+                      }}
+                      className={`w-full px-3 py-2 rounded-xl border font-mono ${
+                        couponFormErrors.value ? 'border-red-500 bg-red-50 text-red-900' : 'border-[#D8CEBE] bg-[#FAF7F2]'
+                      }`}
                     />
+                    {couponFormErrors.value && (
+                      <p className="text-[11px] text-red-600 mt-1 font-medium">{couponFormErrors.value}</p>
+                    )}
                   </div>
 
                   <div>
                     <label className="font-semibold text-[#524B46] block mb-1">Giảm tối đa (VNĐ)</label>
                     <input
                       type="number"
-                      min={0}
                       value={couponForm.max_discount || 0}
-                      onChange={e => setCouponForm({ ...couponForm, max_discount: Number(e.target.value) })}
-                      className="w-full px-3 py-2 rounded-xl border border-[#D8CEBE] bg-[#FAF7F2] font-mono"
+                      onChange={e => {
+                        setCouponForm({ ...couponForm, max_discount: Number(e.target.value) });
+                        if (couponFormErrors.max_discount) {
+                          setCouponFormErrors(prev => { const n = { ...prev }; delete n.max_discount; return n; });
+                        }
+                      }}
+                      className={`w-full px-3 py-2 rounded-xl border font-mono ${
+                        couponFormErrors.max_discount ? 'border-red-500 bg-red-50 text-red-900' : 'border-[#D8CEBE] bg-[#FAF7F2]'
+                      }`}
                     />
+                    {couponFormErrors.max_discount && (
+                      <p className="text-[11px] text-red-600 mt-1 font-medium">{couponFormErrors.max_discount}</p>
+                    )}
                   </div>
                 </div>
               )}
@@ -3746,27 +3995,36 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                 <label className="font-semibold text-[#524B46] block mb-1">Giá trị đơn hàng tối thiểu (VNĐ)</label>
                 <input
                   type="number"
-                  min={0}
                   step={10000}
                   value={couponForm.min_order_amount}
-                  onChange={e => setCouponForm({ ...couponForm, min_order_amount: Number(e.target.value) })}
-                  className="w-full px-3 py-2 rounded-xl border border-[#D8CEBE] bg-[#FAF7F2] font-mono"
+                  onChange={e => {
+                    setCouponForm({ ...couponForm, min_order_amount: Number(e.target.value) });
+                    if (couponFormErrors.min_order_amount) {
+                      setCouponFormErrors(prev => { const n = { ...prev }; delete n.min_order_amount; return n; });
+                    }
+                  }}
+                  className={`w-full px-3 py-2 rounded-xl border font-mono ${
+                    couponFormErrors.min_order_amount ? 'border-red-500 bg-red-50 text-red-900' : 'border-[#D8CEBE] bg-[#FAF7F2]'
+                  }`}
                 />
+                {couponFormErrors.min_order_amount && (
+                  <p className="text-[11px] text-red-600 mt-1 font-medium">{couponFormErrors.min_order_amount}</p>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3 pt-3 border-t border-[#E6DFD5]">
                 <button
                   type="button"
-                  onClick={() => setCouponModalOpen(false)}
+                  onClick={() => { setCouponModalOpen(false); setEditingCoupon(null); }}
                   className="py-2.5 px-4 rounded-xl border border-[#D8CEBE] text-stone-600 text-xs font-semibold hover:bg-stone-50"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
-                  className="py-2.5 px-4 rounded-xl bg-[#C2522D] text-white text-xs font-bold hover:bg-[#c24621] shadow-xs"
+                  className="py-2.5 px-4 rounded-xl bg-[#C2522D] text-white text-xs font-bold hover:bg-[#c24621] shadow-xs cursor-pointer"
                 >
-                  Tạo mã
+                  {editingCoupon ? 'Lưu thay đổi' : 'Tạo mã'}
                 </button>
               </div>
             </form>
@@ -4641,39 +4899,52 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                   type="text"
                   required
                   value={shopEditForm.name}
-                  onChange={e => {
-                    const name = e.target.value;
-                    const autoSlug = name
-                      .toLowerCase()
-                      .normalize('NFD')
-                      .replace(/[\u0300-\u036f]/g, '')
-                      .replace(/đ/g, 'd')
-                      .replace(/[^a-z0-9]+/g, '-')
-                      .replace(/^-+|-+$/g, '');
-                    setShopEditForm(prev => ({
-                      ...prev,
-                      name,
-                      slug: prev.slug === '' || prev.slug === autoSlug.slice(0, -1) ? autoSlug : prev.slug
-                    }));
-                  }}
+                  onChange={e => setShopEditForm(prev => ({ ...prev, name: e.target.value }))}
                   placeholder="VD: Tiệm Đồ Cũ Vintage"
                   className="w-full px-3.5 py-2.5 rounded-xl border border-[#DAE7C7] bg-[#F5F8EF] focus:outline-none focus:border-[#08482D]"
                 />
               </div>
 
               <div>
-                <label className="font-semibold text-[#101410] block mb-1">Đường dẫn shop (Slug) *</label>
-                <div className="flex items-center gap-1 px-3.5 py-2.5 rounded-xl border border-[#DAE7C7] bg-[#F5F8EF] font-mono text-xs">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="font-semibold text-[#101410]">Đường dẫn shop (Slug)</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const slug = shopEditForm.slug || currentShop?.slug || '';
+                      const link = `${window.location.origin}/shop/${slug}`;
+                      try {
+                        navigator.clipboard.writeText(link);
+                        showToast('Đã sao chép liên kết shop', 'success');
+                      } catch {
+                        const ta = document.createElement('textarea');
+                        ta.value = link;
+                        document.body.appendChild(ta);
+                        ta.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(ta);
+                        showToast('Đã sao chép liên kết shop', 'success');
+                      }
+                    }}
+                    className="text-[11px] font-bold text-[#08482D] hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>Sao chép link shop</span>
+                  </button>
+                </div>
+                <div className="flex items-center gap-1 px-3.5 py-2.5 rounded-xl border border-[#DAE7C7] bg-[#E9EFE2] font-mono text-xs">
                   <span className="text-[#5E5E61]">/shop/</span>
                   <input
                     type="text"
-                    required
+                    readOnly
+                    disabled
                     value={shopEditForm.slug}
-                    onChange={e => setShopEditForm(prev => ({ ...prev, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') }))}
-                    placeholder="tiem-do-cu"
-                    className="flex-1 bg-transparent text-[#08482D] font-bold focus:outline-none"
+                    className="flex-1 bg-transparent text-[#5E5E61] font-bold cursor-not-allowed focus:outline-none"
                   />
                 </div>
+                <p className="text-[10px] text-[#5E5E61] mt-1 italic">
+                  Đường dẫn shop cố định sau khi tạo
+                </p>
               </div>
 
               <div>
