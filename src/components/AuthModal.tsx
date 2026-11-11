@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Lock, Phone, User, Store, ArrowRight, ShieldCheck, Eye, EyeOff, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
@@ -12,7 +12,7 @@ interface AuthModalProps {
   initialUsername?: string;
   promptMessage?: string;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (role?: 'buyer' | 'seller') => void;
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
@@ -30,6 +30,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [presentationMode, setPresentationMode] = useState(false);
   const [storedAccounts, setStoredAccounts] = useState<StoredAccount[]>([]);
+
+  const passwordInputRef = useRef<HTMLInputElement>(null);
+  const identifierInputRef = useRef<HTMLInputElement>(null);
 
   // Password visibility toggles
   const [showPassword, setShowPassword] = useState(false);
@@ -56,12 +59,27 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       if (initialUsername) {
         setUsername(initialUsername);
         setPhone(initialUsername);
+      } else {
+        setUsername('');
+        setPhone('');
       }
+      setPassword('');
+      setConfirmPassword('');
       setFieldErrors({});
       setGeneralError('');
       setStoredAccounts(getStoredAccounts());
       // Check presentation mode
       api.getPresentationMode().then(res => setPresentationMode(!!res.presentation_mode)).catch(() => {});
+
+      // Autofocus: if initialUsername is provided, place cursor in password input
+      const timer = setTimeout(() => {
+        if (initialUsername) {
+          passwordInputRef.current?.focus();
+        } else {
+          identifierInputRef.current?.focus();
+        }
+      }, 50);
+      return () => clearTimeout(timer);
     }
   }, [isOpen, role, initialIsRegister, initialUsername]);
 
@@ -168,12 +186,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         await login(identifier, password, activeRole);
       }
 
-      if (activeRole === 'buyer' && typeof window !== 'undefined' && window.location.pathname.startsWith('/seller')) {
+      if (activeRole === 'seller') {
+        if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/seller')) {
+          window.history.pushState(null, '', '/seller');
+          window.dispatchEvent(new PopStateEvent('popstate'));
+        }
+      } else if (activeRole === 'buyer' && typeof window !== 'undefined' && window.location.pathname.startsWith('/seller')) {
         window.history.pushState(null, '', '/');
         window.dispatchEvent(new PopStateEvent('popstate'));
       }
 
-      onSuccess();
+      onSuccess(activeRole);
       onClose();
     } catch (err: any) {
       setGeneralError(err.message || 'Thao tác không thành công, vui lòng thử lại');
@@ -183,7 +206,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
+    <div 
+      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200"
+      onClick={onClose}
+    >
       <div 
         className="w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-3xl border border-[#DAE7C7] shadow-2xl p-6 sm:p-8 space-y-4 relative text-[#101410] max-h-[92vh] overflow-y-auto animate-in slide-in-from-bottom sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-250"
         onClick={e => e.stopPropagation()}
@@ -466,6 +492,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 {activeRole === 'buyer' ? 'Số điện thoại của bạn *' : 'Tên đăng nhập người bán *'}
               </label>
               <input
+                ref={identifierInputRef}
                 type={activeRole === 'buyer' ? 'tel' : 'text'}
                 required
                 value={activeRole === 'buyer' ? (phone || username) : username}
@@ -498,6 +525,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <label className="font-semibold text-[#101410] block mb-1">Mật khẩu *</label>
             <div className="relative">
               <input
+                ref={passwordInputRef}
                 type={showPassword ? 'text' : 'password'}
                 required
                 value={password}

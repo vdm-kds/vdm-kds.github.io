@@ -113,23 +113,16 @@ function MainShopApp() {
   }>({ open: false, role: 'buyer' });
   const pendingSellerPathRef = useRef<string | null>(null);
 
-  // If seller session restores while authModal is open, auto-close modal and restore seller path
+  // When a pending seller route was waiting for session restoration, restore it once user is ready
   useEffect(() => {
-    if (user && user.role === 'seller') {
-      if (authModal.open && authModal.role === 'seller') {
-        setAuthModal({ open: false, role: 'seller', initialIsRegister: false });
-      }
-      if (pendingSellerPathRef.current) {
-        const dest = pendingSellerPathRef.current;
-        pendingSellerPathRef.current = null;
-        window.history.replaceState({}, '', dest);
-        setCurrentView('seller');
-      } else if (window.location.pathname === '/seller/login' || window.location.pathname === '/seller/register') {
-        window.history.replaceState({}, '', '/seller');
-        setCurrentView('seller');
-      }
+    if (user && user.role === 'seller' && pendingSellerPathRef.current) {
+      const dest = pendingSellerPathRef.current;
+      pendingSellerPathRef.current = null;
+      setAuthModal(prev => ({ ...prev, open: false }));
+      window.history.replaceState({}, '', dest);
+      setCurrentView('seller');
     }
-  }, [user, authModal.open, authModal.role]);
+  }, [user]);
 
   const [policyType, setPolicyType] = useState<'returns' | 'shipping' | 'guide' | 'about' | 'contact' | null>(null);
 
@@ -363,9 +356,6 @@ function MainShopApp() {
       if (path.startsWith('/seller')) {
         if (user && user.role === 'seller') {
           setCurrentView('seller');
-          if (authModal.open && authModal.role === 'seller') {
-            setAuthModal({ open: false, role: 'seller', initialIsRegister: false });
-          }
         } else if (!user) {
           if (path !== '/seller/login' && path !== '/seller/register') {
             pendingSellerPathRef.current = path;
@@ -771,14 +761,22 @@ function MainShopApp() {
   };
 
   // Auth Modal Success Handler: Automatically resumes pending guest action
-  const handleAuthSuccess = async () => {
-    if (authModal.role === 'seller') {
+  const handleAuthSuccess = async (resolvedRole?: 'buyer' | 'seller') => {
+    const finalRole = resolvedRole || authModal.role;
+    if (finalRole === 'seller') {
       setCurrentView('seller');
       setPendingAction(null);
-      if (typeof window !== 'undefined') {
+      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/seller')) {
         window.history.replaceState({}, '', '/seller');
       }
       return;
+    }
+
+    if (finalRole === 'buyer') {
+      if (typeof window !== 'undefined' && window.location.pathname.startsWith('/seller')) {
+        setCurrentView('home');
+        window.history.replaceState({}, '', '/');
+      }
     }
 
     if (pendingAction) {
@@ -912,6 +910,7 @@ function MainShopApp() {
       <main className="flex-1">
         {currentView === 'seller' ? (
           <SellerDashboard
+            key={user?.id || 'seller'}
             onViewPreview={() => setCurrentView('preview')}
             currentUser={user}
             onLogout={() => {
@@ -1532,7 +1531,7 @@ function MainShopApp() {
         initialIsRegister={authModal.initialIsRegister}
         initialUsername={authModal.initialUsername}
         promptMessage={authModal.promptMessage}
-        onClose={() => setAuthModal({ open: false, role: 'buyer' })}
+        onClose={() => setAuthModal(prev => ({ ...prev, open: false }))}
         onSuccess={handleAuthSuccess}
       />
 

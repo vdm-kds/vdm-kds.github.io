@@ -336,11 +336,16 @@ export function DemoController({
                           ? 'bg-[#DAE7C7]/50 border-[#08482D] font-bold shadow-2xs'
                           : loggedIn
                           ? 'bg-white border-[#E2E8D8] hover:border-[#08482D] hover:bg-[#F5F8EF] cursor-pointer'
-                          : 'bg-stone-50 border-dashed border-[#E2E8D8] opacity-75'
+                          : 'bg-stone-50 border-dashed border-[#E2E8D8] hover:border-[#08482D] hover:bg-white cursor-pointer'
                       }`}
                       onClick={() => {
                         if (loggedIn && !isCurrent) {
                           handleSwitchAccountRole(acc.role, acc.username);
+                        } else if (!loggedIn) {
+                          if (onOpenFirstTimeLogin) {
+                            setIsOpen(false);
+                            onOpenFirstTimeLogin(acc.role, acc.username);
+                          }
                         }
                       }}
                     >
