@@ -733,7 +733,9 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                             <p className="font-semibold text-amber-950">
                               {flaw.location ? `[${flaw.location}] ` : ''}{flaw.description}
                             </p>
-                            <span className="text-[10px] text-amber-800/80">Ảnh ghi nhận từ người bán</span>
+                            {flawImg && (
+                              <span className="text-[10px] text-amber-800/80">Ảnh ghi nhận từ người bán</span>
+                            )}
                           </div>
                         </div>
                       );

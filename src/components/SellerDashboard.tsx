@@ -2319,7 +2319,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                         <div><strong>Khách:</strong> {ord.buyer_name}{ord.phone ? ` (${ord.phone})` : ''}</div>
                         <div className="text-stone-500 truncate"><strong>Địa chỉ:</strong> {ord.address}</div>
                         <div>
-                          <strong>Món:</strong> {ord.items?.map(i => `${i.product_name} (x${i.quantity})`).join(', ')}
+                          <strong>Món:</strong> {ord.items?.map(i => `${i.product_name} (${i.quantity} × ${formatVND(i.price)}${i.is_negotiated ? ' - giá trả giá' : ''})`).join(', ')}
                         </div>
                         {ord.coupon_code && (
                           <div className="text-[11px] text-[#08482D]">
@@ -2481,12 +2481,12 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                           <div className="min-w-0">
                             <div className="font-bold text-[#101410] truncate">{it.product_name}</div>
                             <div className="text-stone-500 flex items-center gap-2 flex-wrap">
-                              <span>Độ mới {it.condition_pct}% · Số lượng: {it.quantity}</span>
-                              {Boolean(it.is_negotiated) && (
-                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 text-[10px] font-semibold border border-amber-200">
-                                  Giá trả giá
-                                </span>
-                              )}
+                              <span>
+                                {it.quantity} × {formatVND(it.price)}
+                                {Boolean(it.is_negotiated) ? ' (giá trả giá)' : ''}
+                              </span>
+                              <span>·</span>
+                              <span>Độ mới {it.condition_pct}%</span>
                             </div>
                           </div>
                         </div>

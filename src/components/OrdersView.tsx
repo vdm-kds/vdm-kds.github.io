@@ -447,6 +447,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                           </p>
                           <span className="text-[11px] text-[#5E5E61]">
                             {item.quantity} × {formatVND(item.price)}
+                            {Boolean(item.is_negotiated) ? ' (giá trả giá)' : ''}
                           </span>
                         </div>
                       </div>
@@ -704,15 +705,12 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                             {item.product_name}
                           </h5>
                           <div className="flex items-center gap-2 text-[11px] text-[#5E5E61] mt-0.5">
-                            <span>x{item.quantity}</span>
+                            <span>
+                              {item.quantity} × {formatVND(item.price)}
+                              {Boolean(item.is_negotiated) ? ' (giá trả giá)' : ''}
+                            </span>
                             <span>·</span>
                             <span className="font-mono text-[#C2522D]">Độ mới {item.condition_pct}%</span>
-                            {Boolean(item.is_negotiated) && (
-                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 text-[10px] font-semibold border border-amber-200">
-                                <Tag className="w-2.5 h-2.5" />
-                                Giá trả giá
-                              </span>
-                            )}
                           </div>
                         </div>
                       </div>

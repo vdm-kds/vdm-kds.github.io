@@ -59,8 +59,8 @@ export const api = {
   getCart: () =>
     db.getCart(),
 
-  addToCart: (productId: number | string, quantity: number = 1, offerId?: number | string) =>
-    db.addToCart(productId, quantity, offerId as any),
+  addToCart: (productId: number | string, quantity: number = 1, offerId?: number | string, negotiatedPrice?: number) =>
+    db.addToCart(productId, quantity, offerId as any, negotiatedPrice),
 
   updateCartQty: (cartId: number | string, quantity: number) =>
     db.updateCartQty(cartId, quantity),

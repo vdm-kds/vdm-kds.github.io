@@ -22,7 +22,15 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+const portArgIdx = process.argv.indexOf('--port');
+const cliPort = portArgIdx !== -1 && process.argv[portArgIdx + 1] ? parseInt(process.argv[portArgIdx + 1], 10) : NaN;
+const envPort =
+  process.env.PORT && process.env.PORT !== process.env.NGINX_PORT
+    ? parseInt(process.env.PORT, 10)
+    : process.env.DEFAULT_APP_PORT
+      ? parseInt(process.env.DEFAULT_APP_PORT, 10)
+      : NaN;
+const PORT = !Number.isNaN(cliPort) ? cliPort : !Number.isNaN(envPort) ? envPort : 3000;
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));

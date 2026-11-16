@@ -1647,18 +1647,21 @@ export class DCCTDatabaseService {
       try {
         const prodSnap = await getDoc(doc(db, 'products', String(it.productId)));
         if (prodSnap.exists() && prodSnap.data()?.isActive !== false) {
-          const p = normalizeProductDoc(prodSnap.data()!, prodSnap.id);
+          const p = normalizeProductDoc(prodSnap.data(), prodSnap.id);
+          const isNegotiated = !!it.offerId || !!it.negotiatedPrice;
           const effectivePrice = it.negotiatedPrice ? Number(it.negotiatedPrice) : p.price;
+          const itemQty = it.offerId ? 1 : Number(it.qty || 1);
           if (p.stock > 0) {
-            totalPrice += effectivePrice * it.qty;
+            totalPrice += effectivePrice * itemQty;
           }
+          const uniqueCartId = it.offerId ? `${it.productId}__offer__${it.offerId}` : String(it.productId);
           items.push({
-            id: it.productId as any,
+            id: uniqueCartId as any,
             user_id: cur.uid as any,
             product_id: it.productId as any,
             product_name: p.name,
             product_image: p.image_url,
-            quantity: it.qty,
+            quantity: itemQty,
             name: p.name,
             category: p.category,
             price: effectivePrice,
@@ -1676,8 +1679,8 @@ export class DCCTDatabaseService {
             product: p,
             effective_price: effectivePrice,
             offer_id: it.offerId ? String(it.offerId) : undefined,
-            is_negotiated: !!it.negotiatedPrice,
-            negotiated_price: it.negotiatedPrice
+            is_negotiated: isNegotiated,
+            negotiated_price: it.negotiatedPrice ? Number(it.negotiatedPrice) : undefined
           });
         }
       } catch {}
@@ -1701,33 +1704,119 @@ export class DCCTDatabaseService {
     }
 
     const db = getActiveFirestore();
+    const strOfferId = offerId != null ? String(offerId) : null;
+    const strPid = String(productId);
+
+    // Fetch product to verify stock and shop
+    const prodSnap = await getDoc(doc(db, 'products', strPid));
+    if (!prodSnap.exists() || prodSnap.data()?.isActive === false) {
+      throw new Error('Sản phẩm không tồn tại hoặc đã ngừng bán');
+    }
+    const prodData = prodSnap.data();
+    const stock = Number(prodData?.stock || 0);
+    const shopId = prodData?.shopId || 'do-cu-con-thuong';
+
+    // If offerId is present, verify offer and resolve final deal price
+    let resolvedPrice = negotiatedPrice ? Number(negotiatedPrice) : null;
+    if (strOfferId) {
+      const offSnap = await getDoc(doc(db, 'offers', strOfferId));
+      if (offSnap.exists()) {
+        const offData = offSnap.data();
+        if (offData.buyerUid && offData.buyerUid !== cur.uid) {
+          throw new Error('Lời trả giá này không thuộc về tài khoản của bạn');
+        }
+        if (offData.productId && String(offData.productId) !== strPid) {
+          throw new Error('Lời trả giá không khớp với sản phẩm');
+        }
+        const deal = offData.counterPrice != null ? Number(offData.counterPrice) : Number(offData.offeredPrice || offData.price || 0);
+        if (deal > 0) resolvedPrice = deal;
+      }
+    }
+
     const cartRef = doc(db, 'carts', cur.uid);
     const cartSnap = await getDoc(cartRef);
     let items = cartSnap.exists() && Array.isArray(cartSnap.data()?.items) ? cartSnap.data()!.items : [];
 
-    const existingIdx = items.findIndex((i: any) => String(i.productId) === String(productId));
-    const strOfferId = offerId != null ? String(offerId) : null;
-    if (existingIdx >= 0) {
-      items[existingIdx].qty += quantity;
-      if (strOfferId) items[existingIdx].offerId = strOfferId;
-      if (negotiatedPrice) items[existingIdx].negotiatedPrice = negotiatedPrice;
+    let message = 'Đã thêm vào giỏ hàng';
+
+    if (strOfferId) {
+      // Negotiated item: ALWAYS a separate line with quantity = 1 (DO NOT merge with regular item)
+      const existingOfferIdx = items.findIndex((i: any) => String(i.productId) === strPid && String(i.offerId) === strOfferId);
+      if (existingOfferIdx >= 0) {
+        items[existingOfferIdx].qty = 1;
+        if (resolvedPrice) items[existingOfferIdx].negotiatedPrice = resolvedPrice;
+      } else {
+        items.push({
+          productId: strPid,
+          shopId,
+          qty: 1,
+          offerId: strOfferId,
+          negotiatedPrice: resolvedPrice
+        });
+      }
+
+      // Check total quantity of both lines against stock; if exceeded, reduce regular item
+      const regIdx = items.findIndex((i: any) => String(i.productId) === strPid && !i.offerId);
+      if (regIdx >= 0) {
+        const totalQty = 1 + Number(items[regIdx].qty || 0);
+        if (totalQty > stock) {
+          const maxRegular = Math.max(0, stock - 1);
+          if (maxRegular <= 0) {
+            items.splice(regIdx, 1);
+            message = `Đã thêm món giá trả giá. Do kho chỉ còn ${stock} món, món giá thường trước đó đã được bỏ ra khỏi giỏ.`;
+          } else {
+            items[regIdx].qty = maxRegular;
+            message = `Đã thêm món giá trả giá. Do kho chỉ còn ${stock} món, số lượng món giá thường đã được tự động giảm còn ${maxRegular}.`;
+          }
+        }
+      }
     } else {
-      const prodSnap = await getDoc(doc(db, 'products', String(productId)));
-      const shopId = prodSnap.exists() ? prodSnap.data()?.shopId || 'do-cu-con-thuong' : 'do-cu-con-thuong';
-      items.push({
-        productId: String(productId),
-        shopId,
-        qty: quantity,
-        negotiatedPrice: negotiatedPrice || null,
-        offerId: strOfferId
-      });
+      // Regular price item: calculate existing negotiated qty in cart for this product
+      const totalNegotiatedQty = items
+        .filter((i: any) => String(i.productId) === strPid && i.offerId)
+        .reduce((sum: number, i: any) => sum + (i.qty || 1), 0);
+
+      const regIdx = items.findIndex((i: any) => String(i.productId) === strPid && !i.offerId);
+      const currentRegQty = regIdx >= 0 ? Number(items[regIdx].qty || 0) : 0;
+      const requestedQty = Number(quantity) || 1;
+
+      if (totalNegotiatedQty + currentRegQty + requestedQty > stock) {
+        const maxCanAdd = Math.max(0, stock - totalNegotiatedQty - currentRegQty);
+        if (maxCanAdd <= 0) {
+          throw new Error(`Bạn đã có ${totalNegotiatedQty + currentRegQty} món trong giỏ (bao gồm món giá trả giá), kho chỉ còn ${stock} món.`);
+        }
+        if (regIdx >= 0) {
+          items[regIdx].qty += maxCanAdd;
+        } else {
+          items.push({
+            productId: strPid,
+            shopId,
+            qty: maxCanAdd,
+            offerId: null,
+            negotiatedPrice: null
+          });
+        }
+        message = `Chỉ có thể thêm ${maxCanAdd} món giá thường do kho chỉ còn ${stock} món (đã có 1 món giá trả giá).`;
+      } else {
+        if (regIdx >= 0) {
+          items[regIdx].qty += requestedQty;
+        } else {
+          items.push({
+            productId: strPid,
+            shopId,
+            qty: requestedQty,
+            offerId: null,
+            negotiatedPrice: null
+          });
+        }
+      }
     }
 
     await setDoc(cartRef, { items, updatedAt: serverTimestamp() });
-    return { message: 'Đã thêm vào giỏ hàng' };
+    return { message };
   }
 
-  async updateCartQty(productId: number | string, quantity: number): Promise<{ message: string }> {
+  async updateCartQty(cartItemId: number | string, quantity: number): Promise<{ message: string }> {
     const cur = getCurrentUser();
     if (!cur || cur.role !== 'buyer') throw new Error('Chưa đăng nhập');
 
@@ -1736,20 +1825,48 @@ export class DCCTDatabaseService {
     const cartSnap = await getDoc(cartRef);
     if (!cartSnap.exists()) return { message: 'Thành công' };
 
-    let items = (cartSnap.data()?.items || []).filter((i: any) => {
-      if (String(i.productId) === String(productId)) {
-        if (quantity <= 0) return false;
-        i.qty = quantity;
+    let items = (cartSnap.data()?.items || []) as any[];
+    const strId = String(cartItemId);
+    let targetPid = strId;
+    let targetOfferId: string | null = null;
+    if (strId.includes('__offer__')) {
+      const parts = strId.split('__offer__');
+      targetPid = parts[0];
+      targetOfferId = parts[1];
+    }
+
+    if (targetOfferId) {
+      // Negotiated item cannot change quantity - it stays 1, or remove if <= 0
+      if (quantity <= 0) {
+        items = items.filter((i: any) => !(String(i.productId) === targetPid && String(i.offerId) === targetOfferId));
+      } else {
+        const idx = items.findIndex((i: any) => String(i.productId) === targetPid && String(i.offerId) === targetOfferId);
+        if (idx >= 0) items[idx].qty = 1;
       }
-      return true;
-    });
+    } else {
+      // Regular item
+      const idx = items.findIndex((i: any) => String(i.productId) === targetPid && !i.offerId);
+      if (idx >= 0) {
+        if (quantity <= 0) {
+          items.splice(idx, 1);
+        } else {
+          const prodSnap = await getDoc(doc(db, 'products', targetPid));
+          const stock = Number(prodSnap.data()?.stock || 0);
+          const totalNegQty = items
+            .filter((i: any) => String(i.productId) === targetPid && i.offerId)
+            .reduce((s: number, i: any) => s + (i.qty || 1), 0);
+          const maxAllowed = Math.max(1, stock - totalNegQty);
+          items[idx].qty = Math.min(quantity, maxAllowed);
+        }
+      }
+    }
 
     await setDoc(cartRef, { items, updatedAt: serverTimestamp() });
     return { message: 'Đã cập nhật số lượng' };
   }
 
-  async removeFromCart(productId: number | string): Promise<{ message: string }> {
-    return this.updateCartQty(productId, 0);
+  async removeFromCart(cartItemId: number | string): Promise<{ message: string }> {
+    return this.updateCartQty(cartItemId, 0);
   }
 
   async clearCart(): Promise<void> {
@@ -2083,11 +2200,18 @@ export class DCCTDatabaseService {
         }
       }
 
-      // Check stock
+      // Check total required stock aggregated per product
+      const totalRequestedByProduct = new Map<string, number>();
       for (const it of payload.items) {
-        const pData = productSnaps.get(String(it.product_id));
-        if (pData.stock < it.quantity) {
-          throw new Error(`${pData.name} vừa có chủ mới`);
+        const pid = String(it.product_id);
+        const hasOffer = !!(it.offer_id || (it as any).offerId);
+        const itemQty = hasOffer ? 1 : Number(it.quantity || 1);
+        totalRequestedByProduct.set(pid, (totalRequestedByProduct.get(pid) || 0) + itemQty);
+      }
+      for (const [pid, reqQty] of totalRequestedByProduct.entries()) {
+        const pData = productSnaps.get(pid);
+        if (pData.stock < reqQty) {
+          throw new Error(`${pData.name} không đủ tồn kho (chỉ còn ${pData.stock} món, bạn đang đặt ${reqQty} món)`);
         }
       }
 
@@ -2114,7 +2238,11 @@ export class DCCTDatabaseService {
                 !isPast24h
               ) {
                 validOffersMap.set(offStr, offData);
+              } else {
+                throw new Error(`Lời trả giá cho "${productSnaps.get(String(it.product_id))?.name || 'sản phẩm'}" không hợp lệ, chưa được shop chấp nhận hoặc đã hết hạn`);
               }
+            } else {
+              throw new Error('Lời trả giá không tồn tại');
             }
           }
         }
@@ -2176,6 +2304,7 @@ export class DCCTDatabaseService {
           let itemPrice = Number(pData.price || 0);
           let isNegotiated = false;
           const originalPrice = itemPrice;
+          let itemQty = Number(it.quantity || 1);
 
           if (validOffer) {
             const finalOffered = validOffer.counterPrice != null
@@ -2185,9 +2314,10 @@ export class DCCTDatabaseService {
               itemPrice = finalOffered;
               isNegotiated = true;
             }
+            itemQty = 1; // Strict: a negotiated offer applies to exactly 1 item
           }
 
-          subtotal += itemPrice * it.quantity;
+          subtotal += itemPrice * itemQty;
           const itemThumb = pData.thumb || (Array.isArray(pData.images) && pData.images[0]) || pData.imageUrl || '';
           return {
             productId: String(it.product_id),
@@ -2197,7 +2327,7 @@ export class DCCTDatabaseService {
             conditionPct: pData.conditionPct || 90,
             price: itemPrice,
             originalPrice,
-            qty: it.quantity,
+            qty: itemQty,
             negotiated: isNegotiated,
             offerId: validOffer ? String(offId) : null
           };
@@ -4576,12 +4706,13 @@ export class DCCTDatabaseService {
     let totDisc = 0;
 
     for (const [sId, items] of shopMap.entries()) {
-      let sub = 0;
       let shopName = items[0]?.product?.shop_name || 'Đồ Cũ Còn Thương';
+      let sub = 0;
       for (const i of items) {
-        sub += (i.effective_price || i.product?.price || 0) * (i.quantity || 1);
+        const itemPrice = i.effective_price ?? i.negotiated_price ?? i.price ?? i.product?.price ?? 0;
+        sub += itemPrice * (i.quantity || 1);
       }
-      const ship = sub >= 1000000 ? 0 : 30000;
+      const ship = sub >= 1000000 || sub === 0 ? 0 : 30000;
       let disc = 0;
       const cCode = couponsByShop ? couponsByShop[sId as any] : undefined;
       if (cCode) {

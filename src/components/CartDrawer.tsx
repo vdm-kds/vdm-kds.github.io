@@ -192,9 +192,9 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                               ) : (
                                 <span>Còn {item.stock}</span>
                               )}
-                              {Boolean(item.is_negotiated) && (
-                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 text-[10px] font-semibold border border-amber-200">
-                                  Giá deal
+                              {Boolean(item.is_negotiated || item.offer_id) && (
+                                <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-[#DAE7C7] text-[#08482D] text-[10px] font-bold border border-[#08482D]/20">
+                                  Giá trả giá
                                 </span>
                               )}
                             </div>
@@ -213,23 +213,30 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                             )}
 
                             <div className="flex items-center justify-between mt-2.5">
-                              <div className="flex items-center border border-[#E2E8D8] rounded-lg bg-[#FFFFFF] p-0.5 font-mono text-xs">
-                                <button
-                                  onClick={() => onUpdateQty(item.id, item.quantity - 1)}
-                                  disabled={item.quantity <= 1 || item.stock <= 0}
-                                  className="w-5 h-5 flex items-center justify-center hover:bg-[#DAE7C7] rounded disabled:opacity-30"
-                                >
-                                  -
-                                </button>
-                                <span className="w-6 text-center font-bold text-xs">{item.quantity}</span>
-                                <button
-                                  onClick={() => onUpdateQty(item.id, item.quantity + 1)}
-                                  disabled={item.quantity >= item.stock || item.stock <= 0}
-                                  className="w-5 h-5 flex items-center justify-center hover:bg-[#DAE7C7] rounded disabled:opacity-30"
-                                >
-                                  +
-                                </button>
-                              </div>
+                              {Boolean(item.is_negotiated || item.offer_id) ? (
+                                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#F5F8EF] border border-[#DAE7C7] text-[11px] font-bold text-[#08482D]">
+                                  <span>SL: 1</span>
+                                  <span className="text-[10px] text-[#5E5E61] font-normal">(Giá trả giá)</span>
+                                </div>
+                              ) : (
+                                <div className="flex items-center border border-[#E2E8D8] rounded-lg bg-[#FFFFFF] p-0.5 font-mono text-xs">
+                                  <button
+                                    onClick={() => onUpdateQty(item.id, item.quantity - 1)}
+                                    disabled={item.quantity <= 1 || item.stock <= 0}
+                                    className="w-5 h-5 flex items-center justify-center hover:bg-[#DAE7C7] rounded disabled:opacity-30"
+                                  >
+                                    -
+                                  </button>
+                                  <span className="w-6 text-center font-bold text-xs">{item.quantity}</span>
+                                  <button
+                                    onClick={() => onUpdateQty(item.id, item.quantity + 1)}
+                                    disabled={item.quantity >= item.stock || item.stock <= 0}
+                                    className="w-5 h-5 flex items-center justify-center hover:bg-[#DAE7C7] rounded disabled:opacity-30"
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                              )}
 
                               <div className="text-right">
                                 {Boolean(item.is_negotiated) && (

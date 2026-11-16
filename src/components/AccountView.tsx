@@ -118,9 +118,10 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart, onNavi
 
   const handleBuyNegotiated = async (offer: Offer) => {
     try {
-      await api.addToCart(offer.product_id, 1, offer.id);
+      const deal = offer.counter_price || (offer as any).counterPrice || (offer as any).final_price || offer.offered_price || 0;
+      await api.addToCart(offer.product_id, 1, offer.id, deal);
       refreshCartCount();
-      showToast(`Đã thêm vào giỏ hàng với giá thương lượng: ${formatVND(offer.counter_price || offer.offered_price)}!`, 'success');
+      showToast(`Đã thêm vào giỏ hàng với giá thương lượng: ${formatVND(deal)}!`, 'success');
     } catch (err: any) {
       showToast(err.message || 'Lỗi thêm vào giỏ hàng', 'error');
     }
@@ -129,6 +130,7 @@ export function AccountView({ onBackToHome, onSelectProduct, onAddToCart, onNavi
   const handleAcceptCounter = async (offerId: number) => {
     try {
       await api.buyerAcceptCounter(offerId);
+      refreshCartCount();
       showToast('Đã đồng ý giá thương lượng từ shop!', 'success');
       loadOffers();
     } catch (err: any) {

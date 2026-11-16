@@ -1015,12 +1015,12 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                                 {item.name}
                               </h4>
                               <p className="text-[11px] text-[#5E5E61] flex items-center gap-1.5 flex-wrap">
-                                <span>SL: {item.quantity} · Mới: {item.condition_pct}%</span>
-                                {(item.is_negotiated || item.negotiated_price) && (
-                                  <span className="px-1.5 py-0.2 rounded bg-[#DAE7C7] text-[#08482D] text-[10px] font-bold">
-                                    Giá trả giá
-                                  </span>
-                                )}
+                                <span>
+                                  {item.quantity} × {formatVND(item.price)}
+                                  {Boolean(item.is_negotiated || item.negotiated_price || item.offer_id) ? ' (giá trả giá)' : ''}
+                                </span>
+                                <span>·</span>
+                                <span>Mới: {item.condition_pct}%</span>
                               </p>
                             </div>
                             <div className="text-right shrink-0">
